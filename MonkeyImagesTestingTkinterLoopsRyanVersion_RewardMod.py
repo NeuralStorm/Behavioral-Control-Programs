@@ -1,7 +1,7 @@
 ##### VERY IMPORTANT: Possibly have Pedal1 and Pedal3 switched for testing using Francois Setup.Approx Lines: ~500~ Check these if problems occur.
-#Also check around line ~20~ that self.readyforplexon = True
+# Also check around line ~20~ that self.readyforplexon = True
 ### FOR RYAN: Use Line 4, it contains all the definitions listed just below (lines 6-33)
-#from definitionsRyan import * #Given definitions to Ryan. It might need updates for later. If you use this and some are missing you can uncomment them below
+# from definitionsRyan import * #Given definitions to Ryan. It might need updates for later. If you use this and some are missing you can uncomment them below
 ###################### These are all called in line 4 above from definitionsRyan import *. -They are listed here for Nathan's testing
 import tkinter as tk
 from tkinter import *
@@ -13,15 +13,17 @@ import random
 import winsound
 import math
 import queue
+
+from definitions import *
 ##############################################################################################
-###Monkey Images Class set up for Tkinter GUI
+###M onkey Images Class set up for Tkinter GUI
 class MonkeyImages(tk.Frame,):
     def __init__(self, parent, *args, **kwargs):
-        self.readyforplexon = False ### Nathan's Switch for testing while not connected to plexon omni. I will change to true / get rid of it when not needed.
+        self.readyforplexon = True ### Nathan's Switch for testing while not connected to plexon omni. I will change to true / get rid of it when not needed.
                                     ### Also changed the server set up so that it won't error out and exit if the server is not on, but it will say Client isn't connected.
 
         if self.readyforplexon == True:
-            ##Setup Plexon Server
+            ## Setup Plexon Server
             # Initialize the API class
             self.client = PyOPXClientAPI()
             # Connect to OmniPlex Server, check for success
@@ -63,7 +65,7 @@ class MonkeyImages(tk.Frame,):
                     source_numbers_rates[global_parameters.source_ids[index]] = rate
                     source_numbers_voltage_scalers[global_parameters.source_ids[index]] = voltage_scaler
                     print("Digitization Rate: {}, Voltage Scaler: {}".format(rate, voltage_scaler))   
-            ##Setup for Plexon DO
+            ## Setup for Plexon DO
             compatible_devices = ['PXI-6224', 'PXI-6259']
             self.plexdo = PyPlexDO()
             doinfo = self.plexdo.get_digital_output_info()
@@ -81,43 +83,50 @@ class MonkeyImages(tk.Frame,):
                 print("Couldn't initialize device. Exiting.")
                 sys.exit(1)
             self.plexdo.clear_all_bits(device_number)
-            ##End Setup for Plexon DO
+            ## End Setup for Plexon DO
 
         ############# Specific for pedal Press Tasks
-        self.Pedal = 0 #Initialize Pedal/Press
-        self.PullThreshold = 4.5 #(Voltage)Amount that Monkey has to pull to. Will be 0 or 5, because digital signal from pedal. (Connected to Analog input in plexon?)
+        self.Pedal = 0 # Initialize Pedal/Press
+        self.PullThreshold = 3 # (Voltage)Amount that Monkey has to pull to. Will be 0 or 5, because digital signal from pedal. (Connected to Analog input in plexon?)
         self.DiscrimStimDuration = round((random.randint(60,180)/60),2) # (seconds)How long is the Discriminative Stimulus displayed for. Currently 1 to 3 seconds.
-        self.TimeBeforeSound = 1 #(seconds)
-        self.MaxTimeAfterSound = 5 #(seconds) Maximum time Monkey has to pull. I think we want this, not sure. ???
-        self.RewardDelay = 0.5 #(seconds)Length of Delay before Reward is given.
-        self.Pedal1 = 0 #Push / Forward
-        self.Pedal2 = 0 #Right
-        self.Pedal3 = 0 #Pull / Backwards
-        self.Pedal4 = 0 #Left
+        self.TimeBeforeSound = 1 # (seconds)
+        self.MaxTimeAfterSound = 5 # (seconds) Maximum time Monkey has to pull. I think we want this, not sure. ???
+        self.RewardDelay = 0.5 # (seconds)Length of Delay before Reward is given.
+        self.TimeOut = 3 # (seconds) Time for black time out screen
+        self.Pedal1 = 0 # Push / Forward
+        self.Pedal2 = 0 # Right
+        self.Pedal3 = 0 # Pull / Backwards
+        self.Pedal4 = 0 # Left
         self.list_images = [] # Image list for Discriminative Stimuli
-        src = "./TestImages/" #Name of folder in which you keep your images to be displayed
+        src = "./TestImages/" # Name of folder in which you keep your images to be displayed
         for images in os.listdir(src):
             self.list_images.append(images)
 
         self.NumEvents = 3
-        # RangeIntervals = RewardClass(0.5,0.05,1,0.25,2,0.45)  #Sample RangeIntervals for Monkey Test
-        self.DurationList()                                 #Creates dict of lists to encapsulate press durations. Will be used for Adaptive Reward Control
-        self.AdaptiveValue = 0.05                           # Probably going to use this in the form of a value that represents a percent. (EX: 0.05 = 5%)
+        # RangeIntervals = RewardClass(0.5,0.05,1,0.25,2,0.45)  # Sample RangeIntervals for Monkey Test
+        self.DurationList()                                 # Creates dict of lists to encapsulate press durations. Will be used for Adaptive Reward Control
+        self.AdaptiveValue = 0.05                           # Probably going to use this in the form of a value
         self.AdaptiveAlgorithm = 1                          # 1: Percentage based change 2: mean, std, calculated shift of distribution (Don't move center?) 3: TBD Move center as well?
         self.AdaptiveFrequency = 50                         # Number of trials inbetween calling AdaptiveRewardThreshold()
 
-
+        self.EnableTimeOut = True # Toggle this True if you want to include 'punishment' timeouts (black screen for self.TimeOut duration), or False for no TimeOuts.
         self.RewardClass(self.NumEvents,1,0.5,2,0.75,3,1)   #Hi Ryan, I added this range for your testing for now, because I changed where the reward is given so that it has to fit into an interval now.
-        self.counter = 0
+        self.counter = 0 # Counter Values: Alphabetic from TestImages folder
+        # Blank(white screen), disc stim 1, disc stim 2, disc stim 3, disc stim go 1, disc stim go 2, disc stim go 3, black(timeout), Prepare(to put hand in position), Monkey image
         self.current_counter = 0
         self.excluded_events = [] #Might want this for excluded events
         self.ImageRatio = 75 # EX: ImageRatio = 75 => 75% Image Reward, 25% Water Reward , Currently does not handle the both choice for water and image.
         ############# Omniplex / Map Channels
-        self.RewardDO_chan = 1
-        self.Area1_right = 5
-        self.Area2_right = 6
-        self.Area1_left = 7
-        self.Area2_left = 8
+        self.RewardDO_chan = 1 # DO Channel
+        # Continuous AI channels
+        self.Pedal1_chan = 1 # Push / Forward channel
+        self.Pedal2_chan = 2 # Right channel
+        self.Pedal3_chan = 3 # Pull / Backwards channel
+        self.Pedal4_chan = 4 # Left channel
+        self.Area1_right = 5 # Home Area (Area 1)
+        self.Area2_right = 6 # Joystick Area (Area 2)
+        self.Area1_left = 7 # Home Area (Area 1)
+        self.Area2_left = 8 # Joystick Area (Area 2)
 
         #############
         # Queue
@@ -141,8 +150,10 @@ class MonkeyImages(tk.Frame,):
         self.ReadyForPull = False
         self.RewardReady = False
         #Rename Area1 and Area2
-        self.Area1 = False
-        self.Area2 = True #???????????? Will have to test how cineplex acts to determine starting bool for Area 1 and 2 ?????????
+        self.Area1_right_pres = False # Home Area
+        self.Area2_right_pres = False # Joystick Area
+        self.Area1_left_pres = False # Home Area
+        self.Area2_left_pres = False # Joystick Area
         self.ImageReward = False
         self.PictureCueTimeInterval = 5 #(seconds) Duration between animal in start position (Area 2) and displaying an image cue.
 
@@ -155,9 +166,10 @@ class MonkeyImages(tk.Frame,):
         self.SoundTime = time.time()
         self.RelSoundTime = time.time() - self.SoundTime
         self.PressTime = time.time()
-        self.RelPressTime = time.time() - self.PressTime
+        self.RelPressTime = 0
+        self.PunishLockTime = time.time()
+        self.RelPunishLockTime = time.time() - self.PunishLockTime
 
-        print('mainloop')
         print("ready for plexon:" , self.readyforplexon)
         tk.Frame.__init__(self, parent, *args, **kwargs)
         self.root = parent
@@ -177,6 +189,12 @@ class MonkeyImages(tk.Frame,):
 
         testbutton = tk.Button(self.root, text = "Test", height = 5, width = 5, command = self.Test)
         testbutton.pack(side = LEFT)
+
+        durationbutton = tk.Button(self.root, text = "Duration", height = 5, width = 8, command = self.Durationbutton)
+        durationbutton.pack(side = LEFT)
+
+        rangesbutton = tk.Button(self.root, text = "Ranges", height = 5, width = 8, command = self.Rangesbutton)
+        rangesbutton.pack(side = LEFT)
 
         # Likely Don't Need these buttons, Image reward will always be an option, and will be controlled by %
         ImageRewardOn = tk.Button(self.root, text = "ImageReward\nOn", height = 5, width = 10, command = self.HighLevelRewardOn)
@@ -199,8 +217,10 @@ class MonkeyImages(tk.Frame,):
                 if self.StartTrialBool == True:
                     self.StartTrialCue()
 
-                if self.PictureBool == False and self.RelStartTime >=  self.PictureCueTimeInterval: #This will be changed to # if self.PictureBool == False and self.Area1 == True:
-                    print('Random pic')
+                # This will be changed to:
+                if self.PictureBool == False and (self.Area1_right_pres == True or self.Area1_left_pres == True):
+                #if self.PictureBool == False and self.RelStartTime >=  self.PictureCueTimeInterval:
+                    print('Discriminatory Stimulus')
                     self.StartTrialBool = False
                     self.PictureBool = True# This will be on for the duration of the trial
 ################################################################################################################################################################################################
@@ -209,6 +229,7 @@ class MonkeyImages(tk.Frame,):
 ################################################################################################################################################################################################
                     self.counter = random.randint(1,self.NumEvents) #Randomly chooses next image -Current,will change the range depending on which images are to be shown here.
                     self.current_counter = self.counter
+                    self.AddCount(self.counter)
                     self.CueTime = time.time()
                     self.RelCueTime = time.time() - self.CueTime
                     self.next_image()
@@ -235,11 +256,11 @@ class MonkeyImages(tk.Frame,):
                         print('Pull')
                         self.CurrentPress = True
                         self.PressTime = time.time()
-                    else:
+
                         while self.Pedal3 >= self.PullThreshold:                    ### While loop in place to continuously and quickly update the Press Time for the Duration that
-                            self.gathering_data_omni()
                             self.RelPressTime = time.time() - self.PressTime        ### The Monkey is Pulling it for. This will reduce latency issues with running through the whole
-                        print('Pull for: {} seconds'.format(self.RelPressTime))     ### Loop.
+                            self.gathering_data_omni()                              ### Loop.
+                        print('Pull for: {} seconds'.format(self.RelPressTime))     
                         self.AddDuration(self.RelPressTime)
                         self.RewardTime = self.ChooseReward(self.RelPressTime)
                         if self.RewardTime > 0:                                     ### Reward will Only be Given if the Pull Duration Falls in one of the intervals.
@@ -247,38 +268,48 @@ class MonkeyImages(tk.Frame,):
                 elif self.RewardReady == True:                                      ### Reward will be Water or Image or Both
                     Reward = self.ChooseOne(self.ImageRatio)
                     if self.ImageReward == True and Reward == 1:
-                        print('Image Reward coming soon to a Pedal Press Project near you!')
+                        self.counter = -1
+                        self.next_image()
                     else:
                         winsound.PlaySound(winsound.Beep(550,500), winsound.SND_ALIAS | winsound.SND_ASYNC)
                         print('Press Duration: {}'.format(self.RelPressTime))
                         print('Reward Duration: {}'.format(self.RewardTime))
                         winsound.PlaySound(self.RewardSound, winsound.SND_ALIAS | winsound.SND_ASYNC)
                         self.WaterReward.run()
+                        self.counter = 0
+                        self.next_image()
                         self.CurrentPress = False
                         self.RewardReady = False
                         self.PictureBool = False
                         self.ReadyForSound = False
-                        self.PunishLockout = False
+                        if self.EnableTimeOut == True:
+                            self.PunishLockout = True
                         self.ReadyForPull = False
                         self.RewardTime = 0
                         self.RewardReady = False
                         self.DiscrimStimDuration = round((random.randint(60,180)/60),2)
                         self.StartTime = time.time() #Update start time for next cue.
                         self.RelStartTime = time.time() - self.StartTime
+                        self.PunishLockTime = time.time()
+                        self.RelPunishLockTime = time.time() - self.PunishLockTime
 
                 # Reset
                 elif self.RelDiscrimStimTime >= self.MaxTimeAfterSound and self.ReadyForPull == True:
                     print('Time Elapsed, wait for Cue again.')
-                    self.counter = 0
+                    self.counter = -3
+                    self.next_image()
                     self.CurrentPress = False
                     self.StartTrialBool = True
                     self.RewardReady = False
                     self.PictureBool = False
                     self.ReadyForSound = False
-                    self.PunishLockout = False
+                    if self.EnableTimeOut == True:
+                        self.PunishLockout = True
                     self.ReadyForSound = False
                     self.ReadyForPull = False
                     self.DiscrimStimDuration = round((random.randint(60,180)/60),2)
+                    self.PunishLockTime = time.time()
+                    self.RelPunishLockTime = time.time() - self.PunishLockTime
                     self.StartTime = time.time() #Update start time for next cue.
                     self.RelStartTime = time.time() - self.StartTime
 
@@ -287,16 +318,28 @@ class MonkeyImages(tk.Frame,):
                 # TODO: Adaptive Thresholding to check lengths of duration lists here
 #########################################################################################################
                 try:
-                    if len(self.durationdict[self.current_counter])%self.AdaptiveFrequency == 0:
+                    if len(self.csvdict[self.current_counter])%self.AdaptiveFrequency == 0:
                         self.AdaptiveRewardThreshold(self.AdaptiveValue,self.AdaptiveAlgorithm)
                 except KeyError:
                     pass
-                # self.update_idletasks
-                self.RelStartTime = time.time() - self.StartTime
-                self.RelCueTime = time.time() - self.CueTime
-                self.RelDiscrimStimTime = time.time() - self.DiscrimStimTime
-                self.RelSoundTime = time.time() - self.SoundTime###This Timing is used for if animal surpasses max time to do task, needs to update every loop
-                self.after(1,func=self.LOOP)
+                
+                if self.PunishLockout == True and self.RelPunishLockTime <= self.TimeOut:
+                    self.StartTime = time.time()
+                    self.CueTime = time.time()
+                    self.DiscrimStimTime = time.time()
+                    self.SoundTime = time.time()
+                    self.RelPunishLockTime = time.time() - self.PunishLockTime
+                    self.after(1,func=self.LOOP)
+                else:
+                    if self.counter == -3:
+                        self.counter = 0
+                        self.next_image()
+                    self.update_idletasks()
+                    self.RelStartTime = time.time() - self.StartTime
+                    self.RelCueTime = time.time() - self.CueTime
+                    self.RelDiscrimStimTime = time.time() - self.DiscrimStimTime
+                    self.RelSoundTime = time.time() - self.SoundTime###This Timing is used for if animal surpasses max time to do task, needs to update every loop
+                    self.after(1,func=self.LOOP)
         #except: #For Later when we want a try block to deal with errors, will help to properly stop water in case of emergency.
         #    print('Error')
         #    if self.readyforplexon == True:
@@ -326,11 +369,11 @@ class MonkeyImages(tk.Frame,):
             rewcounter = rewcounter + 1
             peak = math.trunc((rewcounter + 1) / 2)
             if rewcounter%2 == 1:
-                print('This arg is for peak {} center: {}'.format(peak,arg))
+                print('This arg is for Range: {} center: {}'.format(peak,arg))
                 arg_center = arg
             else:
                 index += 1
-                print('This arg is for peak {} width: {}'.format(peak,arg))
+                print('This arg is for Range: {} width: {}'.format(peak,arg))
                 arg_width = arg
                 low = arg_center - arg_width
                 high = arg_center + arg_width
@@ -338,7 +381,7 @@ class MonkeyImages(tk.Frame,):
                 self.Ranges[index].append(low)
                 self.Ranges[index].append(arg_center)
                 self.Ranges[index].append(high)
-        print(self.Ranges)
+        print("Ranges: {}".format(self.Ranges))
 ############################################################################################################################################
             #TODO: Need to add event to the choose reward inputs. This will come from the event cue that is shown ( Can Use self.current_counter )
 ############################################################################################################################################
@@ -351,36 +394,51 @@ class MonkeyImages(tk.Frame,):
         return RewardDuration
 ############################################################################################################################################
     def DurationList(self):
-        self.durationdict = {}
+        self.csvdict = {}
         for i in range(self.NumEvents):
-            self.durationdict[(i+1)] = []
-        print(self.durationdict)
+            self.csvdict[(i+1)] = []
+            self.csvdict[('Count ' + str(i+1))] = [0]
+        print('Duration Dictionary: {}'.format(self.csvdict))
 
     def AddDuration(self, Duration): 
-        self.durationdict[self.current_counter].append(Duration)
+        self.csvdict[self.current_counter].append(Duration)
+    
+    def AddCount(self, event):
+        self.csvdict['Count ' + str(event)][0] += 1
 
     def FormatDurations(self):
-        # name = 'dummydelete'
-        data = input('What would you like to save the Duration File as: ')
-        # if name == data:
-        #     input('Please choose a different name to save the Duration File: ')
-        with open(data + '.csv', 'w', newline = '') as csvfile:
-            csv_writer = writer(csvfile, delimiter = ',')
-            for key in self.durationdict.keys():
-                csv_writer.writerow([key]+self.durationdict[key])
+        filename = input('What would you like to save the Duration File as: ')
+        fullfilename = filename + '.csv'
+        csvtest = True
+        while csvtest == True:
+            try:
+                check = os.path.isfile(fullfilename)
+                while check == True:
+                    print('File name already exists')
+                    filename = input('Enter File name')
+                    fullfilename = filename + '.csv'
+                    check = os.path.isfile(fullfilename)
+                print('File name not currently used, saving.')
 
-        # with open(name + '.csv', newline = '') as csv_read, open(data +'.csv', 'w', newline = '') as csv_write:
-        #     writer(csv_write, delimiter= ',').writerows(zip(*reader(csv_read, delimiter=',')))
+                with open(filename + '.csv', 'w', newline = '') as csvfile:
+                    csv_writer = writer(csvfile, delimiter = ',')
+                    for key in self.csvdict.keys():
+                        csv_writer.writerow([key]+self.csvdict[key])
+                csvtest = False
+                # with open(name + '.csv', newline = '') as csv_read, open(data +'.csv', 'w', newline = '') as csv_write:
+                #     writer(csv_write, delimiter= ',').writerows(zip(*reader(csv_read, delimiter=',')))
+            except:
+                print('Error with File name')
+        print(fullfilename)
 ############################################################################################################################################
     def AdaptiveRewardThreshold(self, AdaptiveValue, AdaptiveAlgorithm):
-        #Take each self.durationdict and analyze duration times. (Average, sliding average?, etc)
+        #Take each self.csvdict and analyze duration times. (Average, sliding average?, etc)
         #Modify the self.Ranges to reduce the range to increase performance close to the center. Ranges[self.current_counter][1]
         if AdaptiveAlgorithm == 1: # 1: Percentage based change
             self.Ranges[self.current_counter][0] = round((self.Ranges[self.current_counter][0] + self.AdaptiveValue),2)
             self.Ranges[self.current_counter][2] = round((self.Ranges[self.current_counter][2] - self.AdaptiveValue),2)
         elif AdaptiveAlgorithm == 2: #2: mean, std, calculated shift of distribution
-
-            pass
+            self.Ranges[self.current_counter][0] = round((self.Ranges[self.current_counter][0] + self.AdaptiveValue),2)
         elif AdaptiveAlgorithm == 3:#3: ???
             pass
         #Print statement about new range? for X event, etc
@@ -418,11 +476,17 @@ class MonkeyImages(tk.Frame,):
         elif self.counter == -2:
             self.counter = 0
             self.next_image()
-        winsound.PlaySound(winsound.Beep(650,500), winsound.SND_ALIAS | winsound.SND_ASYNC) #Need to change the tone
+        winsound.PlaySound(winsound.Beep(650,500), winsound.SND_ALIAS + winsound.SND_ASYNC + winsound.SND_NOWAIT + winsound.SND_LOOP) #Need to change the tone
 
     def EndTrialCue(self):
         self.counter = 0
         self.next_image()
+    
+    def Durationbutton(self):
+        print(self.csvdict)
+
+    def Rangesbutton(self):
+        print(self.Ranges)
 
     def KeyPress(self, event):
         key = event.char
@@ -437,12 +501,10 @@ class MonkeyImages(tk.Frame,):
     ### These attach to buttons that will select if Monkey has access to the highly coveted monkey image reward
     def HighLevelRewardOn(self):
         print('Image Reward On')
-        print('Image Reward coming soon to a Pedal Press Project near you!')
         self.ImageReward = True
 
     def HighLevelRewardOff(self):
         print('Image Reward Off')
-        print('Image Reward coming soon to a Pedal Press Project near you!')
         self.ImageReward = False
 
     def next_image(self): #This is the call for nextimage, set counter to 0 and run next_image to get blank. For this to work need a blank image in first position in directory.
@@ -484,7 +546,10 @@ class MonkeyImages(tk.Frame,):
                 elif new_data.source_num_or_type[i] == self.keyboard_event_source and new_data.channel[i] == 8: #Alt 8
                     pass
             #For other new data find the AI channel 1 data for pedal
-                if source_numbers_types[new_data.source_num_or_type[i]] == CONTINUOUS_TYPE and (new_data.channel[i] == 1 or new_data.channel[i] == 2 or new_data.channel[i] == 3 or new_data.channel[i] == 4 or new_data.channel[i] == self.Area1_right or new_data.channel[i] == self.Area2_right or new_data.channel[i] == self.Area1_left or new_data.channel[i] == self.Area2_left):
+                if source_numbers_types[new_data.source_num_or_type[i]] == CONTINUOUS_TYPE and (new_data.channel[i] == self.Pedal1_chan
+                     or new_data.channel[i] == self.Pedal2_chan or new_data.channel[i] == self.Pedal3_chan or new_data.channel[i] == self.Pedal4_chan
+                     or new_data.channel[i] == self.Area1_right or new_data.channel[i] == self.Area2_right or new_data.channel[i] == self.Area1_left
+                     or new_data.channel[i] == self.Area2_left):
                     # Output info
                     tmp_source_number = new_data.source_num_or_type[i]
                     tmp_channel = new_data.channel[i]
@@ -513,16 +578,47 @@ class MonkeyImages(tk.Frame,):
                         self.Pedal4 = tmp_samples[0] # Assign Pedal from AI continuous
                         # Construct a string with the samples for convenience
                         tmp_samples_str = float(self.Pedal4)
-                    elif new_data.channel[i] == (self.Area1_right or self.Area1_left):
+
+                    ################################################################
+                    elif new_data.channel[i] == (self.Area1_right):
                         if tmp_samples[0] >= 1:
-                            self.Area1 = True
+                            if self.Area1_right_pres == False and tmp_samples[0] >= 1:
+                                print('Area1_right_pres set to True')
+                            self.Area1_right_pres = True
                         else:
-                            self.Area1 = False
-                    elif new_data.channel[i] == (self.Area2_right or self.Area2_left):
+                            if self.Area1_right_pres == True and tmp_samples[0] <= 1:
+                                print('Area1_right_pres set to False')
+                            self.Area1_right_pres = False
+                            
+                    elif new_data.channel[i] == (self.Area1_left):
                         if tmp_samples[0] >= 1:
-                            self.Area2 = True
+                            if self.Area1_left_pres == False and tmp_samples[0] >= 1:
+                                print('Area1_left_pres set to True')
+                            self.Area1_left_pres = True
                         else:
-                            self.Area2 = False
+                            if self.Area1_left_pres == True and tmp_samples[0] <= 1:
+                                print('Area1_left_pres set to False')
+                            self.Area1_left_pres = False
+
+                    elif new_data.channel[i] == (self.Area2_right):
+                        if tmp_samples[0] >= 1:
+                            if self.Area2_right_pres == False and tmp_samples[0] >= 1:
+                                print('Area2_right_pres set to True')
+                            self.Area2_right_pres = True
+                        else:
+                            if self.Area2_right_pres == True and tmp_samples[0] <= 1:
+                                print('Area2_right_pres set to False')
+                            self.Area2_right_pres = False
+                            
+                    elif new_data.channel[i] == (self.Area2_left):
+                        if tmp_samples[0] >= 1:
+                            if self.Area2_left_pres == False and tmp_samples[0] >= 1:
+                                print('Area2_left_pres set to True')
+                            self.Area2_left_pres = True
+                        else:
+                            if self.Area2_left_pres == True and tmp_samples[0] <= 1:
+                                print('Area2_left_pres set to False')
+                            self.Area2_left_pres = False
                     #print values that we want from AI
                     #if new_data.channel[i] == 1:
                         #print("SRC:{} {} TS:{} CH:{} WF:{}".format(tmp_source_number, tmp_source_name, tmp_timestamp, tmp_channel, tmp_samples_str))
@@ -548,7 +644,9 @@ class MonkeyImages(tk.Frame,):
         def run(self):
             print('start')
             time.sleep(MonkeyTest.RewardDelay)
-            #time.sleep(5) #For Testing
+            if MonkeyTest.ImageReward == True:
+                MonkeyTest.counter = -1
+                MonkeyTest.next_image()
             print("Water On")
             if MonkeyTest.readyforplexon == True:
                 MonkeyTest.plexdo.set_bit(MonkeyTest.device_number, MonkeyTest.RewardDO_chan)
