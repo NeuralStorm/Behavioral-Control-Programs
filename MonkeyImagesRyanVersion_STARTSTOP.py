@@ -19,6 +19,7 @@ import tkinter as tk
 from tkinter import *
 import threading as t
 from PIL import Image, ImageTk
+from csv import reader, writer
 import os
 import os.path
 import time
@@ -32,7 +33,7 @@ import queue
 ###M onkey Images Class set up for Tkinter GUI
 class MonkeyImages(tk.Frame,):
     def __init__(self, parent, *args, **kwargs):
-        self.readyforplexon = True ### Nathan's Switch for testing while not connected to plexon omni. I will change to true / get rid of it when not needed.
+        self.readyforplexon = False ### Nathan's Switch for testing while not connected to plexon omni. I will change to true / get rid of it when not needed.
                                     ### Also changed the server set up so that it won't error out and exit if the server is not on, but it will say Client isn't connected.
 
         if self.readyforplexon == True:
@@ -229,10 +230,14 @@ class MonkeyImages(tk.Frame,):
         ImageRewardOff = tk.Button(self.root, text = "ImageReward\nOff", height = 5, width = 10, command = self.HighLevelRewardOff)
         ImageRewardOff.pack(side = LEFT)
 
-        testbutton = tk.Button(self.root, text = "Water Reward - 'z'", height = 5, width = 5, command = self.WaterReward.run())
+        testbutton = tk.Button(self.root, text = "Water Reward - 'z'", height = 5, width = 5, command = self.WaterButton)
         testbutton.pack(side = LEFT)
+
         updatebutton = tk.Button(self.root, text = "Update", height = 5, width = 5, command = self.ConfusionMatrixUpdate)
         updatebutton.pack(side = LEFT)
+
+        savebutton = tk.Button(self.root, text = "Save CSV", height = 5, width = 5, command = self.FormatDurations)
+        savebutton.pack(side = LEFT)
 
         self.root.bind('<Key>', lambda a : self.KeyPress(a))
         if self.readyforplexon == True:
@@ -492,12 +497,12 @@ class MonkeyImages(tk.Frame,):
                 check = os.path.isfile(self.fullfilename)
                 while check == True:
                     print('File name already exists')
-                    self.filename = input('Enter File name')
+                    self.filename = input('Enter File name: ')
                     self.fullfilename = self.filename + '.csv'
                     check = os.path.isfile(self.fullfilename)
                 print('File name not currently used, saving.')
 
-                with open(filename + '.csv', 'w', newline = '') as csvfile:
+                with open(self.filename + '.csv', 'w', newline = '') as csvfile:
                     csv_writer = writer(csvfile, delimiter = ',')
                     for key in self.csvdict.keys():
                         csv_writer.writerow([key]+self.csvdict[key])
@@ -507,6 +512,7 @@ class MonkeyImages(tk.Frame,):
             except:
                 print('Error with File name')
         print(self.fullfilename)
+        print('saved')
 ############################################################################################################################################
     def AdaptiveRewardThreshold(self, AdaptiveValue, AdaptiveAlgorithm):
         #Take each self.csvdict and analyze duration times. (Average, sliding average?, etc)
@@ -615,6 +621,9 @@ class MonkeyImages(tk.Frame,):
         elif key == 'z':
             self.RewardTime = self.MaxReward # Gives MaxReward for the water
             self.WaterReward.run()
+
+    def WaterButton(self):
+        self.WaterReward.run()
 
     def ConfusionMatrix(self): # This will only be called once at the beginning
         self.confmat = tk.Toplevel(self)
