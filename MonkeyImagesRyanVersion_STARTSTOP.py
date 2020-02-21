@@ -33,7 +33,7 @@ import queue
 ###M onkey Images Class set up for Tkinter GUI
 class MonkeyImages(tk.Frame,):
     def __init__(self, parent, *args, **kwargs):
-        self.readyforplexon = False ### Nathan's Switch for testing while not connected to plexon omni. I will change to true / get rid of it when not needed.
+        self.readyforplexon = True ### Nathan's Switch for testing while not connected to plexon omni. I will change to true / get rid of it when not needed.
                                     ### Also changed the server set up so that it won't error out and exit if the server is not on, but it will say Client isn't connected.
 
         if self.readyforplexon == True:
