@@ -281,7 +281,6 @@ class MonkeyImages(tk.Frame,):
 ################################################################################################################################################################################################
                     self.counter = random.randint(1,self.NumEvents) #Randomly chooses next image -Current,will change the range depending on which images are to be shown here.
                     self.current_counter = self.counter
-                    self.AddCount(self.counter)
                     self.CueTime = time.time()
                     self.RelCueTime = time.time() - self.CueTime
                     self.next_image()
@@ -313,23 +312,27 @@ class MonkeyImages(tk.Frame,):
                 # If Lever is Pulled On and ready for Pull
                 elif self.ReadyForPull == True and self.CurrentPress == True and self.PunishLockout == False:
                     print('Pull')
-                    winsound.PlaySound(winsound.Beep(550,1000), winsound.SND_ASYNC + winsound.SND_LOOP)
-                    if self.Pedal3 >= self.PullThreshold:
-                        self.gathering_data_omni()
+                    #winsound.PlaySound(winsound.Beep(550,1000), winsound.SND_ASYNC + winsound.SND_LOOP)
                     while self.Pedal3 >= self.PullThreshold:                     ### While loop in place to continuously and quickly update the Press Time for the Duration that
                                                                                  ### The Monkey is Pulling it for. This will reduce latency issues with running through the whole
                         self.gathering_data_omni()                               ### Loop.
                     winsound.PlaySound(winsound.Beep(100,0), winsound.SND_PURGE)
                     print('Pull for: {} seconds'.format(self.DurationTimestamp))
-                    self.AddDuration(self.DurationTimestamp)
-                    self.AddStartPress(self.StartTimestamp)
-                    self.AddEndPress(self.StopTimestamp)
+                    
+
                     self.RewardTime = self.ChooseReward(self.DurationTimestamp)
                     print(self.RewardTime)
                     if self.RewardTime > 0:                                      ### Reward will Only be Given if the Pull Duration Falls in one of the intervals.
                         self.JoystickPulled = True
+                        self.AddStimCount(self.counter)
+                        self.AddCorrectDuration(self.DurationTimestamp)
+                        self.AddCorrectStartPress(self.StartTimestamp)
+                        self.AddCorrectEndPress(self.StopTimestamp)
                     elif self.EnableTimeOut == True and self.RewardTime == 0:
                         self.PunishLockout = True
+                        self.AddIncorrectDuration(self.DurationTimestamp)
+                        self.AddIncorrectStartPress(self.StartTimestamp)
+                        self.AddIncorrectEndPress(self.StopTimestamp)
                         winsound.PlaySound('WrongHoldDuration.wav', winsound.SND_ALIAS + winsound.SND_ASYNC + winsound.SND_NOWAIT)
                         self.PunishLockTime = time.time()
                         self.RelPunishLockTime = time.time() - self.PunishLockTime
@@ -470,25 +473,41 @@ class MonkeyImages(tk.Frame,):
         return RewardDuration
 ############################################################################################################################################
     def DurationList(self):
-        self.csvdict = {'Start': [], 'Image Shown': [], 'Discrim Stim': []}
+        self.csvdict = {'Start': [], 'Discrim Stim': [], 'Go Cue': [], 'Paw into Box': [], 'Paw out of Box': []}
         for i in range(self.NumEvents):
-            self.csvdict[('Duration ' + str(i+1))] = []
-            self.csvdict[('Count ' + str(i+1))] = [0]
-            self.csvdict[('Start Press ' + str(i+1))] = []
-            self.csvdict[('End Press ' + str(i+1))] = []
+            self.csvdict[('Correct Start Press ' + str(i+1))] = []
+            self.csvdict[('Correct End Press ' + str(i+1))] = []
+            self.csvdict[('Correct Duration ' + str(i+1))] = []
+            self.csvdict[('Correct Stim Count ' + str(i+1))] = [0]
+            self.csvdict[('Incorrect Start Press ' + str(i+1))] = []
+            self.csvdict[('Incorrect End Press ' + str(i+1))] = []
+            self.csvdict[('Incorrect Duration ' + str(i+1))] = []
+            self.csvdict[('Discriminatory Stimulus ' + str(i+1))] = []
+            self.csvdict[('Go Cue ' + str(i+1))] = []
+
+
         print('Duration Dictionary: {}'.format(self.csvdict))
 
-    def AddDuration(self, Duration): 
-        self.csvdict[('Duration' + str(self.current_counter))].append(Duration)
+    def AddCorrectDuration(self, Duration): 
+        self.csvdict[('Correct Duration ' + str(self.current_counter))].append(Duration)
     
-    def AddCount(self, event):
-        self.csvdict['Count ' + str(event)][0] += 1
+    def AddIncorrectDuration(self, Duration):
+        self.csvdict[('Incorrect Duration ' + str(self.current_counter))].append(Duration)
     
-    def AddStartPress(self, Start):
-        self.csvdict[('Start Press ' + str(self.current_counter))].append(Start)
+    def AddStimCount(self, event):
+        self.csvdict['Correct Stim Count ' + str(event)][0] += 1
     
-    def AddEndPress(self, End):
-        self.csvdict[('End Press ' + str(self.current_counter))].append(End)
+    def AddCorrectStartPress(self, Start):
+        self.csvdict[('Correct Start Press ' + str(self.current_counter))].append(Start)
+    
+    def AddCorrectEndPress(self, End):
+        self.csvdict[('Correct End Press ' + str(self.current_counter))].append(End)
+
+    def AddIncorrectStartPress(self, Start):
+        self.csvdict[('Incorrect Start Press ' + str(self.current_counter))].append(Start)
+    
+    def AddIncorrectEndPress(self, End):
+        self.csvdict[('Incorrect End Press ' + str(self.current_counter))].append(End)
 
     def FormatDurations(self):
         csvtest = True
