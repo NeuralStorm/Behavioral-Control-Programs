@@ -101,10 +101,64 @@ class MonkeyImages(tk.Frame,):
                 sys.exit(1)
             self.plexdo.clear_all_bits(device_number)
             ## End Setup for Plexon DO
+        self.begin   = numpy.array([0,0,0,0,0,0,0,0], dtype=numpy.uint8) # Connector Currently on Port A, When switched to port B, Events = Event + 16
+        self.event0  = numpy.array([1,0,0,0,0,0,0,0], dtype=numpy.uint8) #task: EV14    #task2: NC
+        self.event1  = numpy.array([0,1,0,0,0,0,0,0], dtype=numpy.uint8) #task: EV13    #task2: NC
+        self.event2  = numpy.array([0,0,1,0,0,0,0,0], dtype=numpy.uint8) #task: EV12    #task2: EV15
+        self.event3  = numpy.array([0,0,0,1,0,0,0,0], dtype=numpy.uint8) #task: EV11    #task2: EV16
+        self.event4  = numpy.array([0,0,0,0,1,0,0,0], dtype=numpy.uint8) #task: EV10    #task2: NC
+        self.event5  = numpy.array([0,0,0,0,0,1,0,0], dtype=numpy.uint8) #task: EV09    #task2: EV05
+        self.event6  = numpy.array([0,0,0,0,0,0,1,0], dtype=numpy.uint8) #task: EV08    #task2: EV04
+        self.event7  = numpy.array([0,0,0,0,0,0,0,1], dtype=numpy.uint8) #task: EV07    #task2: EV03
+        
+        # Connector Currently on Port A
 
+        # EV03: Ready (Beginning of Trial)
+        # EV04: Correct Count (Time of Correct Tone)
+        # EV05: Incorrect Count (Time of Blooper Tone)
+        # EV07: Reward Count (Time of Reward)
+        # EV08: End of Trial
+        # EV09: DS 1
+        # EV10: GC 1
+        # EV11: DS 2
+        # EV12: GC 2
+        # EV13: DS 3
+        # EV14: GC 3
+        # EV15: DS 4 (Not Currently Used)
+        # EV16: GC 4 (Not Currently Used)
+
+
+
+        # self.word0  = numpy.array([1,0,0,0,0,0,0,1], dtype=numpy.uint8)
+        # self.word1  = numpy.array([0,1,0,0,0,0,0,1], dtype=numpy.uint8)
+        # self.word2  = numpy.array([0,0,1,0,0,0,0,1], dtype=numpy.uint8)
+        # self.word3  = numpy.array([0,0,0,1,0,0,0,1], dtype=numpy.uint8)
+        # self.word4  = numpy.array([0,0,0,0,1,0,0,1], dtype=numpy.uint8)
+        # self.word5  = numpy.array([0,0,0,0,0,1,0,1], dtype=numpy.uint8)
+        # self.word6  = numpy.array([0,0,0,0,0,0,1,1], dtype=numpy.uint8)
+        # self.word7  = numpy.array([0,0,0,0,0,0,0,1], dtype=numpy.uint8)
+        
+        
+        
+        self.task = Task()
+        self.task.CreateDOChan("/Dev2/port2/line0:7","",PyDAQmx.DAQmx_Val_ChanForAllLines)
+        self.task.StartTask()
+        self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
+        
+        self.task2 = Task()
+        self.task2.CreateDOChan("/Dev2/port1/line0:7","",PyDAQmx.DAQmx_Val_ChanForAllLines)
+        self.task2.StartTask()
+        self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
+        
+        #self.task3 = Task()
+        #self.task3.CreateDOChan("/Dev2/port0/line0","",PyDAQmx.DAQmx_Val_ChanForAllLines)
+        #self.task3.StartTask()
+        #self.task3.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
+        
         ############# Specific for pedal Press Tasks
         self.Pedal = 0 # Initialize Pedal/Press
         self.PullThreshold = 3 # (Voltage)Amount that Monkey has to pull to. Will be 0 or 5, because digital signal from pedal. (Connected to Analog input in plexon)
+        self.InterTrialTime = 1 # (seconds) Time between trials / Time before trial starts
         self.DiscrimStimDuration = round((random.randint(30,120)/60),2) # (seconds) How long is the Discriminative Stimulus displayed for.
         #self.TimeBeforeSound = 0.2 # (seconds) Not Currently Used
         self.MaxTimeAfterSound = 20 # (seconds) Maximum time Monkey has to pull. However, it is currently set so that it will not reset if the Pedal is being Pulled
@@ -128,8 +182,9 @@ class MonkeyImages(tk.Frame,):
         self.AdaptiveValue = 0.05                           # Probably going to use this in the form of a value
         self.AdaptiveAlgorithm = 1                          # 1: Percentage based change 2: mean, std, calculated shift of distribution (Don't move center?) 3: TBD Move center as well?
         self.AdaptiveFrequency = 50                         # Number of trials inbetween calling AdaptiveRewardThreshold()
-        self.EarlyPullTimeOut = False                        # This Boolean sets if you want to have a timeout for a pull before the Go Red Rectangle.
+        self.EarlyPullTimeOut = False                       # This Boolean sets if you want to have a timeout for a pull before the Go Red Rectangle.
         self.RewardTime = 0
+        self.UseMaximumRewardTime = False                   # This Boolean sets if you want to use the Maximum Reward Time for each Reward or to use scaled Reward Time relative to Pull Duration.
         self.EnableTimeOut = False # Toggle this True if you want to include 'punishment' timeouts (black screen for self.TimeOut duration), or False for no TimeOuts.
         self.RewardClass(self.NumEvents,0.5,.45,0.75,0.68,1,0.9)   #Hi Ryan, I added this range for your testing for now, because I changed where the reward is given so that it has to fit into an interval now.
         self.counter = 0 # Counter Values: Alphabetic from TestImages folder
@@ -206,16 +261,16 @@ class MonkeyImages(tk.Frame,):
         self.cv1 = tk.Canvas(self.frame1, width = 1600, height = 800, background = "white", bd = 1, relief = tk.RAISED)
         self.cv1.pack(side = BOTTOM)
 
-        startbutton = tk.Button(self.root, text = "Start - 'a'", height = 5, width = 5, command = self.Start)
+        startbutton = tk.Button(self.root, text = "Start-'a'", height = 5, width = 6, command = self.Start)
         startbutton.pack(side = LEFT)
 
-        pausebutton = tk.Button(self.root, text = "Pause - 's'", height = 5, width = 5, command = self.Pause)
+        pausebutton = tk.Button(self.root, text = "Pause-'s'", height = 5, width = 6, command = self.Pause)
         pausebutton.pack(side = LEFT)
 
-        unpausebutton = tk.Button(self.root, text = "Unpause - 'd'", height = 5, width = 8, command = self.Unpause)
+        unpausebutton = tk.Button(self.root, text = "Unpause-'d'", height = 5, width = 8, command = self.Unpause)
         unpausebutton.pack(side = LEFT)
 
-        stopbutton = tk.Button(self.root, text = "Stop - 'f'", height = 5, width = 5, command = self.Stop)
+        stopbutton = tk.Button(self.root, text = "Stop-'f'", height = 5, width = 6, command = self.Stop)
         stopbutton.pack(side = LEFT)
 
         durationbutton = tk.Button(self.root, text = "Print Durations", height = 5, width = 12, command = self.Durationbutton)
@@ -230,13 +285,13 @@ class MonkeyImages(tk.Frame,):
         ImageRewardOff = tk.Button(self.root, text = "ImageReward\nOff", height = 5, width = 10, command = self.HighLevelRewardOff)
         ImageRewardOff.pack(side = LEFT)
 
-        testbutton = tk.Button(self.root, text = "Water Reward - 'z'", height = 5, width = 5, command = self.WaterButton)
+        testbutton = tk.Button(self.root, text = "Water Reward-'z'", height = 5, width = 12, command = self.WaterButton)
         testbutton.pack(side = LEFT)
 
-        updatebutton = tk.Button(self.root, text = "Update", height = 5, width = 5, command = self.ConfusionMatrixUpdate)
+        updatebutton = tk.Button(self.root, text = "Test", height = 5, width = 5, command = self.Test)
         updatebutton.pack(side = LEFT)
 
-        savebutton = tk.Button(self.root, text = "Save CSV", height = 5, width = 5, command = self.FormatDurations)
+        savebutton = tk.Button(self.root, text = "Save CSV", height = 5, width = 10, command = self.FormatDurations)
         savebutton.pack(side = LEFT)
 
         self.root.bind('<Key>', lambda a : self.KeyPress(a))
@@ -266,7 +321,7 @@ class MonkeyImages(tk.Frame,):
                     self.gathering_data_omni()
 
                 # Flashing box for trial start cue + low freq sound.
-                if self.StartTrialBool == True and self.PunishLockout == False and self.Area1_right_pres == False and self.Area1_left_pres == False:
+                if self.StartTrialBool == True and self.PunishLockout == False and self.Area1_right_pres == False and self.Area1_left_pres == False and self.RelStartTime >= self.InterTrialTime:
                     self.StartTrialCue()
 
                 if self.PictureBool == False and (self.Area1_right_pres == True or self.Area1_left_pres == True) and self.PunishLockout == False:
@@ -283,12 +338,14 @@ class MonkeyImages(tk.Frame,):
                     self.current_counter = self.counter
                     self.CueTime = time.time()
                     self.RelCueTime = time.time() - self.CueTime
+                    # EV09 , EV11, EV13
                     self.next_image()
 
-                # TODO: Discriminatory Stimulus here
                 elif self.PictureBool == True and self.RelCueTime >= self.DiscrimStimDuration and self.ReadyForPull == False:
+                    print('Go Cue')
                     self.ReadyForPull = True
                     self.counter = self.counter + self.NumEvents
+                    # EV10, EV12, EV14
                     self.next_image()
                     self.DiscrimStimTime = time.time()
                     self.RelDiscrimStimTime = time.time() - self.DiscrimStimTime
@@ -319,12 +376,15 @@ class MonkeyImages(tk.Frame,):
                     winsound.PlaySound(winsound.Beep(100,0), winsound.SND_PURGE)
                     print('Pull for: {} seconds'.format(self.DurationTimestamp))
                     
+                    if self.UseMaximumRewardTime == False:
+                        self.RewardTime = self.ChooseReward(self.DurationTimestamp)
+                    elif self.UseMaximumRewardTime == True:
+                        self.RewardTime = self.MaxReward
 
-                    self.RewardTime = self.ChooseReward(self.DurationTimestamp)
                     print(self.RewardTime)
                     if self.RewardTime > 0:                                      ### Reward will Only be Given if the Pull Duration Falls in one of the intervals.
                         self.JoystickPulled = True
-                        self.AddStimCount(self.counter)
+                        self.AddCorrectStimCount(self.current_counter)
                         self.AddCorrectDuration(self.DurationTimestamp)
                         self.AddCorrectStartPress(self.StartTimestamp)
                         self.AddCorrectEndPress(self.StopTimestamp)
@@ -333,6 +393,7 @@ class MonkeyImages(tk.Frame,):
                         self.AddIncorrectDuration(self.DurationTimestamp)
                         self.AddIncorrectStartPress(self.StartTimestamp)
                         self.AddIncorrectEndPress(self.StopTimestamp)
+                        # EV05
                         winsound.PlaySound('WrongHoldDuration.wav', winsound.SND_ALIAS + winsound.SND_ASYNC + winsound.SND_NOWAIT)
                         self.PunishLockTime = time.time()
                         self.RelPunishLockTime = time.time() - self.PunishLockTime
@@ -348,6 +409,7 @@ class MonkeyImages(tk.Frame,):
                     winsound.PlaySound(winsound.Beep(550,500), winsound.SND_ALIAS | winsound.SND_ASYNC)
                     print('Press Duration: {}'.format(self.DurationTimestamp))
                     print('Reward Duration: {}'.format(self.RewardTime))
+                    #EV04
                     winsound.PlaySound(self.RewardSound, winsound.SND_ALIAS | winsound.SND_ASYNC)
                     try:
                         if len(self.csvdict[self.current_counter])%self.AdaptiveFrequency == 0 and len(self.csvdict[self.current_counter]) > 0:
@@ -376,6 +438,7 @@ class MonkeyImages(tk.Frame,):
                          self.Pedal3 < self.PullThreshold and self.Pedal4 < self.PullThreshold):
                     print('Time Elapsed, wait for Cue again.')
                     self.counter = -3
+                    # EV08 ?
                     self.next_image()
                     self.counter = 0
                     self.CurrentPress = False
@@ -411,6 +474,7 @@ class MonkeyImages(tk.Frame,):
                 else:
                     if self.counter == -3:
                         self.counter = 0
+                        # EV08 ?
                         self.next_image()
                     self.update_idletasks()
                     self.RelStartTime = time.time() - self.StartTime
@@ -494,7 +558,7 @@ class MonkeyImages(tk.Frame,):
     def AddIncorrectDuration(self, Duration):
         self.csvdict[('Incorrect Duration ' + str(self.current_counter))].append(Duration)
     
-    def AddStimCount(self, event):
+    def AddCorrectStimCount(self, event):
         self.csvdict['Correct Stim Count ' + str(event)][0] += 1
     
     def AddCorrectStartPress(self, Start):
@@ -604,8 +668,83 @@ class MonkeyImages(tk.Frame,):
         self.after(1,func=None)
 
     def Test(self):
-        self.WaterReward.run()
-
+        print('test')
+        # self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event0,None,None)
+        # self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
+        # time.sleep(0.1)
+        # self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event1,None,None)
+        # self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
+        # time.sleep(0.1)
+        # self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event2,None,None)
+        # self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
+        # time.sleep(0.1)
+        # self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event3,None,None)
+        # self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
+        # time.sleep(0.1)
+        # self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event4,None,None)
+        # self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
+        # time.sleep(0.1)
+        # self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event5,None,None)
+        # self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
+        # time.sleep(0.1)
+        # self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event6,None,None)
+        # self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
+        # time.sleep(0.1)
+        # self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event7,None,None)
+        # self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
+        # time.sleep(0.1)
+        # self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event2,None,None)
+        # self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
+        # time.sleep(0.1)
+        # self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event3,None,None)
+        # self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
+        # time.sleep(0.1)
+        # self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event5,None,None)
+        # self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
+        # time.sleep(0.1)
+        # self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event6,None,None)
+        # self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
+        # time.sleep(0.1)
+        # self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event7,None,None)
+        # self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
+        # time.sleep(0.1)
+    
+    def Test2(self):
+        print('test2')
+        self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event7,None,None)
+        self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event6,None,None)
+        self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event5,None,None)
+       #self.task3.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event0,None,None)
+        self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
+       #self.task3.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
+    
+    def Test3(self):
+        print('test3')
+        #self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.word0,None,None)
+        #self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
+        #time.sleep(0.1)
+        #self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.word1,None,None)
+        #self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
+        #time.sleep(0.1)
+        self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.word2,None,None)
+        self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
+        time.sleep(0.1)
+        self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.word3,None,None)
+        self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
+        time.sleep(0.1)
+        #self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.word4,None,None)
+        #self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
+        #time.sleep(0.1)
+        self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.word5,None,None)
+        self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
+        time.sleep(0.1)
+        self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.word6,None,None)
+        self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
+        time.sleep(0.1)
+        #self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.word7,None,None)
+        #self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
+        #time.sleep(0.1)
+        
     def StartTrialCue(self):
         if self.counter == 0:
             self.counter = -2
@@ -614,6 +753,7 @@ class MonkeyImages(tk.Frame,):
             self.counter = 0
             self.next_image()
         if self.OutofHomeZoneOn == False:
+            # EV03 Ready
             winsound.PlaySound('OutOfHomeZone.wav', winsound.SND_ALIAS + winsound.SND_ASYNC + winsound.SND_NOWAIT + winsound.SND_LOOP) #Need to change the tone
             self.OutofHomeZoneOn = True
 
@@ -868,6 +1008,7 @@ class MonkeyImages(tk.Frame,):
                 MonkeyTest.next_image()
             print("Water On")
             if MonkeyTest.readyforplexon == True:
+                #EV07
                 MonkeyTest.plexdo.set_bit(MonkeyTest.device_number, MonkeyTest.RewardDO_chan)
                 time.sleep(MonkeyTest.RewardTime)
                 MonkeyTest.plexdo.clear_bit(MonkeyTest.device_number, MonkeyTest.RewardDO_chan)
