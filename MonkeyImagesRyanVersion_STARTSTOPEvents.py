@@ -53,10 +53,13 @@ class MonkeyImages(tk.Frame,):
 
             for source_id in global_parameters.source_ids:
                 source_name, _, _, _ = self.client.get_source_info(source_id)
+                print(source_name)
                 if source_name == 'KBD':
                     self.keyboard_event_source = source_id
                 if source_name == 'AI':
                     self.ai_source = source_id
+                if source_name == 'Single-bit events':
+                    self.event_source = source_id
                 if source_name == 'Other events':
                     self.other_event_source = source_id
                     print ("Other event source is {}".format(self.other_event_source))
@@ -185,7 +188,8 @@ class MonkeyImages(tk.Frame,):
         self.EarlyPullTimeOut = False                       # This Boolean sets if you want to have a timeout for a pull before the Go Red Rectangle.
         self.RewardTime = 0
         self.UseMaximumRewardTime = False                   # This Boolean sets if you want to use the Maximum Reward Time for each Reward or to use scaled Reward Time relative to Pull Duration.
-        self.EnableTimeOut = False # Toggle this True if you want to include 'punishment' timeouts (black screen for self.TimeOut duration), or False for no TimeOuts.
+        self.EnableTimeOut = False # Toggle this to True if you want to include 'punishment' timeouts (black screen for self.TimeOut duration), or False for no TimeOuts.
+        self.EnableBlooperNoise = False # Toggle this to True if you want to include the blooper noise when an incorrect pull is detected (Either too long or too short / No Reward Given)
         self.RewardClass(self.NumEvents,0.5,.45,0.75,0.68,1,0.9)   #Hi Ryan, I added this range for your testing for now, because I changed where the reward is given so that it has to fit into an interval now.
         self.counter = 0 # Counter Values: Alphabetic from TestImages folder
         # Blank(white screen), disc stim 1, disc stim 2, disc stim 3, disc stim go 1, disc stim go 2, disc stim go 3, black(timeout), Prepare(to put hand in position), Monkey image
@@ -321,14 +325,20 @@ class MonkeyImages(tk.Frame,):
                     self.gathering_data_omni()
 
                 # Flashing box for trial start cue + low freq sound.
-                if self.StartTrialBool == True and self.PunishLockout == False and self.Area1_right_pres == False and self.Area1_left_pres == False and self.RelStartTime >= self.InterTrialTime:
-                    self.StartTrialCue()
+                if self.StartTrialBool == True and self.PunishLockout == False and self.RelStartTime >= self.InterTrialTime:
+                    if self.Area1_right_pres == False and self.Area1_left_pres == False:
+                        self.StartTrialCue()
+                        self.StartTrialBool = False
+                    else:
+                        # EV03 Ready
+                        self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event7,None,None)
+                        self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
+                        self.StartTrialBool = False
 
-                if self.PictureBool == False and (self.Area1_right_pres == True or self.Area1_left_pres == True) and self.PunishLockout == False:
+                if self.PictureBool == False and (self.Area1_right_pres == True or self.Area1_left_pres == True) and self.PunishLockout == False and self.StartTrialBool == False:
                 #if self.PictureBool == False and self.RelStartTime >=  self.PictureCueTimeInterval:
                     winsound.PlaySound(winsound.Beep(100,0), winsound.SND_PURGE) #Purge looping sounds
                     print('Discriminatory Stimulus')
-                    self.StartTrialBool = False
                     self.PictureBool = True # This will be on for the duration of the trial
 ################################################################################################################################################################################################
                     #while self.counter not in self.excluded_events: #Don't use excluded events
@@ -338,16 +348,19 @@ class MonkeyImages(tk.Frame,):
                     self.current_counter = self.counter
                     self.CueTime = time.time()
                     self.RelCueTime = time.time() - self.CueTime
-                    # EV09 , EV11, EV13
-                    #if self.current_counter == 1: # EV09
-                        # self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event5,None,None)
-                        # self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
-                    #elif self.current_counter == 2: # EV11
-                        # self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event3,None,None)
-                        # self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
-                    #elif self.current_counter == 3: # EV13
-                        # self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event1,None,None)
-                        # self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
+                    # EV09 , EV11, EV13, EV15
+                    if self.current_counter == 1: # EV09
+                        self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event5,None,None)
+                        self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
+                    elif self.current_counter == 2: # EV11
+                        self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event3,None,None)
+                        self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
+                    elif self.current_counter == 3: # EV13
+                        self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event1,None,None)
+                        self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
+                    elif self.current_counter == 4: # EV15
+                        self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event2,None,None)
+                        self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
                     self.next_image()
 
                 elif self.PictureBool == True and self.RelCueTime >= self.DiscrimStimDuration and self.ReadyForPull == False:
@@ -355,15 +368,18 @@ class MonkeyImages(tk.Frame,):
                     self.ReadyForPull = True
                     self.counter = self.counter + self.NumEvents
                     # EV10, EV12, EV14
-                    #if self.current_counter == 1: # EV010
-                        # self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event4,None,None)
-                        # self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
-                    #elif self.current_counter == 2: # EV12
-                        # self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event2,None,None)
-                        # self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
-                    #elif self.current_counter == 3: # EV14
-                        # self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event0,None,None)
-                        # self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
+                    if self.current_counter == 1: # EV010
+                        self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event4,None,None)
+                        self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
+                    elif self.current_counter == 2: # EV12
+                        self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event2,None,None)
+                        self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
+                    elif self.current_counter == 3: # EV14
+                        self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event0,None,None)
+                        self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
+                    elif self.current_counter == 4: # EV16
+                        self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event3,None,None)
+                        self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
                     self.next_image()
                     self.DiscrimStimTime = time.time()
                     self.RelDiscrimStimTime = time.time() - self.DiscrimStimTime
@@ -371,7 +387,8 @@ class MonkeyImages(tk.Frame,):
                 # TEST: For Pull before ReadyForPull. Go to Black Screen and lockout
                 elif self.PictureBool == True and self.ReadyForPull == False and self.CurrentPress == True and self.EarlyPullTimeOut == True and self.PunishLockout == False:
                         self.PunishLockout = True
-                        winsound.PlaySound('WrongHoldDuration.wav', winsound.SND_ALIAS + winsound.SND_ASYNC + winsound.SND_NOWAIT) # Might have this sound or another or None
+                        if self.EnableBlooperNoise == True:
+                            winsound.PlaySound('WrongHoldDuration.wav', winsound.SND_ALIAS + winsound.SND_ASYNC + winsound.SND_NOWAIT) # Might have this sound or another or None
                         self.PunishLockTime = time.time()
                         self.RelPunishLockTime = time.time() - self.PunishLockTime
                         self.counter = -3
@@ -412,13 +429,23 @@ class MonkeyImages(tk.Frame,):
                         self.AddIncorrectStartPress(self.StartTimestamp)
                         self.AddIncorrectEndPress(self.StopTimestamp)
                         # EV05
-                        # self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event5,None,None)
-                        # self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
-                        winsound.PlaySound('WrongHoldDuration.wav', winsound.SND_ALIAS + winsound.SND_ASYNC + winsound.SND_NOWAIT)
+                        self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event5,None,None)
+                        self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
+                        if self.EnableBlooperNoise == True:
+                            winsound.PlaySound('WrongHoldDuration.wav', winsound.SND_ALIAS + winsound.SND_ASYNC + winsound.SND_NOWAIT)
                         self.PunishLockTime = time.time()
                         self.RelPunishLockTime = time.time() - self.PunishLockTime
                         self.counter = -3
                         self.next_image()
+                    elif self.RewardTime == 0:
+                        self.AddIncorrectDuration(self.DurationTimestamp)
+                        self.AddIncorrectStartPress(self.StartTimestamp)
+                        self.AddIncorrectEndPress(self.StopTimestamp)
+                        # EV05
+                        self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event5,None,None)
+                        self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
+                        if self.EnableBlooperNoise == True:
+                            winsound.PlaySound('WrongHoldDuration.wav', winsound.SND_ALIAS + winsound.SND_ASYNC + winsound.SND_NOWAIT)
                     self.CurrentPress = False
                     
                 if self.JoystickPulled == True and self.ReadyForPull == True:                                   ### Reward will be Water or Image or Both (Need to add Both Option)
@@ -426,13 +453,13 @@ class MonkeyImages(tk.Frame,):
                     if self.ImageReward == True and Reward == 1:
                         self.counter = -1
                         self.next_image()
-                    winsound.PlaySound(winsound.Beep(550,500), winsound.SND_ALIAS | winsound.SND_ASYNC)
+                    winsound.PlaySound(winsound.Beep(550,500), winsound.SND_ALIAS + winsound.SND_ASYNC)
                     print('Press Duration: {}'.format(self.DurationTimestamp))
                     print('Reward Duration: {}'.format(self.RewardTime))
                     #EV04
-                    # self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event6,None,None)
-                    # self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
-                    winsound.PlaySound(self.RewardSound, winsound.SND_ALIAS | winsound.SND_ASYNC)
+                    self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event6,None,None)
+                    self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
+                    winsound.PlaySound(self.RewardSound, winsound.SND_ALIAS + winsound.SND_ASYNC)
                     try:
                         if len(self.csvdict[self.current_counter])%self.AdaptiveFrequency == 0 and len(self.csvdict[self.current_counter]) > 0:
                             self.AdaptiveRewardThreshold(self.AdaptiveValue,self.AdaptiveAlgorithm)
@@ -449,6 +476,10 @@ class MonkeyImages(tk.Frame,):
                     self.ReadyForPull = False
                     self.RewardTime = 0
                     self.DiscrimStimDuration = round((random.randint(60,180)/60),2)
+                    # EV08
+                    self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event6,None,None)
+                    self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
+                    self.StartTrialBool = True
                     self.StartTime = time.time() #Update start time for next cue.
                     self.RelStartTime = time.time() - self.StartTime
                     self.PunishLockTime = time.time()
@@ -460,9 +491,6 @@ class MonkeyImages(tk.Frame,):
                          self.Pedal3 < self.PullThreshold and self.Pedal4 < self.PullThreshold):
                     print('Time Elapsed, wait for Cue again.')
                     self.counter = -3
-                    # EV08 ?
-                    # self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event6,None,None)
-                    # self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
                     self.next_image()
                     self.counter = 0
                     self.CurrentPress = False
@@ -478,6 +506,9 @@ class MonkeyImages(tk.Frame,):
                     self.ReadyForPull = False
                     self.DiscrimStimDuration = round((random.randint(60,180)/60),2)
                     self.OutofHomeZoneOn == False
+                    # EV08
+                    self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event6,None,None)
+                    self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
                     self.StartTime = time.time() #Update start time for next cue.
                     self.RelStartTime = time.time() - self.StartTime
 
@@ -488,6 +519,10 @@ class MonkeyImages(tk.Frame,):
 
                 if self.PunishLockout == True and self.RelPunishLockTime <= self.TimeOut:
                     self.PunishLockout = False
+                    # EV08
+                    self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event6,None,None)
+                    self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
+                    self.StartTrialBool = True
                     self.StartTime = time.time()
                     self.CueTime = time.time()
                     self.DiscrimStimTime = time.time()
@@ -498,9 +533,6 @@ class MonkeyImages(tk.Frame,):
                 else:
                     if self.counter == -3:
                         self.counter = 0
-                        # EV08 ?
-                        # self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event6,None,None)
-                        # self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
                         self.next_image()
                     self.update_idletasks()
                     self.RelStartTime = time.time() - self.StartTime
@@ -563,7 +595,7 @@ class MonkeyImages(tk.Frame,):
         return RewardDuration
 ############################################################################################################################################
     def DurationList(self):
-        self.csvdict = {'Start': [], 'Discrim Stim': [], 'Go Cue': [], 'Paw into Box': [], 'Paw out of Box': []}
+        self.csvdict = {'Start': [], 'Paw into Box': [], 'Paw out of Box': [], 'Trial End': []}
         for i in range(self.NumEvents):
             self.csvdict[('Correct Start Press ' + str(i+1))] = []
             self.csvdict[('Correct End Press ' + str(i+1))] = []
@@ -598,7 +630,12 @@ class MonkeyImages(tk.Frame,):
     
     def AddIncorrectEndPress(self, End):
         self.csvdict[('Incorrect End Press ' + str(self.current_counter))].append(End)
-
+    
+    def AddDiscriminatoryStimulus(self, Timestamp):
+        self.csvdict[('Discriminatory Stimulus ' + str(self.current_counter))].append(Timestamp)
+        
+    def AddGoCue(self, Timestamp):
+        self.csvdict[('Go Cue ' + str(self.current_counter))].append(Timestamp)
     def FormatDurations(self):
         csvtest = True
         while csvtest == True:
@@ -744,8 +781,8 @@ class MonkeyImages(tk.Frame,):
             self.next_image()
         if self.OutofHomeZoneOn == False:
             # EV03 Ready
-            # self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event7,None,None)
-            # self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
+            self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event7,None,None)
+            self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
             winsound.PlaySound('OutOfHomeZone.wav', winsound.SND_ALIAS + winsound.SND_ASYNC + winsound.SND_NOWAIT + winsound.SND_LOOP) #Need to change the tone
             self.OutofHomeZoneOn = True
 
@@ -864,8 +901,8 @@ class MonkeyImages(tk.Frame,):
                     tmp_voltage_scaler = source_numbers_voltage_scalers[tmp_source_number]
                     tmp_timestamp = new_data.timestamp[i]
                     tmp_unit = new_data.unit[i]
-                    tmp_rate = source_numbers_rates[tmp_source_number]
-
+                    #tmp_rate = source_numbers_rates[tmp_source_number]
+    
                     # Convert the samples from AD units to voltage using the voltage scaler, use tmp_samples[0] because it could be a list.
                     tmp_samples = new_data.waveform[i][:max_samples_output]
                     tmp_samples = [s * tmp_voltage_scaler for s in tmp_samples]
@@ -880,12 +917,12 @@ class MonkeyImages(tk.Frame,):
                     #         print('stop press')
                     #         self.StopTimestamp = tmp_timestamp - self.RecordingStartTimestamp
                     #         self.DurationTimestamp = self.StopTimestamp - self.StartTimestamp
-
+    
                     #     self.Pedal1 = tmp_samples[0] # Assign Pedal from AI continuous
                     #     # Construct a string with the samples for convenience
                     #     tmp_samples_str = float(self.Pedal1)
                     # elif new_data.channel[i] == 2:
-
+    
                     #     if self.Pedal2 < self.PullThreshold and tmp_samples[0] >= self.PullThreshold:
                     #         print('start press')
                     #         self.StartTimestamp = tmp_timestamp - self.RecordingStartTimestamp
@@ -896,12 +933,12 @@ class MonkeyImages(tk.Frame,):
                     #         print('stop press')
                     #         self.StopTimestamp = tmp_timestamp - self.RecordingStartTimestamp
                     #         self.DurationTimestamp = self.StopTimestamp - self.StartTimestamp
-
+    
                     #     self.Pedal2 = tmp_samples[0] # Assign Pedal from AI continuous
                     #     # Construct a string with the samples for convenience
                     #     tmp_samples_str = float(self.Pedal2)
                     if new_data.channel[i] == 3: # Change to elif if using other channels 1,2 and 4.
-
+    
                         if self.Pedal3 < self.PullThreshold and tmp_samples[0] >= self.PullThreshold:
                             print('start press')
                             self.StartTimestamp = tmp_timestamp - self.RecordingStartTimestamp
@@ -911,12 +948,12 @@ class MonkeyImages(tk.Frame,):
                             print('stop press')
                             self.StopTimestamp = tmp_timestamp - self.RecordingStartTimestamp
                             self.DurationTimestamp = self.StopTimestamp - self.StartTimestamp
-
+    
                         self.Pedal3 = tmp_samples[0] # Assign Pedal from AI continuous
                         # Construct a string with the samples for convenience
                         tmp_samples_str = float(self.Pedal3)
                     # elif new_data.channel[i] == 4:
-
+    
                     #     if self.Pedal4 < self.PullThreshold and tmp_samples[0] >= self.PullThreshold:
                     #         print('start press')
                     #         self.StartTimestamp = tmp_timestamp - self.RecordingStartTimestamp
@@ -927,11 +964,11 @@ class MonkeyImages(tk.Frame,):
                     #         print('stop press')
                     #         self.StopTimestamp = tmp_timestamp - self.RecordingStartTimestamp
                     #         self.DurationTimestamp = self.StopTimestamp - self.StartTimestamp
-
+    
                     #     self.Pedal4 = tmp_samples[0] # Assign Pedal from AI continuous
                     #     # Construct a string with the samples for convenience
                     #     tmp_samples_str = float(self.Pedal4)
-
+    
                     ################################################################
                     elif new_data.channel[i] == (self.Area1_right):
                         if tmp_samples[0] >= 1:
@@ -952,7 +989,7 @@ class MonkeyImages(tk.Frame,):
                             if self.Area1_left_pres == True and tmp_samples[0] <= 1:
                                 print('Area1_left_pres set to False')
                             self.Area1_left_pres = False
-
+    
                     elif new_data.channel[i] == (self.Area2_right):
                         if tmp_samples[0] >= 1:
                             if self.Area2_right_pres == False and tmp_samples[0] >= 1:
@@ -962,7 +999,6 @@ class MonkeyImages(tk.Frame,):
                             if self.Area2_right_pres == True and tmp_samples[0] <= 1:
                                 print('Area2_right_pres set to False')
                             self.Area2_right_pres = False
-                            
                     elif new_data.channel[i] == (self.Area2_left):
                         if tmp_samples[0] >= 1:
                             if self.Area2_left_pres == False and tmp_samples[0] >= 1:
@@ -978,10 +1014,34 @@ class MonkeyImages(tk.Frame,):
                 
                 # This is for 2 events that come from Cineplex, might have to change channels depending on physical connections.
                 # Waiting for Ryan to see if these should be event type or continuous
-
-                    
+                elif new_data.source_num_or_type[i] == self.event_source: # Single-bit events EV01 - EV32
+                    tmp_source_number = new_data.source_num_or_type[i]
+                    tmp_channel = new_data.channel[i]
+                    tmp_source_name = source_numbers_names[tmp_source_number]
+                    #tmp_voltage_scaler = source_numbers_voltage_scalers[tmp_source_number]
+                    tmp_timestamp = new_data.timestamp[i]
+                    tmp_unit = new_data.unit[i]
+                    #tmp_rate = source_numbers_rates[tmp_source_number]
+                    if tmp_channel == 3: # Start Timestamps are inconsistent and missing some.
+                        pass
+                        # self.csvdict[('Start')].append(tmp_timestamp - self.RecordingStartTimestamp)
+                    if tmp_channel == 4:
+                        pass
+                    if tmp_channel == 5:
+                        pass
+                    if tmp_channel == 7:
+                        pass
+                    if tmp_channel == 8:
+                        pass
+                        # self.csvdict[('Trial End')].append(tmp_timestamp - self.RecordingStartTimestamp)
+                    if tmp_channel == 9 or tmp_channel == 11 or tmp_channel == 13 or tmp_channel == 15:
+                        self.AddDiscriminatoryStimulus(tmp_timestamp - self.RecordingStartTimestamp)
+                    if tmp_channel == 10 or tmp_channel == 12 or tmp_channel == 14 or tmp_channel == 16:
+                        self.AddGoCue(tmp_timestamp - self.RecordingStartTimestamp)
+    
+                        
             except KeyError:
-                continue
+                pass
     #end of gathering data
 
 ########################################
@@ -1001,8 +1061,8 @@ class MonkeyImages(tk.Frame,):
             print("Water On")
             if MonkeyTest.readyforplexon == True:
                 #EV07
-                # self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event7,None,None)
-                # self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
+                MonkeyTest.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,MonkeyTest.event7,None,None)
+                MonkeyTest.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,MonkeyTest.begin,None,None)
                 MonkeyTest.plexdo.set_bit(MonkeyTest.device_number, MonkeyTest.RewardDO_chan)
                 time.sleep(MonkeyTest.RewardTime)
                 MonkeyTest.plexdo.clear_bit(MonkeyTest.device_number, MonkeyTest.RewardDO_chan)
