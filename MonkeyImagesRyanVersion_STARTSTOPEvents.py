@@ -193,7 +193,7 @@ class MonkeyImages(tk.Frame,):
         self.RewardClass(self.NumEvents,0.5,.45,0.75,0.68,1,0.9)   #Hi Ryan, I added this range for your testing for now, because I changed where the reward is given so that it has to fit into an interval now.
         self.ImageRatio = 100 # EX: ImageRatio = 75 => 75% Image Reward, 25% Water Reward , Currently does not handle the both choice for water and image.
         self.WaterReward = self.WaterRewardThread()
-        
+        self.ActivePedalChans = [3]                  # This can be used if you only want him to pull in certain directions as commented above as self.Pedal#_chan.
         
         ############# Initializing vars
         self.counter = 0 # Counter Values: Alphabetic from TestImages folder
@@ -213,7 +213,6 @@ class MonkeyImages(tk.Frame,):
         self.Area1_left = 7 # Home Area (Area 1)
         self.Area2_left = 8 # Joystick Area (Area 2)
         self.StartTimestamp = 0 
-        self.ActivePedalChans = [1,2,3,4] # This can be used if you only want him to pull in certain directions as commented above as self.Pedal#_chan.
         #############
         # Queue 
         self.queue = queue.Queue()
@@ -228,7 +227,7 @@ class MonkeyImages(tk.Frame,):
         self.Bloop       = 'Question'
         ##############
         
-        # Parameters (Parameters built into GUI Class functions):
+        # Booleans (built into GUI Class functions):
         self.MonkeyLoop = False         # Overall for when the program is looping
         self.StartTrialBool = False     # Gives the flashing diamond signal before discrim stimulus
         self.CurrentPress = False       # Changes to True to show that a Press has happened / recorded into plexon and on server.
@@ -910,37 +909,37 @@ class MonkeyImages(tk.Frame,):
                     # Convert the samples from AD units to voltage using the voltage scaler, use tmp_samples[0] because it could be a list.
                     tmp_samples = new_data.waveform[i][:max_samples_output]
                     tmp_samples = [s * tmp_voltage_scaler for s in tmp_samples]
-                    # if new_data.channel[i] == 1:
-                    #     if self.Pedal1 < self.PullThreshold and tmp_samples[0] >= self.PullThreshold:
-                    #         print('start press')
-                    #         self.StartTimestamp = tmp_timestamp - self.RecordingStartTimestamp
-                    #         if self.CurrentPress == False and self.ReadyForPull == True:
-                    #             pass
-                    #             #self.CurrentPress = True
-                    #     elif self.Pedal1 >= self.PullThreshold and tmp_samples[0] < self.PullThreshold:
-                    #         print('stop press')
-                    #         self.StopTimestamp = tmp_timestamp - self.RecordingStartTimestamp
-                    #         self.DurationTimestamp = self.StopTimestamp - self.StartTimestamp
+                    if new_data.channel[i] == 1:
+                        if self.Pedal1 < self.PullThreshold and tmp_samples[0] >= self.PullThreshold:
+                            print('start press')
+                            self.StartTimestamp = tmp_timestamp - self.RecordingStartTimestamp
+                            if self.CurrentPress == False and self.ReadyForPull == True:
+                                pass
+                                #self.CurrentPress = True
+                        elif self.Pedal1 >= self.PullThreshold and tmp_samples[0] < self.PullThreshold:
+                            print('stop press')
+                            self.StopTimestamp = tmp_timestamp - self.RecordingStartTimestamp
+                            self.DurationTimestamp = self.StopTimestamp - self.StartTimestamp
     
-                    #     self.Pedal1 = tmp_samples[0] # Assign Pedal from AI continuous
-                    #     # Construct a string with the samples for convenience
-                    #     tmp_samples_str = float(self.Pedal1)
-                    # elif new_data.channel[i] == 2:
+                        self.Pedal1 = tmp_samples[0] # Assign Pedal from AI continuous
+                        # Construct a string with the samples for convenience
+                        tmp_samples_str = float(self.Pedal1)
+                    elif new_data.channel[i] == 2:
     
-                    #     if self.Pedal2 < self.PullThreshold and tmp_samples[0] >= self.PullThreshold:
-                    #         print('start press')
-                    #         self.StartTimestamp = tmp_timestamp - self.RecordingStartTimestamp
-                    #         if self.CurrentPress == False and self.ReadyForPull == True:
-                    #             pass
-                    #             #self.CurrentPress = True
-                    #     elif self.Pedal2 >= self.PullThreshold and tmp_samples[0] < self.PullThreshold:
-                    #         print('stop press')
-                    #         self.StopTimestamp = tmp_timestamp - self.RecordingStartTimestamp
-                    #         self.DurationTimestamp = self.StopTimestamp - self.StartTimestamp
+                        if self.Pedal2 < self.PullThreshold and tmp_samples[0] >= self.PullThreshold:
+                            print('start press')
+                            self.StartTimestamp = tmp_timestamp - self.RecordingStartTimestamp
+                            if self.CurrentPress == False and self.ReadyForPull == True:
+                                pass
+                                #self.CurrentPress = True
+                        elif self.Pedal2 >= self.PullThreshold and tmp_samples[0] < self.PullThreshold:
+                            print('stop press')
+                            self.StopTimestamp = tmp_timestamp - self.RecordingStartTimestamp
+                            self.DurationTimestamp = self.StopTimestamp - self.StartTimestamp
     
-                    #     self.Pedal2 = tmp_samples[0] # Assign Pedal from AI continuous
-                    #     # Construct a string with the samples for convenience
-                    #     tmp_samples_str = float(self.Pedal2)
+                        self.Pedal2 = tmp_samples[0] # Assign Pedal from AI continuous
+                        # Construct a string with the samples for convenience
+                        tmp_samples_str = float(self.Pedal2)
                     if new_data.channel[i] == 3: # Change to elif if using other channels 1,2 and 4.
     
                         if self.Pedal3 < self.PullThreshold and tmp_samples[0] >= self.PullThreshold:
@@ -956,22 +955,22 @@ class MonkeyImages(tk.Frame,):
                         self.Pedal3 = tmp_samples[0] # Assign Pedal from AI continuous
                         # Construct a string with the samples for convenience
                         tmp_samples_str = float(self.Pedal3)
-                    # elif new_data.channel[i] == 4:
+                    elif new_data.channel[i] == 4:
     
-                    #     if self.Pedal4 < self.PullThreshold and tmp_samples[0] >= self.PullThreshold:
-                    #         print('start press')
-                    #         self.StartTimestamp = tmp_timestamp - self.RecordingStartTimestamp
-                    #         if self.CurrentPress == False and self.ReadyForPull == True:
-                    #             pass
-                    #             #self.CurrentPress = True
-                    #     elif self.Pedal4 >= self.PullThreshold and tmp_samples[0] < self.PullThreshold:
-                    #         print('stop press')
-                    #         self.StopTimestamp = tmp_timestamp - self.RecordingStartTimestamp
-                    #         self.DurationTimestamp = self.StopTimestamp - self.StartTimestamp
+                        if self.Pedal4 < self.PullThreshold and tmp_samples[0] >= self.PullThreshold:
+                            print('start press')
+                            self.StartTimestamp = tmp_timestamp - self.RecordingStartTimestamp
+                            if self.CurrentPress == False and self.ReadyForPull == True:
+                                pass
+                                #self.CurrentPress = True
+                        elif self.Pedal4 >= self.PullThreshold and tmp_samples[0] < self.PullThreshold:
+                            print('stop press')
+                            self.StopTimestamp = tmp_timestamp - self.RecordingStartTimestamp
+                            self.DurationTimestamp = self.StopTimestamp - self.StartTimestamp
     
-                    #     self.Pedal4 = tmp_samples[0] # Assign Pedal from AI continuous
-                    #     # Construct a string with the samples for convenience
-                    #     tmp_samples_str = float(self.Pedal4)
+                        self.Pedal4 = tmp_samples[0] # Assign Pedal from AI continuous
+                        # Construct a string with the samples for convenience
+                        tmp_samples_str = float(self.Pedal4)
     
                     ################################################################
                     elif new_data.channel[i] == (self.Area1_right):
