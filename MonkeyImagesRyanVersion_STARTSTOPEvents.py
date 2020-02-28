@@ -402,12 +402,12 @@ class MonkeyImages(tk.Frame,):
                 #     self.ReadyForPull = True
                 #     self.SoundTime = time.time()
                 #     self.RelSoundTime = time.time() - self.SoundTime
-                #     winsound.PlaySound(winsound.Beep(750,1000), winsound.SND_ALIAS | winsound.SND_ASYNC) #750 Hz, 1000 ms
+                #     winsound.PlaySound('750Hz_1s', winsound.SND_ALIAS + winsound.SND_ASYNC + winsound.SND_NOWAIT) #750 Hz, 1000 ms
 
                 # If Lever is Pulled On and ready for Pull
                 elif self.ReadyForPull == True and self.CurrentPress == True and self.PunishLockout == False:
                     print('Pull')
-                    #winsound.PlaySound(winsound.Beep(550,1000), winsound.SND_ASYNC + winsound.SND_LOOP)
+                    #winsound.PlaySound('550Hz_1s', winsound.SND_ASYNC + winsound.SND_LOOP + winsound.SND_NOWAIT)
                     while self.Pedal3 >= self.PullThreshold:                     ### While loop in place to continuously and quickly update the Press Time for the Duration that
                         self.client.opx_wait(100)                                ### The Monkey is Pulling it for. This will reduce latency issues with running through the whole
                         self.gathering_data_omni()                               ### Loop.
@@ -456,13 +456,13 @@ class MonkeyImages(tk.Frame,):
                     if self.ImageReward == True and Reward == 1:
                         self.counter = -1
                         self.next_image()
-                    winsound.PlaySound(winsound.Beep(550,500), winsound.SND_ALIAS + winsound.SND_ASYNC)
                     print('Press Duration: {}'.format(self.DurationTimestamp))
                     print('Reward Duration: {}'.format(self.RewardTime))
                     #EV04
                     self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event6,None,None)
                     self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
-                    winsound.PlaySound(self.RewardSound, winsound.SND_ALIAS + winsound.SND_ASYNC)
+                    winsound.PlaySound('550Hz_0.5s', winsound.SND_ALIAS + winsound.SND_ASYNC + winsound.SND_NOWAIT)
+                    #winsound.PlaySound(self.RewardSound, winsound.SND_ALIAS + winsound.SND_ASYNC)
                     try:
                         if len(self.csvdict[self.current_counter])%self.AdaptiveFrequency == 0 and len(self.csvdict[self.current_counter]) > 0:
                             self.AdaptiveRewardThreshold(self.AdaptiveValue,self.AdaptiveAlgorithm)
