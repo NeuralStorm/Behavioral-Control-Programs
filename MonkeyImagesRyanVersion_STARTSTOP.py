@@ -33,7 +33,7 @@ import queue
 ###M onkey Images Class set up for Tkinter GUI
 class MonkeyImages(tk.Frame,):
     def __init__(self, parent, *args, **kwargs):
-        self.readyforplexon = True ### Nathan's Switch for testing while not connected to plexon omni. I will change to true / get rid of it when not needed.
+        self.readyforplexon = True  ### Nathan's Switch for testing while not connected to plexon omni. I will change to true / get rid of it when not needed.
                                     ### Also changed the server set up so that it won't error out and exit if the server is not on, but it will say Client isn't connected.
 
         if self.readyforplexon == True:
@@ -64,7 +64,7 @@ class MonkeyImages(tk.Frame,):
                     self.other_event_source = source_id
                     print ("Other event source is {}".format(self.other_event_source))
             # Print information on each source
-
+            
             ##### Need to include information here about getting Digital signals ############
             for index in range(global_parameters.num_sources):
                 # Get general information on the source
@@ -161,12 +161,7 @@ class MonkeyImages(tk.Frame,):
         ############# Specific for pedal Press Tasks
         self.Pedal = 0 # Initialize Pedal/Press
         self.PullThreshold = 3 # (Voltage)Amount that Monkey has to pull to. Will be 0 or 5, because digital signal from pedal. (Connected to Analog input in plexon)
-        self.InterTrialTime = 1 # (seconds) Time between trials / Time before trial starts
-        self.DiscrimStimDuration = round((random.randint(30,120)/60),2) # (seconds) How long is the Discriminative Stimulus displayed for.
         #self.TimeBeforeSound = 0.2 # (seconds) Not Currently Used
-        self.MaxTimeAfterSound = 20 # (seconds) Maximum time Monkey has to pull. However, it is currently set so that it will not reset if the Pedal is being Pulled
-        self.RewardDelay = 0.020 # (seconds) Length of Delay before Reward (Juice) is given.
-        self.TimeOut = 0.5 # (seconds) Time for black time out screen
         self.Pedal1 = 0 # Push / Forward
         self.Pedal2 = 0 # Right
         self.Pedal3 = 0 # Pull / Backwards
@@ -179,23 +174,33 @@ class MonkeyImages(tk.Frame,):
         # PARAMETERS
         self.filename = 'dummy'
         self.fullfilename = self.filename + '.csv'
+        self.DiscrimStimDuration = round((random.randint(30,120)/60),2) # (seconds) How long is the Discriminative Stimulus displayed for.
+        self.MaxTimeAfterSound = 20                          # (seconds) Maximum time Monkey has to pull. However, it is currently set so that it will not reset if the Pedal is being Pulled
         self.NumEvents = 3
-        # RangeIntervals = RewardClass(0.5,0.05,1,0.25,2,0.45)  # Sample RangeIntervals for Monkey Test
         self.DurationList()                                 # Creates dict of lists to encapsulate press durations. Will be used for Adaptive Reward Control
+        self.InterTrialTime = 1                             # (seconds) Time between trials / Time before trial starts
         self.AdaptiveValue = 0.05                           # Probably going to use this in the form of a value
         self.AdaptiveAlgorithm = 1                          # 1: Percentage based change 2: mean, std, calculated shift of distribution (Don't move center?) 3: TBD Move center as well?
         self.AdaptiveFrequency = 50                         # Number of trials inbetween calling AdaptiveRewardThreshold()
         self.EarlyPullTimeOut = False                       # This Boolean sets if you want to have a timeout for a pull before the Go Red Rectangle.
         self.RewardTime = 0
+        self.RewardDelay = 0.020                            # (seconds) Length of Delay before Reward (Juice) is given.
         self.UseMaximumRewardTime = False                   # This Boolean sets if you want to use the Maximum Reward Time for each Reward or to use scaled Reward Time relative to Pull Duration.
-        self.EnableTimeOut = False # Toggle this to True if you want to include 'punishment' timeouts (black screen for self.TimeOut duration), or False for no TimeOuts.
-        self.EnableBlooperNoise = False # Toggle this to True if you want to include the blooper noise when an incorrect pull is detected (Either too long or too short / No Reward Given)
+        self.MaxReward = 0.18                               # (seconds, maximum time to give water)
+        self.EnableTimeOut = False                          # Toggle this to True if you want to include 'punishment' timeouts (black screen for self.TimeOut duration), or False for no TimeOuts.
+        self.TimeOut = 0.5                                  # (seconds) Time for black time out screen
+        self.EnableBlooperNoise = False                     # Toggle this to True if you want to include the blooper noise when an incorrect pull is detected (Either too long or too short / No Reward Given)
         self.RewardClass(self.NumEvents,0.5,.45,0.75,0.68,1,0.9)   #Hi Ryan, I added this range for your testing for now, because I changed where the reward is given so that it has to fit into an interval now.
+        self.ImageRatio = 100 # EX: ImageRatio = 75 => 75% Image Reward, 25% Water Reward , Currently does not handle the both choice for water and image.
+        self.WaterReward = self.WaterRewardThread()
+        
+        
+        ############# Initializing vars
         self.counter = 0 # Counter Values: Alphabetic from TestImages folder
         # Blank(white screen), disc stim 1, disc stim 2, disc stim 3, disc stim go 1, disc stim go 2, disc stim go 3, black(timeout), Prepare(to put hand in position), Monkey image
-        self.current_counter = 0
+        self.current_counter = 0 
         self.excluded_events = [] #Might want this for excluded events
-        self.ImageRatio = 100 # EX: ImageRatio = 75 => 75% Image Reward, 25% Water Reward , Currently does not handle the both choice for water and image.
+        
         ############# Omniplex / Map Channels
         self.RewardDO_chan = 1 # DO Channel
         # Continuous AI channels
@@ -207,10 +212,10 @@ class MonkeyImages(tk.Frame,):
         self.Area2_right = 6 # Joystick Area (Area 2)
         self.Area1_left = 7 # Home Area (Area 1)
         self.Area2_left = 8 # Joystick Area (Area 2)
-        self.StartTimestamp = 0
+        self.StartTimestamp = 0 
         self.ActivePedalChans = [1,2,3,4] # This can be used if you only want him to pull in certain directions as commented above as self.Pedal#_chan.
         #############
-        # Queue
+        # Queue 
         self.queue = queue.Queue()
 
         ############# Confusion Matrix initiation #TODO: Change to using scikit-learn
@@ -221,10 +226,8 @@ class MonkeyImages(tk.Frame,):
         ############# Rewards
         self.RewardSound = 'Exclamation'
         self.Bloop       = 'Question'
-        self.MaxReward = 0.18 #(seconds, maximum time to give water)
-        self.WaterReward = self.WaterRewardThread()
         ##############
-
+        
         # Parameters (Parameters built into GUI Class functions):
         self.MonkeyLoop = False         # Overall for when the program is looping
         self.StartTrialBool = False     # Gives the flashing diamond signal before discrim stimulus
@@ -322,6 +325,7 @@ class MonkeyImages(tk.Frame,):
             if self.MonkeyLoop == True:
                 if self.readyforplexon == True:
                     #Gather new data
+                    self.client.opx_wait(100)
                     self.gathering_data_omni()
 
                 # Flashing box for trial start cue + low freq sound.
@@ -406,7 +410,7 @@ class MonkeyImages(tk.Frame,):
                     print('Pull')
                     #winsound.PlaySound(winsound.Beep(550,1000), winsound.SND_ASYNC + winsound.SND_LOOP)
                     while self.Pedal3 >= self.PullThreshold:                     ### While loop in place to continuously and quickly update the Press Time for the Duration that
-                                                                                 ### The Monkey is Pulling it for. This will reduce latency issues with running through the whole
+                        self.client.opx_wait(100)                                ### The Monkey is Pulling it for. This will reduce latency issues with running through the whole
                         self.gathering_data_omni()                               ### Loop.
                     winsound.PlaySound(winsound.Beep(100,0), winsound.SND_PURGE)
                     print('Pull for: {} seconds'.format(self.DurationTimestamp))
@@ -1018,25 +1022,24 @@ class MonkeyImages(tk.Frame,):
                     tmp_source_number = new_data.source_num_or_type[i]
                     tmp_channel = new_data.channel[i]
                     tmp_source_name = source_numbers_names[tmp_source_number]
-                    #tmp_voltage_scaler = source_numbers_voltage_scalers[tmp_source_number]
                     tmp_timestamp = new_data.timestamp[i]
                     tmp_unit = new_data.unit[i]
-                    #tmp_rate = source_numbers_rates[tmp_source_number]
+                    
                     if tmp_channel == 3: # Start Timestamps are inconsistent and missing some.
+                        self.csvdict[('Start')].append(tmp_timestamp - self.RecordingStartTimestamp)
                         pass
-                        # self.csvdict[('Start')].append(tmp_timestamp - self.RecordingStartTimestamp)
-                    if tmp_channel == 4:
+                    elif tmp_channel == 4:
                         pass
-                    if tmp_channel == 5:
+                    elif tmp_channel == 5:
                         pass
-                    if tmp_channel == 7:
+                    elif tmp_channel == 7:
                         pass
-                    if tmp_channel == 8:
+                    elif tmp_channel == 8:
+                        self.csvdict[('Trial End')].append(tmp_timestamp - self.RecordingStartTimestamp)
                         pass
-                        # self.csvdict[('Trial End')].append(tmp_timestamp - self.RecordingStartTimestamp)
-                    if tmp_channel == 9 or tmp_channel == 11 or tmp_channel == 13 or tmp_channel == 15:
+                    elif tmp_channel == 9 or tmp_channel == 11 or tmp_channel == 13 or tmp_channel == 15:
                         self.AddDiscriminatoryStimulus(tmp_timestamp - self.RecordingStartTimestamp)
-                    if tmp_channel == 10 or tmp_channel == 12 or tmp_channel == 14 or tmp_channel == 16:
+                    elif tmp_channel == 10 or tmp_channel == 12 or tmp_channel == 14 or tmp_channel == 16:
                         self.AddGoCue(tmp_timestamp - self.RecordingStartTimestamp)
     
                         
