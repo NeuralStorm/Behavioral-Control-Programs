@@ -598,7 +598,7 @@ class MonkeyImages(tk.Frame,):
         return RewardDuration
 ############################################################################################################################################
     def DurationList(self):
-        self.csvdict = {'Start': [], 'Paw into Box': [], 'Paw out of Box': [], 'Trial End': []}
+        self.csvdict = {'Start': [], 'Paw into Home Box': [], 'Paw out of Home Box': [], 'Paw into Joystick Box': [], 'Paw out of Joystick Box': [], 'Trial End': []}
         for i in range(self.NumEvents):
             self.csvdict[('Correct Start Press ' + str(i+1))] = []
             self.csvdict[('Correct End Press ' + str(i+1))] = []
@@ -639,6 +639,19 @@ class MonkeyImages(tk.Frame,):
         
     def AddGoCue(self, Timestamp):
         self.csvdict[('Go Cue ' + str(self.current_counter))].append(Timestamp)
+        
+    def AddPawInHome(self, Timestamp):
+        self.csvdict[('Paw into Home Box')].append(Timestamp)
+        
+    def AddPawOutHome(self, Timestamp):
+        self.csvdict[('Paw out of Home Box')].append(Timestamp)
+        
+    def AddPawInJoystick(self, Timestamp):
+        self.csvdict[('Paw into Joystick Box')].append(Timestamp)
+        
+    def AddPawOutJoystick(self, Timestamp):
+        self.csvdict[('Paw out of Joystick Box')].append(Timestamp)
+    
     def FormatDurations(self):
         csvtest = True
         while csvtest == True:
@@ -975,41 +988,49 @@ class MonkeyImages(tk.Frame,):
                     ################################################################
                     elif new_data.channel[i] == (self.Area1_right):
                         if tmp_samples[0] >= 1:
-                            if self.Area1_right_pres == False and tmp_samples[0] >= 1:
+                            if self.Area1_right_pres == False and tmp_samples[0] >= 1: #Paw Into Home
                                 print('Area1_right_pres set to True')
+                                self.AddPawInHome(tmp_timestamp - self.RecordingStartTimestamp)
                             self.Area1_right_pres = True
                         else:
-                            if self.Area1_right_pres == True and tmp_samples[0] <= 1:
+                            if self.Area1_right_pres == True and tmp_samples[0] <= 1: #Paw Out of Home
                                 print('Area1_right_pres set to False')
+                                self.AddPawOutHome(tmp_timestamp - self.RecordingStartTimestamp)
                             self.Area1_right_pres = False
                             
                     elif new_data.channel[i] == (self.Area1_left):
                         if tmp_samples[0] >= 1:
-                            if self.Area1_left_pres == False and tmp_samples[0] >= 1:
+                            if self.Area1_left_pres == False and tmp_samples[0] >= 1: #Paw Into Home
                                 print('Area1_left_pres set to True')
+                                self.AddPawInHome(tmp_timestamp - self.RecordingStartTimestamp)
                             self.Area1_left_pres = True
                         else:
-                            if self.Area1_left_pres == True and tmp_samples[0] <= 1:
+                            if self.Area1_left_pres == True and tmp_samples[0] <= 1: #Paw Out of Home
                                 print('Area1_left_pres set to False')
+                                self.AddPawOutHome(tmp_timestamp - self.RecordingStartTimestamp)
                             self.Area1_left_pres = False
     
-                    elif new_data.channel[i] == (self.Area2_right):
+                    elif new_data.channel[i] == (self.Area2_right): 
                         if tmp_samples[0] >= 1:
-                            if self.Area2_right_pres == False and tmp_samples[0] >= 1:
+                            if self.Area2_right_pres == False and tmp_samples[0] >= 1: #Paw Into Joystick
                                 print('Area2_right_pres set to True')
+                                self.AddPawInJoystick(tmp_timestamp - self.RecordingStartTimestamp)
                             self.Area2_right_pres = True
                         else:
-                            if self.Area2_right_pres == True and tmp_samples[0] <= 1:
+                            if self.Area2_right_pres == True and tmp_samples[0] <= 1: #Paw Out of Joystick
                                 print('Area2_right_pres set to False')
+                                self.AddPawOutJoystick(tmp_timestamp - self.RecordingStartTimestamp)
                             self.Area2_right_pres = False
                     elif new_data.channel[i] == (self.Area2_left):
                         if tmp_samples[0] >= 1:
-                            if self.Area2_left_pres == False and tmp_samples[0] >= 1:
+                            if self.Area2_left_pres == False and tmp_samples[0] >= 1: #Paw Into Joystick
                                 print('Area2_left_pres set to True')
+                                self.AddPawInJoystick(tmp_timestamp - self.RecordingStartTimestamp)
                             self.Area2_left_pres = True
                         else:
-                            if self.Area2_left_pres == True and tmp_samples[0] <= 1:
+                            if self.Area2_left_pres == True and tmp_samples[0] <= 1: #Paw Out of Joystick
                                 print('Area2_left_pres set to False')
+                                self.AddPawOutJoystick(tmp_timestamp - self.RecordingStartTimestamp)
                             self.Area2_left_pres = False
                     #print values that we want from AI
                     #if new_data.channel[i] == 1:
