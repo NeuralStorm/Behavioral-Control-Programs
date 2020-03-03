@@ -100,24 +100,22 @@ class MonkeyImages(tk.Frame,):
 
         ############# Specific for pedal Press Tasks
         self.Pedal = 0 # Initialize Pedal/Press
-
-
-
-        #Not Used here
-        self.TimeBeforeSound = 0.2 # (seconds)
-        self.MaxTimeAfterSound = 20 # (seconds) Maximum time Monkey has to pull. However, it is currently set so that it will not reset if the Pedal is being Pulled
-        self.TimeOut = 0.5 # (seconds) Time for black time out screen
         self.Pedal1 = 0 # Push / Forward
         self.Pedal2 = 0 # Right
         self.Pedal3 = 0 # Pull / Backwards
         self.Pedal4 = 0 # Left
+        self.NumEvents = 3
         self.list_images = [] # Image list for Discriminative Stimuli
         source = "./TestImages/" # Name of folder in which you keep your images to be displayed
         for images in os.listdir(source):
             self.list_images.append(images)
 
+        #Not Used Here
+        self.TimeBeforeSound = 0.2 # (seconds)
+        self.MaxTimeAfterSound = 20 # (seconds) Maximum time Monkey has to pull. However, it is currently set so that it will not reset if the Pedal is being Pulled
+        self.TimeOut = 0.5 # (seconds) Time for black time out screen
+
         # PARAMETERS
-        self.NumEvents = 3
         self.TrainingDuration = 1.0                         # (seconds) how long should monkey hand be in Area1 to get a Training Reward
         self.PullThreshold = 3                              # (Voltage) Amount that Monkey has to pull to. Will be 0 or 5, because digital signal from pedal. (Connected to Analog input in plexon)
         self.DiscrimStimDuration = 0.25                     # (seconds) Amount of time after DS before Go cue
@@ -131,7 +129,11 @@ class MonkeyImages(tk.Frame,):
         self.AdaptiveFrequency = 50                         # Number of trials inbetween calling AdaptiveRewardThreshold()
         self.EarlyPullTimeOut = False                       # This Boolean sets if you want to have a timeout for a pull before the Go Red Rectangle.
         self.RewardTime = 0.18
+        self.MaxReward = 0.18 #(seconds, maximum time to give water)
         self.EnableTimeOut = False # Toggle this True if you want to include 'punishment' timeouts (black screen for self.TimeOut duration), or False for no TimeOuts.
+
+
+        #Not Used Here
         self.RewardClass(self.NumEvents,0.5,0.45,0.75,0.68,1,0.9)   #Hi Ryan, I added this range for your testing for now, because I changed where the reward is given so that it has to fit into an interval now.
         self.counter = 0 # Counter Values: Alphabetic from TestImages folder
         # Blank(white screen), disc stim 1, disc stim 2, disc stim 3, disc stim go 1, disc stim go 2, disc stim go 3, black(timeout), Prepare(to put hand in position), Monkey image
@@ -163,11 +165,10 @@ class MonkeyImages(tk.Frame,):
         ############# Rewards
         self.RewardSound = 'Exclamation'
         self.Bloop       = 'Question'
-        self.MaxReward = 0.18 #(seconds, maximum time to give water)
         self.WaterReward = self.WaterRewardThread()
         ##############
 
-        # Parameters (Parameters built into GUI Class functions):
+        # Booleans (built into GUI Class functions):
         self.MonkeyLoop = False         # Overall for when the program is looping
         self.StartTrialBool = False     # Gives the flashing diamond signal before discrim stimulus
         self.TrainingStart = False      # True when hand goes into the area 1 start zone.
@@ -176,7 +177,7 @@ class MonkeyImages(tk.Frame,):
         self.PictureBool = False
         self.ReadyForSound = False
         self.PunishLockout = False
-        self.ReadyForPull = False
+        self.ReadyForPull = False       # Used in this training for Reward after hand is in box for long enough
         self.OutofHomeZoneOn = False 
         self.RewardOccurred = False
         #Rename Area1 and Area2
@@ -186,7 +187,7 @@ class MonkeyImages(tk.Frame,):
         self.Area2_left_pres = False # Joystick Area
         #self.ImageReward = True     #Default Image Reward set to True
         self.ImageReward = False
-        
+
 
         self.StartTime = time.time()
         self.RelStartTime = time.time() - self.StartTime
@@ -285,6 +286,7 @@ class MonkeyImages(tk.Frame,):
                     self.CueTime = time.time()
                     self.RelCueTime = time.time() - self.CueTime
                     self.next_image()
+
                 if self.PictureBool == True and self.RelCueTime >= self.DiscrimStimDuration and self.ReadyForPull == False:
                     self.ReadyForPull = True
                     self.counter = self.counter + self.NumEvents
@@ -292,7 +294,7 @@ class MonkeyImages(tk.Frame,):
                     self.DiscrimStimTime = time.time()
                     self.RelDiscrimStimTime = time.time() - self.DiscrimStimTime
 
-                if self.TrainingStart == True and self.RelDiscrimStimTime >= self.TrainingDuration and self.RewardOccurred == False:
+                if self.ReadyForPull == True and self.RelDiscrimStimTime >= self.TrainingDuration and self.RewardOccurred == False:
                     print('water reward')
                     self.WaterReward.run() # This still uses Reward Delay
                     self.RewardOccurred = True
@@ -301,6 +303,7 @@ class MonkeyImages(tk.Frame,):
                 if self.TrainingStart == True:
                     self.RelTrainingStartTime = time.time() - self.TrainingStartTime
                     self.RelCueTime = time.time() - self.CueTime
+                    self.RelDiscrimStimTime = time.time() - self.DiscrimStimTime
                 
                 if self.Area1_right_pres == False and self.Area1_left_pres == False:
                     if self.counter != 0:
@@ -311,6 +314,7 @@ class MonkeyImages(tk.Frame,):
                     self.StartTrialBool = True
                     self.TrainingStart = False
                     self.PictureBool = False
+                    self.ReadyForPull = False
                 self.after(1,func=self.LOOP)
 
 

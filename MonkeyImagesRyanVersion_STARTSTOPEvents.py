@@ -142,16 +142,16 @@ class MonkeyImages(tk.Frame,):
         # self.word7  = numpy.array([0,0,0,0,0,0,0,1], dtype=numpy.uint8)
         
         
-        
-        self.task = Task()
-        self.task.CreateDOChan("/Dev2/port2/line0:7","",PyDAQmx.DAQmx_Val_ChanForAllLines)
-        self.task.StartTask()
-        self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
-        
-        self.task2 = Task()
-        self.task2.CreateDOChan("/Dev2/port1/line0:7","",PyDAQmx.DAQmx_Val_ChanForAllLines)
-        self.task2.StartTask()
-        self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
+        if self.readyforplexon == True:
+            self.task = Task()
+            self.task.CreateDOChan("/Dev2/port2/line0:7","",PyDAQmx.DAQmx_Val_ChanForAllLines)
+            self.task.StartTask()
+            self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
+            
+            self.task2 = Task()
+            self.task2.CreateDOChan("/Dev2/port1/line0:7","",PyDAQmx.DAQmx_Val_ChanForAllLines)
+            self.task2.StartTask()
+            self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
         
         #self.task3 = Task()
         #self.task3.CreateDOChan("/Dev2/port0/line0","",PyDAQmx.DAQmx_Val_ChanForAllLines)
@@ -174,9 +174,9 @@ class MonkeyImages(tk.Frame,):
         # PARAMETERS
         self.filename = 'dummy'
         self.fullfilename = self.filename + '.csv'
-        self.DiscrimStimMin = 30                            # (X / 60 seconds) Minimum seconds to display Discrim Stim for before Go Cue
-        self.DiscrimStimMax = 120                           # (X / 60 seconds) Maxiumum seconds to display Discrim Stim for before Go Cue
-        self.DiscrimStimDuration = round((random.randint(self.DiscrimStimMin,self.DiscrimStimMax)/60),2) # (seconds) How long is the Discriminative Stimulus displayed for.
+        self.DiscrimStimMin = 50                            # (X / 100 seconds) Minimum seconds to display Discrim Stim for before Go Cue
+        self.DiscrimStimMax = 150                           # (X / 100 seconds) Maxiumum seconds to display Discrim Stim for before Go Cue
+        self.DiscrimStimDuration = round((random.randint(self.DiscrimStimMin,self.DiscrimStimMax)/100),2) # (seconds) How long is the Discriminative Stimulus displayed for.
         self.MaxTimeAfterSound = 20                          # (seconds) Maximum time Monkey has to pull. However, it is currently set so that it will not reset if the Pedal is being Pulled
         self.NumEvents = 3
         self.InterTrialTime = 1                             # (seconds) Time between trials / Time before trial starts
@@ -324,9 +324,10 @@ class MonkeyImages(tk.Frame,):
     def LOOP(self): #LOOP will be different for each experiment
         #try: #For Later when we want a try block to catch exceptions.
             if self.MonkeyLoop == True:
+                tic = time.time()
                 if self.readyforplexon == True:
                     #Gather new data
-                    self.client.opx_wait(100)
+                    self.client.opx_wait(1)
                     self.gathering_data_omni()
 
                 # Flashing box for trial start cue + low freq sound.
@@ -342,7 +343,7 @@ class MonkeyImages(tk.Frame,):
 
                 if self.PictureBool == False and (self.Area1_right_pres == True or self.Area1_left_pres == True) and self.PunishLockout == False and self.StartTrialBool == False:
                 #if self.PictureBool == False and self.RelStartTime >=  self.PictureCueTimeInterval:
-                    winsound.PlaySound(winsound.Beep(100,0), winsound.SND_PURGE) #Purge looping sounds
+                    winsound.PlaySound(None, winsound.SND_PURGE) #Purge looping sounds
                     print('Discriminatory Stimulus')
                     self.PictureBool = True # This will be on for the duration of the trial
 ################################################################################################################################################################################################
@@ -404,16 +405,16 @@ class MonkeyImages(tk.Frame,):
                 #     self.ReadyForPull = True
                 #     self.SoundTime = time.time()
                 #     self.RelSoundTime = time.time() - self.SoundTime
-                #     winsound.PlaySound('750Hz_1s', winsound.SND_ALIAS + winsound.SND_ASYNC + winsound.SND_NOWAIT) #750 Hz, 1000 ms
+                #     winsound.PlaySound('750Hz_1s_test.wav', winsound.SND_ALIAS + winsound.SND_ASYNC + winsound.SND_NOWAIT) #750 Hz, 1000 ms
 
                 # If Lever is Pulled On and ready for Pull
                 elif self.ReadyForPull == True and self.CurrentPress == True and self.PunishLockout == False:
                     print('Pull')
-                    #winsound.PlaySound('550Hz_1s', winsound.SND_ASYNC + winsound.SND_LOOP + winsound.SND_NOWAIT)
+                    #winsound.PlaySound('550Hz_1s_test.wav', winsound.SND_ASYNC + winsound.SND_LOOP + winsound.SND_NOWAIT)
                     while self.Pedal3 >= self.PullThreshold:                     ### While loop in place to continuously and quickly update the Press Time for the Duration that
                         self.client.opx_wait(100)                                ### The Monkey is Pulling it for. This will reduce latency issues with running through the whole
                         self.gathering_data_omni()                               ### Loop.
-                    winsound.PlaySound(winsound.Beep(100,0), winsound.SND_PURGE)
+                    winsound.PlaySound(None, winsound.SND_PURGE)
                     print('Pull for: {} seconds'.format(self.DurationTimestamp))
                     
                     if self.UseMaximumRewardTime == False:
@@ -463,7 +464,7 @@ class MonkeyImages(tk.Frame,):
                     #EV04
                     self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event6,None,None)
                     self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
-                    winsound.PlaySound('550Hz_0.5s', winsound.SND_ALIAS + winsound.SND_ASYNC + winsound.SND_NOWAIT)
+                    winsound.PlaySound('550Hz_0.5s_test.wav', winsound.SND_ALIAS + winsound.SND_ASYNC + winsound.SND_NOWAIT)
                     #winsound.PlaySound(self.RewardSound, winsound.SND_ALIAS + winsound.SND_ASYNC)
                     try:
                         if len(self.csvdict[self.current_counter])%self.AdaptiveFrequency == 0 and len(self.csvdict[self.current_counter]) > 0:
@@ -534,16 +535,20 @@ class MonkeyImages(tk.Frame,):
                     self.SoundTime = time.time()
                     self.RelPunishLockTime = time.time() - self.PunishLockTime
                     self.OutofHomeZoneOn == False
+                    toc = time.time() - tic
+                    print(toc)
                     self.after(1,func=self.LOOP)
                 else:
                     if self.counter == -3:
                         self.counter = 0
                         self.next_image()
-                    self.update_idletasks()
+                    self.update_idletasks() # Check speeds with this / without it
                     self.RelStartTime = time.time() - self.StartTime
                     self.RelCueTime = time.time() - self.CueTime
                     self.RelDiscrimStimTime = time.time() - self.DiscrimStimTime
                     self.RelSoundTime = time.time() - self.SoundTime###This Timing is used for if animal surpasses max time to do task, needs to update every loop
+                    toc = time.time() - tic
+                    print(toc)
                     self.after(1,func=self.LOOP)
         #except: #For Later when we want a try block to deal with errors, will help to properly stop water in case of emergency.
         #    print('Error')
@@ -723,7 +728,7 @@ class MonkeyImages(tk.Frame,):
     
     def Pause(self):
         print('pause')
-        winsound.PlaySound(winsound.Beep(100,0), winsound.SND_PURGE)
+        winsound.PlaySound(None, winsound.SND_PURGE)
         if self.readyforplexon == True:
             self.plexdo.clear_bit(self.device_number, self.RewardDO_chan)
         self.MonkeyLoop = False
@@ -748,7 +753,7 @@ class MonkeyImages(tk.Frame,):
             pass
 
     def Stop(self): ###IMPORTANT###Need to make sure this End cleans up any loose ends, such as Water Reward being open. Anything Else?
-        winsound.PlaySound(winsound.Beep(100,0), winsound.SND_PURGE)
+        winsound.PlaySound(None, winsound.SND_PURGE)
         if self.readyforplexon == True:
             self.plexdo.clear_bit(self.device_number, self.RewardDO_chan)
         print('Stop')
