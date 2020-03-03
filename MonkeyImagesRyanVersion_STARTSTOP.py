@@ -142,16 +142,16 @@ class MonkeyImages(tk.Frame,):
         # self.word7  = numpy.array([0,0,0,0,0,0,0,1], dtype=numpy.uint8)
         
         
-        
-        self.task = Task()
-        self.task.CreateDOChan("/Dev2/port2/line0:7","",PyDAQmx.DAQmx_Val_ChanForAllLines)
-        self.task.StartTask()
-        self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
-        
-        self.task2 = Task()
-        self.task2.CreateDOChan("/Dev2/port1/line0:7","",PyDAQmx.DAQmx_Val_ChanForAllLines)
-        self.task2.StartTask()
-        self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
+        if self.readyforplexon == True:
+            self.task = Task()
+            self.task.CreateDOChan("/Dev2/port2/line0:7","",PyDAQmx.DAQmx_Val_ChanForAllLines)
+            self.task.StartTask()
+            self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
+            
+            self.task2 = Task()
+            self.task2.CreateDOChan("/Dev2/port1/line0:7","",PyDAQmx.DAQmx_Val_ChanForAllLines)
+            self.task2.StartTask()
+            self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
         
         #self.task3 = Task()
         #self.task3.CreateDOChan("/Dev2/port0/line0","",PyDAQmx.DAQmx_Val_ChanForAllLines)
@@ -174,16 +174,16 @@ class MonkeyImages(tk.Frame,):
         # PARAMETERS
         self.filename = 'dummy'
         self.fullfilename = self.filename + '.csv'
-        self.DiscrimStimDuration = round((random.randint(30,120)/60),2) # (seconds) How long is the Discriminative Stimulus displayed for.
+        self.DiscrimStimMin = 50                            # (X / 100 seconds) Minimum seconds to display Discrim Stim for before Go Cue
+        self.DiscrimStimMax = 150                           # (X / 100 seconds) Maxiumum seconds to display Discrim Stim for before Go Cue
+        self.DiscrimStimDuration = round((random.randint(self.DiscrimStimMin,self.DiscrimStimMax)/100),2) # (seconds) How long is the Discriminative Stimulus displayed for.
         self.MaxTimeAfterSound = 20                          # (seconds) Maximum time Monkey has to pull. However, it is currently set so that it will not reset if the Pedal is being Pulled
         self.NumEvents = 3
-        self.DurationList()                                 # Creates dict of lists to encapsulate press durations. Will be used for Adaptive Reward Control
         self.InterTrialTime = 1                             # (seconds) Time between trials / Time before trial starts
         self.AdaptiveValue = 0.05                           # Probably going to use this in the form of a value
         self.AdaptiveAlgorithm = 1                          # 1: Percentage based change 2: mean, std, calculated shift of distribution (Don't move center?) 3: TBD Move center as well?
         self.AdaptiveFrequency = 50                         # Number of trials inbetween calling AdaptiveRewardThreshold()
         self.EarlyPullTimeOut = False                       # This Boolean sets if you want to have a timeout for a pull before the Go Red Rectangle.
-        self.RewardTime = 0
         self.RewardDelay = 0.020                            # (seconds) Length of Delay before Reward (Juice) is given.
         self.UseMaximumRewardTime = False                   # This Boolean sets if you want to use the Maximum Reward Time for each Reward or to use scaled Reward Time relative to Pull Duration.
         self.MaxReward = 0.18                               # (seconds, maximum time to give water)
@@ -196,6 +196,7 @@ class MonkeyImages(tk.Frame,):
         self.ActivePedalChans = [3]                  # This can be used if you only want him to pull in certain directions as commented above as self.Pedal#_chan.
         
         ############# Initializing vars
+        self.DurationList()                                 # Creates dict of lists to encapsulate press durations. Will be used for Adaptive Reward Control
         self.counter = 0 # Counter Values: Alphabetic from TestImages folder
         # Blank(white screen), disc stim 1, disc stim 2, disc stim 3, disc stim go 1, disc stim go 2, disc stim go 3, black(timeout), Prepare(to put hand in position), Monkey image
         self.current_counter = 0 
@@ -213,6 +214,7 @@ class MonkeyImages(tk.Frame,):
         self.Area1_left = 7 # Home Area (Area 1)
         self.Area2_left = 8 # Joystick Area (Area 2)
         self.StartTimestamp = 0 
+        self.RewardTime = 0
         #############
         # Queue 
         self.queue = queue.Queue()
@@ -610,6 +612,22 @@ class MonkeyImages(tk.Frame,):
             self.csvdict[('Discriminatory Stimulus ' + str(i+1))] = []
             self.csvdict[('Go Cue ' + str(i+1))] = []
 
+        self.csvdict['Ranges'] = self.Ranges
+        self.csvdict['Discrimanatory Stimulus Min'] = self.DiscrimStimMin
+        self.csvdict['Discrimanatory Stimulus Max'] = self.DiscrimStimMax
+        self.csvdict['Max Time After Sound'] = self.MaxTimeAfterSound
+        self.csvdict['Inter Trial Time'] = self.InterTrialTime
+        self.csvdict['Adaptive Value'] = self.AdaptiveValue
+        self.csvdict['Adaptive Algorithm'] = self.AdaptiveAlgorithm
+        self.csvdict['Adaptive Frequency'] = self.AdaptiveFrequency
+        self.csvdict['Enable Early Pull Time Out'] = self.EarlyPullTimeOut
+        self.csvdict['Reward Delay'] = self.RewardDelay
+        self.csvdict['Use Maximum Reward Time'] = self.UseMaximumRewardTime
+        self.csvdict['Maximum Reward Time'] = self.MaxReward
+        self.csvdict['Enable Time Out'] = self.EnableTimeOut
+        self.csvdict['Time Out'] = self.TimeOut
+        self.csvdict['Enable Blooper Noise'] = self.EnableBlooperNoise
+        self.csvdict['Active Pedal Channels'] = self.ActivePedalChans
 
         print('Duration Dictionary: {}'.format(self.csvdict))
 
