@@ -333,14 +333,14 @@ class MonkeyImages(tk.Frame,):
                 if self.StartTrialBool == True and self.PunishLockout == False and self.RelStartTime >= self.InterTrialTime:
                     if self.Area1_right_pres == False and self.Area1_left_pres == False:
                         self.StartTrialCue()
-                        self.StartTrialBool = False
+                        
                     else:
                         # EV03 Ready
                         self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event7,None,None)
                         self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
-                        self.StartTrialBool = False
+                        
 
-                if self.PictureBool == False and (self.Area1_right_pres == True or self.Area1_left_pres == True) and self.PunishLockout == False and self.StartTrialBool == False:
+                if self.PictureBool == False and (self.Area1_right_pres == True or self.Area1_left_pres == True) and self.PunishLockout == False:
                 #if self.PictureBool == False and self.RelStartTime >=  self.PictureCueTimeInterval:
                     winsound.PlaySound(winsound.Beep(100,0), winsound.SND_PURGE) #Purge looping sounds
                     print('Discriminatory Stimulus')

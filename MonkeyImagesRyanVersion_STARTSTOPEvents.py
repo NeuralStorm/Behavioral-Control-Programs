@@ -179,7 +179,7 @@ class MonkeyImages(tk.Frame,):
         self.DiscrimStimDuration = round((random.randint(self.DiscrimStimMin,self.DiscrimStimMax)/100),2) # (seconds) How long is the Discriminative Stimulus displayed for.
         self.MaxTimeAfterSound = 20                          # (seconds) Maximum time Monkey has to pull. However, it is currently set so that it will not reset if the Pedal is being Pulled
         self.NumEvents = 3
-        self.InterTrialTime = 5                             # (seconds) Time between trials / Time before trial starts
+        self.InterTrialTime = 1                             # (seconds) Time between trials / Time before trial starts
         self.AdaptiveValue = 0.05                           # Probably going to use this in the form of a value
         self.AdaptiveAlgorithm = 1                          # 1: Percentage based change 2: mean, std, calculated shift of distribution (Don't move center?) 3: TBD Move center as well?
         self.AdaptiveFrequency = 50                         # Number of trials inbetween calling AdaptiveRewardThreshold()
@@ -335,17 +335,15 @@ class MonkeyImages(tk.Frame,):
                 if self.StartTrialBool == True and self.PunishLockout == False and self.RelStartTime >= self.InterTrialTime:
                     if self.Area1_right_pres == False and self.Area1_left_pres == False:
                         self.StartTrialCue()
-                        self.StartTrialBool = False
                     else:
                         # EV03 Ready
                         self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event7,None,None)
                         self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
-                        self.StartTrialBool = False
                         if self.counter == -2:
                             self.counter = 0
                             self.next_image()
 
-                if self.PictureBool == False and (self.Area1_right_pres == True or self.Area1_left_pres == True) and self.PunishLockout == False and self.StartTrialBool == False:
+                if self.PictureBool == False and (self.Area1_right_pres == True or self.Area1_left_pres == True) and self.PunishLockout == False:
                 #if self.PictureBool == False and self.RelStartTime >=  self.PictureCueTimeInterval:
                     winsound.PlaySound(None, winsound.SND_PURGE) #Purge looping sounds
                     print('Discriminatory Stimulus')
