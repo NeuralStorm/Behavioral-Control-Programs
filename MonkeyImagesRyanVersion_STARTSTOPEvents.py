@@ -307,7 +307,7 @@ class MonkeyImages(tk.Frame,):
             WaitForStart = True
             print('Start Plexon Recording now')
             while WaitForStart == True:
-                self.client.opx_wait(1)
+                #self.client.opx_wait(1)
                 new_data = self.client.get_new_data()
                 if new_data.num_data_blocks < max_block_output:
                     num_blocks_to_output = new_data.num_data_blocks
@@ -346,6 +346,7 @@ class MonkeyImages(tk.Frame,):
                 if self.PictureBool == False and (self.Area1_right_pres == True or self.Area1_left_pres == True) and self.PunishLockout == False:
                 #if self.PictureBool == False and self.RelStartTime >=  self.PictureCueTimeInterval:
                     winsound.PlaySound(None, winsound.SND_PURGE) #Purge looping sounds
+                    self.StartTrialBool = False
                     print('Discriminatory Stimulus')
                     self.PictureBool = True # This will be on for the duration of the trial
 ################################################################################################################################################################################################
@@ -731,6 +732,8 @@ class MonkeyImages(tk.Frame,):
     
     def Pause(self):
         print('pause')
+        if self.StartTrialBool == True:
+            self.OutofHomeZoneOn = False
         winsound.PlaySound(None, winsound.SND_PURGE)
         if self.readyforplexon == True:
             self.plexdo.clear_bit(self.device_number, self.RewardDO_chan)
@@ -768,6 +771,7 @@ class MonkeyImages(tk.Frame,):
         self.ReadyForSound = False
         self.PunishLockout = False
         self.ReadyForPull = False
+        self.OutofHomeZoneOn = False
         self.counter = 0
         self.next_image()
         self.after(1,func=None)

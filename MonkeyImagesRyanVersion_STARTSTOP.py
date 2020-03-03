@@ -333,7 +333,6 @@ class MonkeyImages(tk.Frame,):
                 if self.StartTrialBool == True and self.PunishLockout == False and self.RelStartTime >= self.InterTrialTime:
                     if self.Area1_right_pres == False and self.Area1_left_pres == False:
                         self.StartTrialCue()
-                        
                     else:
                         # EV03 Ready
                         self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event7,None,None)
@@ -724,6 +723,8 @@ class MonkeyImages(tk.Frame,):
     def Pause(self):
         print('pause')
         winsound.PlaySound(winsound.Beep(100,0), winsound.SND_PURGE)
+        if self.StartTrialBool == True:
+            self.OutofHomeZoneOn = False
         if self.readyforplexon == True:
             self.plexdo.clear_bit(self.device_number, self.RewardDO_chan)
         self.MonkeyLoop = False
@@ -760,6 +761,7 @@ class MonkeyImages(tk.Frame,):
         self.ReadyForSound = False
         self.PunishLockout = False
         self.ReadyForPull = False
+        self.OutofHomeZoneOn = False
         self.counter = 0
         self.next_image()
         self.after(1,func=None)
