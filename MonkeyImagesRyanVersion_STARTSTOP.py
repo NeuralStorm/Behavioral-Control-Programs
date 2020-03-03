@@ -477,7 +477,7 @@ class MonkeyImages(tk.Frame,):
                     self.JoystickPulled = False
                     self.PictureBool = False
                     self.ReadyForSound = False
-
+                    self.OutofHomeZoneOn = False
                     self.ReadyForPull = False
                     self.RewardTime = 0
                     self.DiscrimStimDuration = round((random.randint(60,180)/60),2)
@@ -510,7 +510,7 @@ class MonkeyImages(tk.Frame,):
                     self.ReadyForSound = False
                     self.ReadyForPull = False
                     self.DiscrimStimDuration = round((random.randint(60,180)/60),2)
-                    self.OutofHomeZoneOn == False
+                    self.OutofHomeZoneOn = False
                     # EV08
                     self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event6,None,None)
                     self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
@@ -533,7 +533,7 @@ class MonkeyImages(tk.Frame,):
                     self.DiscrimStimTime = time.time()
                     self.SoundTime = time.time()
                     self.RelPunishLockTime = time.time() - self.PunishLockTime
-                    self.OutofHomeZoneOn == False
+                    self.OutofHomeZoneOn = False
                     self.after(1,func=self.LOOP)
                 else:
                     if self.counter == -3:
@@ -612,22 +612,22 @@ class MonkeyImages(tk.Frame,):
             self.csvdict[('Discriminatory Stimulus ' + str(i+1))] = []
             self.csvdict[('Go Cue ' + str(i+1))] = []
 
-        self.csvdict['Ranges'] = self.Ranges
-        self.csvdict['Discrimanatory Stimulus Min'] = self.DiscrimStimMin
-        self.csvdict['Discrimanatory Stimulus Max'] = self.DiscrimStimMax
-        self.csvdict['Max Time After Sound'] = self.MaxTimeAfterSound
-        self.csvdict['Inter Trial Time'] = self.InterTrialTime
-        self.csvdict['Adaptive Value'] = self.AdaptiveValue
-        self.csvdict['Adaptive Algorithm'] = self.AdaptiveAlgorithm
-        self.csvdict['Adaptive Frequency'] = self.AdaptiveFrequency
-        self.csvdict['Enable Early Pull Time Out'] = self.EarlyPullTimeOut
-        self.csvdict['Reward Delay'] = self.RewardDelay
-        self.csvdict['Use Maximum Reward Time'] = self.UseMaximumRewardTime
-        self.csvdict['Maximum Reward Time'] = self.MaxReward
-        self.csvdict['Enable Time Out'] = self.EnableTimeOut
-        self.csvdict['Time Out'] = self.TimeOut
-        self.csvdict['Enable Blooper Noise'] = self.EnableBlooperNoise
-        self.csvdict['Active Pedal Channels'] = self.ActivePedalChans
+        self.csvdict['Ranges'] = [self.Ranges]
+        self.csvdict['Discrimanatory Stimulus Min'] = [self.DiscrimStimMin]
+        self.csvdict['Discrimanatory Stimulus Max'] = [self.DiscrimStimMax]
+        self.csvdict['Max Time After Sound'] = [self.MaxTimeAfterSound]
+        self.csvdict['Inter Trial Time'] = [self.InterTrialTime]
+        self.csvdict['Adaptive Value'] = [self.AdaptiveValue]
+        self.csvdict['Adaptive Algorithm'] = [self.AdaptiveAlgorithm]
+        self.csvdict['Adaptive Frequency'] = [self.AdaptiveFrequency]
+        self.csvdict['Enable Early Pull Time Out'] = [self.EarlyPullTimeOut]
+        self.csvdict['Reward Delay'] = [self.RewardDelay]
+        self.csvdict['Use Maximum Reward Time'] = [self.UseMaximumRewardTime]
+        self.csvdict['Maximum Reward Time'] = [self.MaxReward]
+        self.csvdict['Enable Time Out'] = [self.EnableTimeOut]
+        self.csvdict['Time Out'] = [self.TimeOut]
+        self.csvdict['Enable Blooper Noise'] = [self.EnableBlooperNoise]
+        self.csvdict['Active Pedal Channels'] = [self.ActivePedalChans]
 
         print('Duration Dictionary: {}'.format(self.csvdict))
 
