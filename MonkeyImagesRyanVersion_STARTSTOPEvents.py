@@ -186,7 +186,9 @@ class MonkeyImages(tk.Frame,):
         self.AdaptiveAlgorithm = 1                          # 1: Percentage based change 2: mean, std, calculated shift of distribution (Don't move center?) 3: TBD Move center as well?
         self.AdaptiveFrequency = 50                         # Number of trials inbetween calling AdaptiveRewardThreshold()
         self.EarlyPullTimeOut = False                       # This Boolean sets if you want to have a timeout for a pull before the Go Red Rectangle.
-        self.RewardDelay = 0.020                            # (seconds) Length of Delay before Reward (Juice) is given.
+        self.RewardDelayMin = 0.020                         # (seconds) Min Length of Delay before Reward (Juice) is given.
+        self.RewardDelayMax = 0.020                         # (seconds) Max Length of Delay before Reward (Juice) is given.
+        self.RewardDelay = self.RandomDuration(self.RewardDelayMin,self.RewardDelayMax) # (seconds) Length of Delay before Reward (Juice) is given.
         self.UseMaximumRewardTime = False                   # This Boolean sets if you want to use the Maximum Reward Time for each Reward or to use scaled Reward Time relative to Pull Duration.
         self.MaxReward = 0.18                               # (seconds, maximum time to give water)
         self.EnableTimeOut = False                          # Toggle this to True if you want to include 'punishment' timeouts (black screen for self.TimeOut duration), or False for no TimeOuts.
@@ -305,7 +307,7 @@ class MonkeyImages(tk.Frame,):
         savebutton.pack(side = LEFT)
 
         self.root.bind('<Key>', lambda a : self.KeyPress(a))
-        
+
         if self.readyforplexon == True:
             WaitForStart = True
             print('Start Plexon Recording now')
@@ -640,7 +642,8 @@ class MonkeyImages(tk.Frame,):
         self.csvdict['Adaptive Algorithm'] = [self.AdaptiveAlgorithm]
         self.csvdict['Adaptive Frequency'] = [self.AdaptiveFrequency]
         self.csvdict['Enable Early Pull Time Out'] = [self.EarlyPullTimeOut]
-        self.csvdict['Reward Delay'] = [self.RewardDelay]
+        self.csvdict['Reward Delay Min'] = [self.RewardDelayMin]
+        self.csvdict['Reward Delay Max'] = [self.RewardDelayMax]
         self.csvdict['Use Maximum Reward Time'] = [self.UseMaximumRewardTime]
         self.csvdict['Maximum Reward Time'] = [self.MaxReward]
         self.csvdict['Enable Time Out'] = [self.EnableTimeOut]

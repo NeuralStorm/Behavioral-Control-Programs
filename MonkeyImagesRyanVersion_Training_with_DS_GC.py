@@ -648,9 +648,10 @@ class MonkeyImages(tk.Frame,):
         self.csvdict['Adaptive Algorithm'] = [self.AdaptiveAlgorithm]
         self.csvdict['Adaptive Frequency'] = [self.AdaptiveFrequency]
         self.csvdict['Enable Early Pull Time Out'] = [self.EarlyPullTimeOut]
-        self.csvdict['Reward Delay'] = [self.RewardDelay]
+        self.csvdict['Reward Delay Min'] = [self.RewardDelayMin]
+        self.csvdict['Reward Delay Max'] = [self.RewardDelayMax]
         self.csvdict['Use Maximum Reward Time'] = [self.UseMaximumRewardTime]
-        self.csvdict['Maximum Reward Time'] = [self.MaxReward]
+        self.csvdict['Maximum Reward Time'] = [self.MaxReward]Ch
         self.csvdict['Enable Time Out'] = [self.EnableTimeOut]
         self.csvdict['Time Out'] = [self.TimeOut]
         self.csvdict['Enable Blooper Noise'] = [self.EnableBlooperNoise]
