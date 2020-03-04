@@ -115,7 +115,6 @@ class MonkeyImages(tk.Frame,):
         self.event7  = numpy.array([0,0,0,0,0,0,0,1], dtype=numpy.uint8) #task: EV07    #task2: EV03
         
         # Connector Currently on Port A
-
         # EV03: Ready (Beginning of Trial)
         # EV04: Correct Count (Time of Correct Tone)
         # EV05: Incorrect Count (Time of Blooper Tone)
@@ -174,10 +173,13 @@ class MonkeyImages(tk.Frame,):
         # PARAMETERS
         self.filename = 'dummy'
         self.fullfilename = self.filename + '.csv'
-        self.DiscrimStimMin = 50                            # (X / 100 seconds) Minimum seconds to display Discrim Stim for before Go Cue
-        self.DiscrimStimMax = 150                           # (X / 100 seconds) Maxiumum seconds to display Discrim Stim for before Go Cue
-        self.DiscrimStimDuration = round((random.randint(self.DiscrimStimMin,self.DiscrimStimMax)/100),2) # (seconds) How long is the Discriminative Stimulus displayed for.
-        self.MaxTimeAfterSound = 20                          # (seconds) Maximum time Monkey has to pull. However, it is currently set so that it will not reset if the Pedal is being Pulled
+        self.DiscrimStimMin = 0.5                           # (seconds) Minimum seconds to display Discrim Stim for before Go Cue
+        self.DiscrimStimMax = 2                             # (seconds) Maxiumum seconds to display Discrim Stim for before Go Cue
+        self.DiscrimStimDuration = self.RandomDuration(self.DiscrimStimMin,self.DiscrimStimMax) # (seconds) How long is the Discriminative Stimulus displayed for.
+        self.GoCueMin = 0.5                                 # (seconds) Minimum seconds to display Discrim Stim for before Go Cue
+        self.GoCueMax = 2                                   # (seconds) Maxiumum seconds to display Discrim Stim for before Go Cue
+        self.GoCueDuration = self.RandomDuration(self.GoCueMin,self.GoCueMax) # (seconds) How long is the Discriminative Stimulus displayed for.
+        self.MaxTimeAfterSound = 20                         # (seconds) Maximum time Monkey has to pull. However, it is currently set so that it will not reset if the Pedal is being Pulled
         self.NumEvents = 3
         self.InterTrialTime = 1                             # (seconds) Time between trials / Time before trial starts
         self.AdaptiveValue = 0.05                           # Probably going to use this in the form of a value
@@ -193,7 +195,7 @@ class MonkeyImages(tk.Frame,):
         self.RewardClass(self.NumEvents,0.5,.45,0.75,0.68,1,0.9)   #Hi Ryan, I added this range for your testing for now, because I changed where the reward is given so that it has to fit into an interval now.
         self.ImageRatio = 100 # EX: ImageRatio = 75 => 75% Image Reward, 25% Water Reward , Currently does not handle the both choice for water and image.
         self.WaterReward = self.WaterRewardThread()
-        self.ActivePedalChans = [3]                  # This can be used if you only want him to pull in certain directions as commented above as self.Pedal#_chan.
+        self.ActiveJoystickChans = [3]                  # This can be used if you only want him to pull in certain directions as commented above as self.Pedal#_chan.
         
         ############# Initializing vars
         self.DurationList()                                 # Creates dict of lists to encapsulate press durations. Will be used for Adaptive Reward Control
@@ -303,6 +305,7 @@ class MonkeyImages(tk.Frame,):
         savebutton.pack(side = LEFT)
 
         self.root.bind('<Key>', lambda a : self.KeyPress(a))
+        
         if self.readyforplexon == True:
             WaitForStart = True
             print('Start Plexon Recording now')
@@ -376,7 +379,7 @@ class MonkeyImages(tk.Frame,):
                     print('Go Cue')
                     self.ReadyForPull = True
                     self.counter = self.counter + self.NumEvents
-                    # EV10, EV12, EV14
+                    # EV10, EV12, EV14 EV16
                     if self.current_counter == 1: # EV010
                         self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event4,None,None)
                         self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
@@ -483,7 +486,8 @@ class MonkeyImages(tk.Frame,):
                     self.ReadyForSound = False
                     self.ReadyForPull = False
                     self.RewardTime = 0
-                    self.DiscrimStimDuration = round((random.randint(60,180)/60),2)
+                    self.DiscrimStimDuration = self.RandomDuration(self.DiscrimStimMin,self.DiscrimStimMax)
+                    self.GoCueDuration = self.RandomDuration(self.GoCueMin,self.GoCueMax)
                     # EV08
                     self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event6,None,None)
                     self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
@@ -514,7 +518,8 @@ class MonkeyImages(tk.Frame,):
                         self.RelPunishLockTime = time.time() - self.PunishLockTime
                     self.ReadyForSound = False
                     self.ReadyForPull = False
-                    self.DiscrimStimDuration = round((random.randint(60,180)/60),2)
+                    self.DiscrimStimDuration = self.RandomDuration(self.DiscrimStimMin,self.DiscrimStimMax)
+                    self.GoCueDuration = self.RandomDuration(self.GoCueMin,self.GoCueMax)
                     self.OutofHomeZoneOn = False
                     # EV08
                     self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event6,None,None)
@@ -568,6 +573,9 @@ class MonkeyImages(tk.Frame,):
         else:
             output = 2
         return output
+    def RandomDuration(self, Min, Max):
+        output = round(random.uniform(Min,Max),2)
+        return output
 ######################
     def RewardClass(self, num_of_events, *args): #Duration is the input of how long the animal will press
         rewcounter = 0
@@ -609,7 +617,7 @@ class MonkeyImages(tk.Frame,):
         return RewardDuration
 ############################################################################################################################################
     def DurationList(self):
-        self.csvdict = {'Start': [], 'Paw into Home Box': [], 'Paw out of Home Box': [], 'Paw into Joystick Box': [], 'Paw out of Joystick Box': [], 'Trial End': []}
+        self.csvdict = {'Joystick': [], 'Start': [], 'Paw into Home Box': [], 'Paw out of Home Box': [], 'Paw into Joystick Box': [], 'Paw out of Joystick Box': [], 'Trial End': []}
         for i in range(self.NumEvents):
             self.csvdict[('Correct Start Press ' + str(i+1))] = []
             self.csvdict[('Correct End Press ' + str(i+1))] = []
@@ -624,6 +632,8 @@ class MonkeyImages(tk.Frame,):
         self.csvdict['Ranges'] = [self.Ranges]
         self.csvdict['Discrimanatory Stimulus Min'] = [self.DiscrimStimMin]
         self.csvdict['Discrimanatory Stimulus Max'] = [self.DiscrimStimMax]
+        self.csvdict['Go Cue Min'] = [self.GoCueMin]
+        self.csvdict['Go Cue Max'] = [self.GoCueMax]
         self.csvdict['Max Time After Sound'] = [self.MaxTimeAfterSound]
         self.csvdict['Inter Trial Time'] = [self.InterTrialTime]
         self.csvdict['Adaptive Value'] = [self.AdaptiveValue]
@@ -636,7 +646,7 @@ class MonkeyImages(tk.Frame,):
         self.csvdict['Enable Time Out'] = [self.EnableTimeOut]
         self.csvdict['Time Out'] = [self.TimeOut]
         self.csvdict['Enable Blooper Noise'] = [self.EnableBlooperNoise]
-        self.csvdict['Active Pedal Channels'] = [self.ActivePedalChans]
+        self.csvdict['Active Joystick Channels'] = [self.ActiveJoystickChans]
 
         print('Duration Dictionary: {}'.format(self.csvdict))
 
@@ -957,7 +967,7 @@ class MonkeyImages(tk.Frame,):
                 elif new_data.source_num_or_type[i] == self.keyboard_event_source and new_data.channel[i] == 8: #Alt 8
                     pass
             #For other new data find the AI channel 1 data for pedal
-                if source_numbers_types[new_data.source_num_or_type[i]] == CONTINUOUS_TYPE and (new_data.channel[i] in self.ActivePedalChans
+                if source_numbers_types[new_data.source_num_or_type[i]] == CONTINUOUS_TYPE and (new_data.channel[i] in self.ActiveJoystickChans
                      or new_data.channel[i] == self.Area1_right or new_data.channel[i] == self.Area2_right or new_data.channel[i] == self.Area1_left
                      or new_data.channel[i] == self.Area2_left):
                     # Output info
