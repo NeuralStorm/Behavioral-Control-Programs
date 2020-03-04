@@ -20,6 +20,7 @@ import tkinter as tk
 from tkinter import *
 import threading as t
 from PIL import Image, ImageTk
+from csv import reader, writer
 import os
 import time
 import random
@@ -56,6 +57,9 @@ class MonkeyImages(tk.Frame,):
                     self.keyboard_event_source = source_id
                 if source_name == 'AI':
                     self.ai_source = source_id
+                if source_name == 'Other events':
+                    self.other_event_source = source_id
+                    print ("Other event source is {}".format(self.other_event_source))
             # Print information on each source
 
             ##### Need to include information here about getting Digital signals ############
@@ -154,16 +158,17 @@ class MonkeyImages(tk.Frame,):
         # PARAMETERS
         self.TrainingDuration = 1.0                         # (seconds) how long should monkey hand be in Area1 to get a Training Reward
         self.PullThreshold = 3                              # (Voltage) Amount that Monkey has to pull to. Will be 0 or 5, because digital signal from pedal. (Connected to Analog input in plexon)
-        self.DiscrimStimMin = 0.5                           # (seconds) Minimum seconds to display Discrim Stim for before Go Cue
-        self.DiscrimStimMax = 2                             # (seconds) Maxiumum seconds to display Discrim Stim for before Go Cue
+        self.DiscrimStimMin = 0.05                           # (seconds) Minimum seconds to display Discrim Stim for before Go Cue
+        self.DiscrimStimMax = 0.05                             # (seconds) Maxiumum seconds to display Discrim Stim for before Go Cue
         self.DiscrimStimDuration = self.RandomDuration(self.DiscrimStimMin,self.DiscrimStimMax) # (seconds) How long is the Discriminative Stimulus displayed for.
-        self.GoCueMin = 0.5                           # (seconds) Minimum seconds to display Discrim Stim for before Go Cue
-        self.GoCueMax = 2                             # (seconds) Maxiumum seconds to display Discrim Stim for before Go Cue
+        self.GoCueMin = 0.25                           # (seconds) Minimum seconds to display Discrim Stim for before Go Cue
+        self.GoCueMax = 0.5                             # (seconds) Maxiumum seconds to display Discrim Stim for before Go Cue
         self.GoCueDuration = self.RandomDuration(self.GoCueMin,self.GoCueMax) # (seconds) How long is the Discriminative Stimulus displayed for.
-        self.InterTrialTime = 1                             # (seconds) Time between Trials / Reward Time
+        self.InterTrialTime = 0.5                             # (seconds) Time between Trials / Reward Time
         self.PictureCueTimeInterval = 5                     # (seconds) Duration between animal in start position (Area 2) and displaying an image cue.
-        self.RewardDelayMin = 0.020                         # (seconds) Min Length of Delay before Reward (Juice) is given.
-        self.RewardDelayMax = 0.025                         # (seconds) Max Length of Delay before Reward (Juice) is given.
+        self.RewardDelayMin = 0.010                         # (seconds) Min Length of Delay before Reward (Juice) is given.
+        self.RewardDelayMax = 0.010                         # (seconds) Max Length of Delay before Reward (Juice) is given.
+        self.RewardDelay = self.RandomDuration(self.RewardDelayMin,self.RewardDelayMax) #(seconds) Time to delay before Reward.
         self.AdaptiveValue = 0.05                           # Probably going to use this in the form of a value
         self.AdaptiveAlgorithm = 1                          # 1: Percentage based change 2: mean, std, calculated shift of distribution (Don't move center?) 3: TBD Move center as well?
         self.AdaptiveFrequency = 50                         # Number of trials inbetween calling AdaptiveRewardThreshold()
@@ -171,6 +176,8 @@ class MonkeyImages(tk.Frame,):
         self.RewardTime = 0.18                              #
         self.MaxReward = 0.18                               # (seconds) maximum time to give water
         self.EnableTimeOut = False # Toggle this True if you want to include 'punishment' timeouts (black screen for self.TimeOut duration), or False for no TimeOuts.
+        self.UseMaximumRewardTime = True                   # This Boolean sets if you want to use the Maximum Reward Time for each Reward or to use scaled Reward Time relative to Pull Duration.
+        self.EnableBlooperNoise = False                     # Toggle this to True if you want to include the blooper noise when an incorrect pull is detected (Either too long or too short / No Reward Given)
 
 
         #Not Used Here
@@ -281,10 +288,11 @@ class MonkeyImages(tk.Frame,):
         ImageRewardOff = tk.Button(self.root, text = "ImageReward\nOff", height = 5, width = 10, command = self.HighLevelRewardOff)
         ImageRewardOff.pack(side = LEFT)
 
-        testbutton = tk.Button(self.root, text = "Test", height = 5, width = 5, command = self.ConfusionMatrix)
+        testbutton = tk.Button(self.root, text = "Test", height = 5, width = 5, command = self.Test)
         testbutton.pack(side = LEFT)
-        updatebutton = tk.Button(self.root, text = "Update", height = 5, width = 5, command = self.ConfusionMatrixUpdate)
-        updatebutton.pack(side = LEFT)
+        
+        savebutton = tk.Button(self.root, text = "Save CSV", height = 5, width = 10, command = self.FormatDurations)
+        savebutton.pack(side = LEFT)
 
         self.root.bind('<Key>', lambda a : self.KeyPress(a))
 
@@ -311,8 +319,8 @@ class MonkeyImages(tk.Frame,):
             if self.MonkeyLoop == True:
                 if self.readyforplexon == True:
                     #Gather new data
-                    print('gather new data')
                     self.gathering_data_omni()
+
 
                 # Flashing box for trial start cue + low freq sound.
                 # TRAINING: Only low frequency sound
@@ -391,10 +399,12 @@ class MonkeyImages(tk.Frame,):
 
                 if self.ReadyForPull == True and self.RelDiscrimStimTime >= self.TrainingDuration and self.RewardOccurred == False:
                     print('water reward')
-                    self.csvdict['Total successes'] += 1
+                    self.csvdict['Total successes'][0] += 1
                     self.csvdict['Trial Outcome'].append('Success')
                     self.WaterReward.run() # This still uses Reward Delay
                     self.RewardOccurred = True
+                    self.DiscrimStimDuration = self.RandomDuration(self.DiscrimStimMin,self.DiscrimStimMax)
+                    self.GoCueDuration = self.RandomDuration(self.GoCueMin,self.GoCueMax)
                     self.StartTime = time.time()
                     self.RelStartTime = time.time() - self.StartTime
                 
@@ -404,19 +414,20 @@ class MonkeyImages(tk.Frame,):
                     self.RelCueTime = time.time() - self.CueTime
                     self.RelDiscrimStimTime = time.time() - self.DiscrimStimTime
                 
-                if self.Area1_right_pres == False and self.Area1_left_pres == False:
+                if self.Area1_right_pres == False and self.Area1_left_pres == False: # Reset
                     if self.counter != 0:
-                        self.counter = 0
+                        # self.counter = 0
                         self.RewardOccurred = False
                         self.current_counter = self.counter
-                        self.DiscrimStimDuration = self.RandomDuration(self.DiscrimStimMin,self.DiscrimStimMax)
-                        self.GoCueDuration = self.RandomDuration(self.GoCueMin,self.GoCueMax)
-
-                        self.next_image()
+                        # self.DiscrimStimDuration = self.RandomDuration(self.DiscrimStimMin,self.DiscrimStimMax)
+                        # self.GoCueDuration = self.RandomDuration(self.GoCueMin,self.GoCueMax)
+                        # self.next_image()
+                        
                     self.StartTrialBool = True
                     self.TrainingStart = False
                     self.PictureBool = False
                     self.ReadyForPull = False
+                    self.RelStartTime = time.time() - self.StartTime
                 self.after(1,func=self.LOOP)
 
 
@@ -699,7 +710,7 @@ class MonkeyImages(tk.Frame,):
                     fullfilename = filename + '.csv'
                     check = os.path.isfile(fullfilename)
                 print('File name not currently used, saving.')
-
+    
                 with open(filename + '.csv', 'w', newline = '') as csvfile:
                     csv_writer = writer(csvfile, delimiter = ',')
                     for key in self.csvdict.keys():
@@ -772,20 +783,36 @@ class MonkeyImages(tk.Frame,):
         self.ReadyForSound = False
         self.PunishLockout = False
         self.ReadyForPull = False
+        self.OutofHomeZoneOn = False
         self.counter = 0
         self.next_image()
         self.after(1,func=None)
 
     def Test(self):
-        self.WaterReward.run()
+        print('test')
+        print('self.MonkeyLoop',self.MonkeyLoop)
+        print('self.StartTrialBool',self.StartTrialBool)
+        print('self.CurrentPress',self.CurrentPress)
+        print('self.JoystickPulled',self.JoystickPulled)
+        print('self.PictureBool',self.PictureBool)
+        print('self.ReadyForSound',self.ReadyForSound)
+        print('self.PunishLockout',self.PunishLockout)
+        print('self.ReadyForPull',self.ReadyForPull)
+        print('self.OutofHomeZoneOn',self.OutofHomeZoneOn)
+        print('self.Area1_right_pres',self.Area1_right_pres)
+        print('self.Area2_right_pres',self.Area2_right_pres)
+        print('self.Area1_left_pres',self.Area1_left_pres)
+        print('self.Area2_left_pres',self.Area2_left_pres)
+        print('self.ImageReward',self.ImageReward)
+        #self.WaterReward.run()
 
     def StartTrialCue(self):  # Commented out this for Current Training, keep sound.
-        # if self.counter == 0:
-        #     self.counter = -2
-        #     self.next_image()
-        # elif self.counter == -2:
-        #     self.counter = 0
-        #     self.next_image()
+        if self.counter == 0:
+            self.counter = -2
+            self.next_image()
+        elif self.counter == -2:
+            self.counter = 0
+            self.next_image()
         if self.OutofHomeZoneOn == False:
             winsound.PlaySound('OutOfHomeZone.wav', winsound.SND_ALIAS + winsound.SND_ASYNC + winsound.SND_NOWAIT + winsound.SND_LOOP) #Need to change the tone
             self.OutofHomeZoneOn = True
@@ -878,6 +905,7 @@ class MonkeyImages(tk.Frame,):
             self.cv1.create_image(0, 0, anchor = 'nw', image = self.photo)
 ############################################################################################################################################
     def gathering_data_omni(self):
+        self.client.opx_wait(1000)
         new_data = self.client.get_new_data()
         if new_data.num_data_blocks < max_block_output:
             num_blocks_to_output = new_data.num_data_blocks
@@ -975,21 +1003,30 @@ class MonkeyImages(tk.Frame,):
                             if self.Area1_right_pres == False and tmp_samples[0] >= 1: #Paw Into Home
                                 print('Area1_right_pres set to True')
                                 self.AddPawInHome(tmp_timestamp - self.RecordingStartTimestamp)
+                                self.HandInTime = tmp_timestamp - self.RecordingStartTimestamp
                             self.Area1_right_pres = True
                         else:
                             if self.Area1_right_pres == True and tmp_samples[0] <= 1: #Paw Out of Home
                                 print('Area1_right_pres set to False')
                                 self.AddPawOutHome(tmp_timestamp - self.RecordingStartTimestamp)
+                                self.HandOutTime = tmp_timestamp - self.RecordingStartTimestamp
+                                self.HandDurationTime = self.HandOutTime - self.HandInTime
+                                self.csvdict['Duration in Home Zone'].append(self.HandDurationTime)
                             self.Area1_right_pres = False
-                            self.StartTrialBool = True
-                            self.TrainingStart = False
-                            if self.STartTrialBool == False:
+                            if self.StartTrialBool == False:
                                 if self.PictureBool == False:
-                                    self.csvdict['Total t1 failures'] += 1
+                                    self.csvdict['Total t1 failures'][0] += 1
                                     self.csvdict['Trial Outcome'].append('t1 Fail')
                                 else:
-                                    self.csvdict['Total t2 failures'] += 1
+                                    self.csvdict['Total t2 failures'][0] += 1
                                     self.csvdict['Trial Outcome'].append('t2 Fail')
+                                self.DiscrimStimDuration = self.RandomDuration(self.DiscrimStimMin,self.DiscrimStimMax)
+                                self.GoCueDuration = self.RandomDuration(self.GoCueMin,self.GoCueMax)
+                                self.counter = 0
+                                self.current_counter = 0
+                                self.next_image()
+                            self.StartTrialBool = True
+                            self.TrainingStart = False
 
                     elif new_data.channel[i] == (self.Area1_left):
                         if tmp_samples[0] >= 1:
@@ -1005,7 +1042,18 @@ class MonkeyImages(tk.Frame,):
                                 self.HandOutTime = tmp_timestamp - self.RecordingStartTimestamp
                                 self.HandDurationTime = self.HandOutTime - self.HandInTime
                                 self.csvdict['Duration in Home Zone'].append(self.HandDurationTime)
-                            self.Area1_left_pres = False
+                            # self.Area1_left_pres = False
+                            # self.StartTrialBool = True
+                            # self.TrainingStart = False
+                            # if self.StartTrialBool == False:
+                            #     if self.PictureBool == False:
+                            #         self.csvdict['Total t1 failures'][0] += 1
+                            #         self.csvdict['Trial Outcome'].append('t1 Fail')
+                            #     else:
+                            #         self.csvdict['Total t2 failures'][0] += 1
+                            #         self.csvdict['Trial Outcome'].append('t2 Fail')
+                            #     self.DiscrimStimDuration = self.RandomDuration(self.DiscrimStimMin,self.DiscrimStimMax)
+                            #     self.GoCueDuration = self.RandomDuration(self.GoCueMin,self.GoCueMax)
     
                     elif new_data.channel[i] == (self.Area2_right): 
                         if tmp_samples[0] >= 1:
@@ -1097,6 +1145,7 @@ class MonkeyImages(tk.Frame,):
         
         def run(self):
             print('start')
+            MonkeyTest.RewardDelay = MonkeyTest.RandomDuration(MonkeyTest.RewardDelayMin,MonkeyTest.RewardDelayMax)
             time.sleep(MonkeyTest.RewardDelay)
             if MonkeyTest.ImageReward == True:
                 MonkeyTest.counter = -1
