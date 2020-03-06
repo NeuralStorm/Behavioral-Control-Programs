@@ -1013,7 +1013,6 @@ class MonkeyImages(tk.Frame,):
                         # Construct a string with the samples for convenience
                         tmp_samples_str = float(self.Pedal2)
                     elif new_data.channel[i] == 3:
-
                         if self.Pedal3 < self.PullThreshold and tmp_samples[0] >= self.PullThreshold:
                             print('start press')
                             self.StartTimestamp = tmp_timestamp
@@ -1045,6 +1044,7 @@ class MonkeyImages(tk.Frame,):
 
                     ################################################################
                     elif new_data.channel[i] == (self.Area1_right):
+                        print('tmp_samples [0]: ' , tmp_samples[0])
                         if tmp_samples[0] >= 1:
                             if self.Area1_right_pres == False and tmp_samples[0] >= 1: #Paw Into Home
                                 print('Area1_right_pres set to True')
@@ -1125,50 +1125,6 @@ class MonkeyImages(tk.Frame,):
                                 self.AddPawOutJoystick(tmp_timestamp - self.RecordingStartTimestamp)
                             self.Area2_left_pres = False
                     ################################################################
-
-                    elif new_data.channel[i] == (self.Area1_right):
-                        if tmp_samples[0] >= 1:
-                            if self.Area1_right_pres == False and tmp_samples[0] >= 1:
-                                print('Area1_right_pres set to True')
-                            self.Area1_right_pres = True
-                        else:
-                            if self.Area1_right_pres == True and tmp_samples[0] <= 1:
-                                print('Area1_right_pres set to False')
-                            self.Area1_right_pres = False
-                            self.StartTrialBool = True
-                            self.TrainingStart = False
-                            
-                    elif new_data.channel[i] == (self.Area1_left):
-                        if tmp_samples[0] >= 1:
-                            if self.Area1_left_pres == False and tmp_samples[0] >= 1:
-                                print('Area1_left_pres set to True')
-                            self.Area1_left_pres = True
-                        else:
-                            if self.Area1_left_pres == True and tmp_samples[0] <= 1:
-                                print('Area1_left_pres set to False')
-                            self.Area1_left_pres = False
-
-                    elif new_data.channel[i] == (self.Area2_right):
-                        if tmp_samples[0] >= 1:
-                            if self.Area2_right_pres == False and tmp_samples[0] >= 1:
-                                print('Area2_right_pres set to True')
-                            self.Area2_right_pres = True
-                        else:
-                            if self.Area2_right_pres == True and tmp_samples[0] <= 1:
-                                print('Area2_right_pres set to False')
-                            self.Area2_right_pres = False
-                            
-                    elif new_data.channel[i] == (self.Area2_left):
-                        if tmp_samples[0] >= 1:
-                            if self.Area2_left_pres == False and tmp_samples[0] >= 1:
-                                print('Area2_left_pres set to True')
-                            self.Area2_left_pres = True
-                        else:
-                            if self.Area2_left_pres == True and tmp_samples[0] <= 1:
-                                print('Area2_left_pres set to False')
-                            self.Area2_left_pres = False
-
-
 
                     #print values that we want from AI
                     #if new_data.channel[i] == 1:
