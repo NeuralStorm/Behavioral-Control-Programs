@@ -23,6 +23,7 @@ from PIL import Image, ImageTk
 from csv import reader, writer
 import os
 import time
+import datetime
 import random
 import winsound
 import math
@@ -57,6 +58,8 @@ class MonkeyImages(tk.Frame,):
                     self.keyboard_event_source = source_id
                 if source_name == 'AI':
                     self.ai_source = source_id
+                if source_name == 'Single-bit events':
+                    self.event_source = source_id
                 if source_name == 'Other events':
                     self.other_event_source = source_id
                     print ("Other event source is {}".format(self.other_event_source))
@@ -155,7 +158,12 @@ class MonkeyImages(tk.Frame,):
         self.MaxTimeAfterSound = 20 # (seconds) Maximum time Monkey has to pull. However, it is currently set so that it will not reset if the Pedal is being Pulled
         self.TimeOut = 0.5 # (seconds) Time for black time out screen
 
-        # PARAMETERS
+        # PARAMETERS META DATA
+        self.StudyID = ['ABC']                              # 3 letter study code
+        self.SessionID = ['SessionID']                      # Type of Session
+        self.AnimalID = ['001']                               # 3 digit number
+        self.Date = [time.strftime('%Y%m%d')]               # Today's Date
+        # PARAMETERS EXPERIMENTAL
         self.TrainingDuration = 1.0                         # (seconds) how long should monkey hand be in Area1 to get a Training Reward
         self.PullThreshold = 3                              # (Voltage) Amount that Monkey has to pull to. Will be 0 or 5, because digital signal from pedal. (Connected to Analog input in plexon)
         self.DiscrimStimMin = 2#0.05                           # (seconds) Minimum seconds to display Discrim Stim for before Go Cue
@@ -333,7 +341,7 @@ class MonkeyImages(tk.Frame,):
                         self.counter = 0
                         self.next_image()
                         self.update_idletasks()
-                    # EV19 Ready
+                    # EV19 Ready # TODO: Take this out when finish the connector since new start of trial comes from hand in home zone
                     self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event7,None,None)
                     self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
                     print('hand in area, stop sound.')
@@ -356,7 +364,7 @@ class MonkeyImages(tk.Frame,):
                     # self.counter = random.randint(1,self.NumEvents) #Randomly chooses next image -Current,will change the range depending on which images are to be shown here.
                     self.counter = random.randint(1,self.NumEvents) # Randomly chooses next image -Current,will change the range depending on which images are to be shown here.
                     self.current_counter = self.counter
-                    #self.AddCount(self.counter)
+                    # self.AddCount(self.counter)
                     self.CueTime = time.time()
                     self.RelCueTime = time.time() - self.CueTime
                     # EV25 , EV27, EV29, EV31
@@ -403,11 +411,6 @@ class MonkeyImages(tk.Frame,):
 
                 if self.ReadyForPull == True and self.RewardOccurred == False:
                     print('water reward')
-                    self.csvdict['Total successes'][0] += 1
-                    self.csvdict['Trial Outcome'].append('Success')
-                    self.AddPawInHome(self.HandInTime)
-                    self.AddPawOutHome(self.HandOutTime)
-                    self.csvdict['Duration in Home Zone'].append(self.HandDurationTime)
                     self.WaterReward.run() # This still uses Reward Delay
                     self.RewardOccurred = True
                     self.DiscrimStimDuration = self.RandomDuration(self.DiscrimStimMin,self.DiscrimStimMax)
@@ -626,7 +629,41 @@ class MonkeyImages(tk.Frame,):
         return RewardDuration
 ############################################################################################################################################
     def DurationList(self):
-        self.csvdict = {'Hand in Home Zone':[], 'Start': [], 'Paw into Home Box': [], 'Paw out of Home Box': [], 'Paw into Joystick Box': [], 'Paw out of Joystick Box': [], 'Trial End': []}
+        self.csvdict = {'Hand in Home Zone': [], 'Study ID': self.StudyID, 'Session ID': self.SessionID, 'Animal ID': self.AnimalID, 'Date': self.Date, 'Session Time': []}
+        self.csvdict['Pre Discrimanatory Stimulus Min delta t1'] = [self.DiscrimStimMin]
+        self.csvdict['Pre Discrimanatory Stimulus Max delta t1'] = [self.DiscrimStimMax]
+        self.csvdict['Pre Go Cue Min delta t2'] = [self.GoCueMin]
+        self.csvdict['Pre Go Cue Max delta t2'] = [self.GoCueMax]
+        self.csvdict['Pre Reward Delay Min delta t3'] = [self.RewardDelayMin]
+        self.csvdict['Pre Reward Delay Max delta t3'] = [self.RewardDelayMax]
+        self.csvdict['Use Maximum Reward Time'] = [self.UseMaximumRewardTime]
+        self.csvdict['Maximum Reward Time'] = [self.MaxReward]
+        self.csvdict['Enable Time Out'] = [self.EnableTimeOut]
+        self.csvdict['Time Out'] = [self.TimeOut]
+        self.csvdict['Total Trials'] = [0]
+        self.csvdict['Total t1 failures'] = [0]
+        self.csvdict['Total t2 failures'] = [0]
+        self.csvdict['Total successes'] = [0]
+        self.csvdict['Check Trials'] = []
+        self.csvdict['Paw into Home Box: Start'] = []
+        self.csvdict['Paw out of Home Box: End'] = []
+        self.csvdict['Paw into Joystick Box'] = []
+        self.csvdict['Paw out of Joystick Box'] = []
+        self.csvdict['Discriminant Stimuli On'] = [] # Need to add these times from Plexon Events # EV25 27 29 31
+        self.csvdict['Discriminant Stimuli Off'] = [] # Need to create an event for this. and Ask about it.
+        self.csvdict['Go Cue On'] = [] # Need to add these times from Plexon Events # EV26 28 30 32
+        self.csvdict['Go Cue Off'] = [] # Need to ask about this.
+        self.csvdict['Trial DS Type'] = []
+        self.csvdict['Duration in Home Zone'] = []
+        self.csvdict['Trial Outcome'] = []
+        
+        
+        self.csvdict['Ranges'] = [self.Ranges]
+        self.csvdict['Inter Trial Time'] = [self.InterTrialTime]
+        self.csvdict['Adaptive Value'] = [self.AdaptiveValue]
+        self.csvdict['Adaptive Algorithm'] = [self.AdaptiveAlgorithm]
+        self.csvdict['Adaptive Frequency'] = [self.AdaptiveFrequency]
+        self.csvdict['Enable Early Pull Time Out'] = [self.EarlyPullTimeOut]
         for i in range(self.NumEvents):
             self.csvdict[('Correct Start Press ' + str(i+1))] = []
             self.csvdict[('Correct End Press ' + str(i+1))] = []
@@ -637,33 +674,16 @@ class MonkeyImages(tk.Frame,):
             self.csvdict[('Incorrect Duration ' + str(i+1))] = []
             self.csvdict[('Discriminatory Stimulus ' + str(i+1))] = []
             self.csvdict[('Go Cue ' + str(i+1))] = []
-        self.csvdict['Total Trials'] = [0]
-        self.csvdict['Total t1 failures'] = [0]
-        self.csvdict['Total t2 failures'] = [0]
-        self.csvdict['Total successes'] = [0]
-        self.csvdict['Trial DS Type'] = []
-        self.csvdict['Duration in Home Zone'] = []
-        self.csvdict['Trial Outcome'] = []
+        
+        
+        
+        
 
-        self.csvdict['Ranges'] = [self.Ranges]
-        self.csvdict['Discrimanatory Stimulus Min'] = [self.DiscrimStimMin]
-        self.csvdict['Discrimanatory Stimulus Max'] = [self.DiscrimStimMax]
-        self.csvdict['Go Cue Min'] = [self.GoCueMin]
-        self.csvdict['Go Cue Max'] = [self.GoCueMax]
-        self.csvdict['Max Time After Sound'] = [self.MaxTimeAfterSound]
-        self.csvdict['Inter Trial Time'] = [self.InterTrialTime]
-        self.csvdict['Adaptive Value'] = [self.AdaptiveValue]
-        self.csvdict['Adaptive Algorithm'] = [self.AdaptiveAlgorithm]
-        self.csvdict['Adaptive Frequency'] = [self.AdaptiveFrequency]
-        self.csvdict['Enable Early Pull Time Out'] = [self.EarlyPullTimeOut]
-        self.csvdict['Reward Delay'] = [self.RewardDelay]
-        self.csvdict['Use Maximum Reward Time'] = [self.UseMaximumRewardTime]
-        self.csvdict['Maximum Reward Time'] = [self.MaxReward]
-        self.csvdict['Enable Time Out'] = [self.EnableTimeOut]
-        self.csvdict['Time Out'] = [self.TimeOut]
-        self.csvdict['Enable Blooper Noise'] = [self.EnableBlooperNoise]
-        self.csvdict['Active Joystick Channels'] = [self.ActiveJoystickChans]
 
+        # self.csvdict['Enable Blooper Noise'] = [self.EnableBlooperNoise]
+        # self.csvdict['Active Joystick Channels'] = [self.ActiveJoystickChans]
+        # self.csvdict['Max Time After Sound'] = [self.MaxTimeAfterSound]
+        
         print('Duration Dictionary: {}'.format(self.csvdict))
 
     def AddCorrectDuration(self, Duration): 
@@ -694,10 +714,10 @@ class MonkeyImages(tk.Frame,):
         self.csvdict[('Go Cue ' + str(self.current_counter))].append(Timestamp)
         
     def AddPawInHome(self, Timestamp):
-        self.csvdict[('Paw into Home Box')].append(Timestamp)
+        self.csvdict[('Paw into Home Box: Start')].append(Timestamp)
         
     def AddPawOutHome(self, Timestamp):
-        self.csvdict[('Paw out of Home Box')].append(Timestamp)
+        self.csvdict[('Paw out of Home Box: End')].append(Timestamp)
         
     def AddPawInJoystick(self, Timestamp):
         self.csvdict[('Paw into Joystick Box')].append(Timestamp)
@@ -750,6 +770,7 @@ class MonkeyImages(tk.Frame,):
             pass
 ############################################################################################################################################
     def Start(self):
+        self.SessionStart = time.time()
         self.MonkeyLoop = True
         self.StartTrialBool = True
         self.StartTime = time.time()
@@ -779,10 +800,19 @@ class MonkeyImages(tk.Frame,):
         self.after(1,func=self.LOOP)
 
     def Stop(self): ###IMPORTANT###Need to make sure this End cleans up any loose ends, such as Water Reward being open. Anything Else?
+        self.SessionStop = time.time()
         winsound.PlaySound(winsound.Beep(100,0), winsound.SND_PURGE)
         if self.readyforplexon == True:
             self.plexdo.clear_bit(self.device_number, self.RewardDO_chan)
         print('Stop')
+        hours, rem = divmod(self.SessionStop - self.SessionStart, 3600)
+        minutes, seconds = divmod(rem, 60)
+        self.SessionDuration = ["{:0>2}:{:0>2}:{:05.2f}".format(int(hours),int(minutes),seconds)]
+        self.csvdict['Session Time'].append(self.SessionDuration)
+        if self.csvdict['Total Trials'][0] == (self.csvdict['Total t1 failures'][0] + self.csvdict['Total t2 failures'][0] + self.csvdict['Total successes'][0]):
+            self.csvdict['Check Trials'].append('True')
+        else:
+            self.csvdict['Check Trials'].append('False')
         self.MonkeyLoop = False
         self.StartTrialBool = False
         self.PictureBool = False
@@ -1047,7 +1077,6 @@ class MonkeyImages(tk.Frame,):
 
                     ################################################################
                     elif new_data.channel[i] == (self.Area1_right):
-                        print('tmp_samples [0]: ' , tmp_samples[0])
                         if tmp_samples[0] >= 1:
                             if self.Area1_right_pres == False and tmp_samples[0] >= 1: #Paw Into Home
                                 print('Area1_right_pres set to True')
@@ -1065,6 +1094,7 @@ class MonkeyImages(tk.Frame,):
                                     self.csvdict['Total t1 failures'][0] += 1
                                     self.csvdict['Trial Outcome'].append('t1 Fail')
                                     self.csvdict['Trial DS Type'].append(0)
+                                    self.csvdict['Discriminant Stimuli On'].append('X')
                                     self.AddPawInHome(self.HandInTime)
                                     self.AddPawOutHome(self.HandOutTime)
                                     self.csvdict['Duration in Home Zone'].append(self.HandDurationTime)
@@ -1074,10 +1104,15 @@ class MonkeyImages(tk.Frame,):
                                     self.AddPawInHome(self.HandInTime)
                                     self.AddPawOutHome(self.HandOutTime)
                                     self.csvdict['Duration in Home Zone'].append(self.HandDurationTime)
+                                elif self.PictureBool == True and self.ReadyForPull == True:
+                                    self.csvdict['Total successes'][0] += 1
+                                    self.csvdict['Trial Outcome'].append('Success')
+                                    self.AddPawInHome(self.HandInTime)
+                                    self.AddPawOutHome(self.HandOutTime)
+                                    self.csvdict['Duration in Home Zone'].append(self.HandDurationTime)
                                 self.DiscrimStimDuration = self.RandomDuration(self.DiscrimStimMin,self.DiscrimStimMax)
                                 self.GoCueDuration = self.RandomDuration(self.GoCueMin,self.GoCueMax)
                                 self.counter = 0
-                                self.current_counter = 0
                                 self.next_image()
                             self.StartTrialBool = True
                             self.TrainingStart = False
@@ -1132,17 +1167,36 @@ class MonkeyImages(tk.Frame,):
                                 self.AddPawOutJoystick(tmp_timestamp - self.RecordingStartTimestamp)
                             self.Area2_left_pres = False
                     ################################################################
-
-                    #print values that we want from AI
-                    #if new_data.channel[i] == 1:
-                        #print("SRC:{} {} TS:{} CH:{} WF:{}".format(tmp_source_number, tmp_source_name, tmp_timestamp, tmp_channel, tmp_samples_str))
-                
-                # This is for 2 events that come from Cineplex, might have to change channels depending on physical connections.
-                # Waiting for Ryan to see if these should be event type or continuous
-
+                            
+                elif new_data.source_num_or_type[i] == self.event_source: # Single-bit events EV01 - EV32
+                    tmp_source_number = new_data.source_num_or_type[i]
+                    tmp_channel = new_data.channel[i]
+                    tmp_source_name = source_numbers_names[tmp_source_number]
+                    tmp_timestamp = new_data.timestamp[i]
+                    tmp_unit = new_data.unit[i]
                     
+                    if tmp_channel == 19: # Start Timestamps are inconsistent and missing some.
+                        #self.csvdict[('Start')].append(tmp_timestamp - self.RecordingStartTimestamp)
+                        pass
+                    elif tmp_channel == 20:
+                        pass
+                    elif tmp_channel == 21:
+                        pass
+                    elif tmp_channel == 23:
+                        pass
+                    elif tmp_channel == 24:
+                        #self.csvdict[('Trial End')].append(tmp_timestamp - self.RecordingStartTimestamp)
+                        pass
+                    elif tmp_channel == 25 or tmp_channel == 27 or tmp_channel == 29 or tmp_channel == 31:
+                        self.AddDiscriminatoryStimulus(tmp_timestamp - self.RecordingStartTimestamp)
+                        self.csvdict['Discriminant Stimuli On'].append(tmp_timestamp - self.RecordingStartTimestamp)
+                    elif tmp_channel == 26 or tmp_channel == 28 or tmp_channel == 30 or tmp_channel == 32:
+                        print('asdofghiaghasiodfsdaofihsdaioghsdaiofhsdaiohsdaiofsadiosdaiodiofsajfiosdgiosahgilsadi')
+                        self.AddGoCue(tmp_timestamp - self.RecordingStartTimestamp)
+                        self.csvdict['Go Cue On'].append(tmp_timestamp - self.RecordingStartTimestamp)
+                        
             except KeyError:
-                continue
+                pass
     #end of gathering data
 
 ########################################
