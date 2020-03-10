@@ -305,7 +305,7 @@ class MonkeyImages(tk.Frame,):
 
         if self.readyforplexon == True:
             WaitForStart = True
-            print('Start Plexon Recording now')s
+            print('Start Plexon Recording now')
             while WaitForStart == True:
                 #self.client.opx_wait(1)
                 new_data = self.client.get_new_data()
