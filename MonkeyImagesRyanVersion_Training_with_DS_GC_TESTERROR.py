@@ -305,7 +305,7 @@ class MonkeyImages(tk.Frame,):
 
         if self.readyforplexon == True:
             WaitForStart = True
-            print('Start Plexon Recording now')
+            print('Start Plexon Recording now')s
             while WaitForStart == True:
                 #self.client.opx_wait(1)
                 new_data = self.client.get_new_data()
@@ -734,11 +734,11 @@ class MonkeyImages(tk.Frame,):
         self.csvdict[('Paw out of Joystick Box')].append(Timestamp)
 
     def FormatDurations(self):
-        filename = input('What would you like to save the Duration File as: ')
-        fullfilename = filename + '.csv'
-        csvtest = True
-        while csvtest == True:
-            try:
+        try:
+            filename = input('What would you like to save the Duration File as: ')
+            fullfilename = filename + '.csv'
+            csvtest = True
+            while csvtest == True:
                 check = os.path.isfile(fullfilename)
                 while check == True:
                     print('File name already exists')
@@ -754,9 +754,12 @@ class MonkeyImages(tk.Frame,):
                 csvtest = False
                 # with open(name + '.csv', newline = '') as csv_read, open(data +'.csv', 'w', newline = '') as csv_write:
                 #     writer(csv_write, delimiter= ',').writerows(zip(*reader(csv_read, delimiter=',')))
-            except:
-                print('Error with File name')
-        print(fullfilename)
+                print('fullfilename: ', fullfilename)
+        except RuntimeError:
+            print('Error with File name')
+            filename = None
+        
+        
 ############################################################################################################################################
     def AdaptiveRewardThreshold(self, AdaptiveValue, AdaptiveAlgorithm):
         #Take each self.csvdict and analyze duration times. (Average, sliding average?, etc)
@@ -1094,12 +1097,13 @@ class MonkeyImages(tk.Frame,):
                             if tmp_samples[0] >= 1:
                                 if self.Area1_right_pres == False and tmp_samples[0] >= 1: #Paw Into Home
                                     print('Area1_right_pres set to True')
-                                    self.HandInTime = tmp_timestamp - self.RecordingStartTimestamp
+                                    # self.HandInTime = tmp_timestamp - self.RecordingStartTimestamp
+                                    # print(self.HandInTime)
                                 self.Area1_right_pres = True
                             else:
                                 if self.Area1_right_pres == True and tmp_samples[0] <= 1: #Paw Out of Home
                                     print('Area1_right_pres set to False')
-                                    self.HandOutTime = tmp_timestamp - self.RecordingStartTimestamp
+                                    # self.HandOutTime = tmp_timestamp - self.RecordingStartTimestamp
                                     self.HandDurationTime = self.HandOutTime - self.HandInTime
                                     
                                 self.Area1_right_pres = False
@@ -1191,11 +1195,12 @@ class MonkeyImages(tk.Frame,):
                     tmp_timestamp = new_data.timestamp[i]
                     tmp_unit = new_data.unit[i]
                     
-                    if tmp_channel == 19: # Start Timestamps are inconsistent and missing some.
-                        #self.csvdict[('Start')].append(tmp_timestamp - self.RecordingStartTimestamp)
-                        pass
-                    elif tmp_channel == 20:
-                        pass
+                    if tmp_channel == 9: # Start Timestamps are inconsistent and missing some.
+                        self.HandInTime = tmp_timestamp - self.RecordingStartTimestamp
+                        print(self.HandInTime)
+                    elif tmp_channel == 10:
+                        self.HandOutTime = tmp_timestamp - self.RecordingStartTimestamp
+                        print(self.HandOutTime)
                     elif tmp_channel == 21:
                         pass
                     elif tmp_channel == 23:
@@ -1211,7 +1216,6 @@ class MonkeyImages(tk.Frame,):
                         print('GC Event')
                         self.AddGoCue(tmp_timestamp - self.RecordingStartTimestamp)
                         self.csvdict['Go Cue On'].append(tmp_timestamp - self.RecordingStartTimestamp)
-                        print('Go Cues Done')
                         
 
     #end of gathering data
