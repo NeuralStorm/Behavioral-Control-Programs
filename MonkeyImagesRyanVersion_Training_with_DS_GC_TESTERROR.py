@@ -1096,45 +1096,16 @@ class MonkeyImages(tk.Frame,):
                         elif new_data.channel[i] == (self.Area1_right):
                             if tmp_samples[0] >= 1:
                                 if self.Area1_right_pres == False and tmp_samples[0] >= 1: #Paw Into Home
-                                    print('Area1_right_pres set to True')
+                                    pass
+                                   
                                     # self.HandInTime = tmp_timestamp - self.RecordingStartTimestamp
                                     # print(self.HandInTime)
-                                self.Area1_right_pres = True
+                                
                             else:
                                 if self.Area1_right_pres == True and tmp_samples[0] <= 1: #Paw Out of Home
-                                    print('Area1_right_pres set to False')
+                                    pass
                                     # self.HandOutTime = tmp_timestamp - self.RecordingStartTimestamp
-                                    self.HandDurationTime = self.HandOutTime - self.HandInTime
-                                if self.StartTrialBool == False:
-                                    if self.PictureBool == False:
-                                        self.csvdict['Total t1 failures'][0] += 1
-                                        self.csvdict['Trial Outcome'].append('t1 Fail')
-                                        self.csvdict['Trial DS Type'].append(0)
-                                        self.csvdict['Discriminant Stimuli On'].append('X')
-                                        self.csvdict['Go Cue On'].append('X')
-                                        self.AddPawInHome(self.HandInTime)
-                                        self.AddPawOutHome(self.HandOutTime)
-                                        self.csvdict['Duration in Home Zone'].append(self.HandDurationTime)
-                                    elif self.PictureBool == True and self.ReadyForPull == False:
-                                        self.csvdict['Total t2 failures'][0] += 1
-                                        self.csvdict['Trial Outcome'].append('t2 Fail')
-                                        self.csvdict['Go Cue On'].append('X')
-                                        self.AddPawInHome(self.HandInTime)
-                                        self.AddPawOutHome(self.HandOutTime)
-                                        self.csvdict['Duration in Home Zone'].append(self.HandDurationTime)
-                                    elif self.PictureBool == True and self.ReadyForPull == True:
-                                        self.csvdict['Total successes'][0] += 1
-                                        self.csvdict['Trial Outcome'].append('Success')
-                                        self.AddPawInHome(self.HandInTime)
-                                        self.AddPawOutHome(self.HandOutTime)
-                                        self.csvdict['Duration in Home Zone'].append(self.HandDurationTime)
-                                    self.DiscrimStimDuration = self.RandomDuration(self.DiscrimStimMin,self.DiscrimStimMax)
-                                    self.GoCueDuration = self.RandomDuration(self.GoCueMin,self.GoCueMax)
-                                    self.counter = 0
-                                    self.next_image()
-                                self.Area1_right_pres = False
-                                self.StartTrialBool = True
-                                self.TrainingStart = False
+
         
                         elif new_data.channel[i] == (self.Area1_left):
                             if tmp_samples[0] >= 1:
@@ -1197,11 +1168,45 @@ class MonkeyImages(tk.Frame,):
                     tmp_unit = new_data.unit[i]
                     
                     if tmp_channel == 9: # Start Timestamps are inconsistent and missing some.
+                         print('Area1_right_pres set to True')
+                        self.Area1_right_pres = True
                         self.HandInTime = tmp_timestamp - self.RecordingStartTimestamp
                         print(self.HandInTime)
                     elif tmp_channel == 10:
+                        print('Area1_right_pres set to False')
+                        self.Area1_right_pres = False
                         self.HandOutTime = tmp_timestamp - self.RecordingStartTimestamp
                         print(self.HandOutTime)
+                        self.HandDurationTime = self.HandOutTime - self.HandInTime
+                        if self.StartTrialBool == False:
+                            if self.PictureBool == False:
+                                self.csvdict['Total t1 failures'][0] += 1
+                                self.csvdict['Trial Outcome'].append('t1 Fail')
+                                self.csvdict['Trial DS Type'].append(0)
+                                self.csvdict['Discriminant Stimuli On'].append('X')
+                                self.csvdict['Go Cue On'].append('X')
+                                self.AddPawInHome(self.HandInTime)
+                                self.AddPawOutHome(self.HandOutTime)
+                                self.csvdict['Duration in Home Zone'].append(self.HandDurationTime)
+                            elif self.PictureBool == True and self.ReadyForPull == False:
+                                self.csvdict['Total t2 failures'][0] += 1
+                                self.csvdict['Trial Outcome'].append('t2 Fail')
+                                self.csvdict['Go Cue On'].append('X')
+                                self.AddPawInHome(self.HandInTime)
+                                self.AddPawOutHome(self.HandOutTime)
+                                self.csvdict['Duration in Home Zone'].append(self.HandDurationTime)
+                            elif self.PictureBool == True and self.ReadyForPull == True:
+                                self.csvdict['Total successes'][0] += 1
+                                self.csvdict['Trial Outcome'].append('Success')
+                                self.AddPawInHome(self.HandInTime)
+                                self.AddPawOutHome(self.HandOutTime)
+                                self.csvdict['Duration in Home Zone'].append(self.HandDurationTime)
+                            self.DiscrimStimDuration = self.RandomDuration(self.DiscrimStimMin,self.DiscrimStimMax)
+                            self.GoCueDuration = self.RandomDuration(self.GoCueMin,self.GoCueMax)
+                            self.counter = 0
+                            self.next_image()
+                        self.StartTrialBool = True
+                        self.TrainingStart = False
                     elif tmp_channel == 21:
                         pass
                     elif tmp_channel == 23:
