@@ -1168,7 +1168,7 @@ class MonkeyImages(tk.Frame,):
                     tmp_unit = new_data.unit[i]
                     
                     if tmp_channel == 9: # Start Timestamps are inconsistent and missing some.
-                         print('Area1_right_pres set to True')
+                        print('Area1_right_pres set to True')
                         self.Area1_right_pres = True
                         self.HandInTime = tmp_timestamp - self.RecordingStartTimestamp
                         print(self.HandInTime)
