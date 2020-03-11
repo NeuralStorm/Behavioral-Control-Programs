@@ -173,15 +173,15 @@ class MonkeyImages(tk.Frame,):
         # PARAMETERS
         self.filename = 'dummy'
         self.fullfilename = self.filename + '.csv'
-        self.DiscrimStimMin = 0.5                           # (seconds) Minimum seconds to display Discrim Stim for before Go Cue
-        self.DiscrimStimMax = 2                             # (seconds) Maxiumum seconds to display Discrim Stim for before Go Cue
+        self.DiscrimStimMin = 0.1                           # (seconds) Minimum seconds to display Discrim Stim for before Go Cue
+        self.DiscrimStimMax = 0.25                             # (seconds) Maxiumum seconds to display Discrim Stim for before Go Cue
         self.DiscrimStimDuration = self.RandomDuration(self.DiscrimStimMin,self.DiscrimStimMax) # (seconds) How long is the Discriminative Stimulus displayed for.
-        self.GoCueMin = 0.5                                 # (seconds) Minimum seconds to display Discrim Stim for before Go Cue
-        self.GoCueMax = 2                                   # (seconds) Maxiumum seconds to display Discrim Stim for before Go Cue
+        self.GoCueMin = 0.25                                 # (seconds) Minimum seconds to display Discrim Stim for before Go Cue
+        self.GoCueMax = 0.5                                   # (seconds) Maxiumum seconds to display Discrim Stim for before Go Cue
         self.GoCueDuration = self.RandomDuration(self.GoCueMin,self.GoCueMax) # (seconds) How long is the Discriminative Stimulus displayed for.
         self.MaxTimeAfterSound = 20                         # (seconds) Maximum time Monkey has to pull. However, it is currently set so that it will not reset if the Pedal is being Pulled
         self.NumEvents = 3
-        self.InterTrialTime = 1                             # (seconds) Time between trials / Time before trial starts
+        self.InterTrialTime = 0.5                             # (seconds) Time between trials / Time before trial starts
         self.AdaptiveValue = 0.05                           # Probably going to use this in the form of a value
         self.AdaptiveAlgorithm = 1                          # 1: Percentage based change 2: mean, std, calculated shift of distribution (Don't move center?) 3: TBD Move center as well?
         self.AdaptiveFrequency = 50                         # Number of trials inbetween calling AdaptiveRewardThreshold()
