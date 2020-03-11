@@ -430,7 +430,7 @@ class MonkeyImages(tk.Frame,):
                     if self.RewardTime > 0:                                      ### Reward will Only be Given if the Pull Duration Falls in one of the intervals.
                         self.JoystickPulled = True
                         self.AddCorrectStimCount(self.current_counter)
-                        self.AddCorrectDuration(self.DurationTimestamp)
+                        self.AddCorrectDuration(self.DurationTimestamp, self.RewardTime)
                         self.AddCorrectStartPress(self.StartTimestamp)
                         self.AddCorrectEndPress(self.StopTimestamp)
                     elif self.EnableTimeOut == True and self.RewardTime == 0:
@@ -620,6 +620,7 @@ class MonkeyImages(tk.Frame,):
             self.csvdict[('Correct Start Press ' + str(i+1))] = []
             self.csvdict[('Correct End Press ' + str(i+1))] = []
             self.csvdict[('Correct Duration ' + str(i+1))] = []
+            self.csvdict[('Reward Duration ' + str(i+1))] = []
             self.csvdict[('Correct Stim Count ' + str(i+1))] = [0]
             self.csvdict[('Incorrect Start Press ' + str(i+1))] = []
             self.csvdict[('Incorrect End Press ' + str(i+1))] = []
@@ -648,8 +649,10 @@ class MonkeyImages(tk.Frame,):
 
         print('Duration Dictionary: {}'.format(self.csvdict))
 
-    def AddCorrectDuration(self, Duration): 
+    def AddCorrectDuration(self, Duration, Reward): 
         self.csvdict[('Correct Duration ' + str(self.current_counter))].append(Duration)
+        self.csvdict[('Reward Duration ' + str(self.current_counter))].append(Reward)
+        
     
     def AddIncorrectDuration(self, Duration):
         self.csvdict[('Incorrect Duration ' + str(self.current_counter))].append(Duration)
@@ -688,9 +691,9 @@ class MonkeyImages(tk.Frame,):
         self.csvdict[('Paw out of Joystick Box')].append(Timestamp)
     
     def FormatDurations(self):
-        csvtest = True
-        while csvtest == True:
-            try:
+        try:
+            csvtest = True
+            while csvtest == True:
                 check = os.path.isfile(self.fullfilename)
                 while check == True:
                     print('File name already exists')
@@ -706,10 +709,11 @@ class MonkeyImages(tk.Frame,):
                 csvtest = False
                     # with open(name + '.csv', newline = '') as csv_read, open(data +'.csv', 'w', newline = '') as csv_write:
                     #     writer(csv_write, delimiter= ',').writerows(zip(*reader(csv_read, delimiter=',')))
-            except:
-                print('Error with File name')
-        print(self.fullfilename)
-        print('saved')
+            print(self.fullfilename)
+            print('saved')
+        except RuntimeError:
+            print('Error with File name')
+            self.filename = None
 ############################################################################################################################################
     def AdaptiveRewardThreshold(self, AdaptiveValue, AdaptiveAlgorithm):
         #Take each self.csvdict and analyze duration times. (Average, sliding average?, etc)

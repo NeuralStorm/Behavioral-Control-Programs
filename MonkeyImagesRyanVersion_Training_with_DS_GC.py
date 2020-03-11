@@ -329,6 +329,8 @@ class MonkeyImages(tk.Frame,):
                     self.gathering_data_omni()
 
 
+
+
                 # Flashing box for trial start cue + low freq sound.
                 # TRAINING: Only low frequency sound
                 if self.StartTrialBool == True and self.PunishLockout == False and self.Area1_right_pres == False and self.Area1_left_pres == False and self.RelStartTime >= self.InterTrialTime:
@@ -388,8 +390,6 @@ class MonkeyImages(tk.Frame,):
                     self.update_idletasks()
 
                 if self.PictureBool == True and self.RelCueTime >= self.GoCueDuration and self.ReadyForPull == False and (self.Area1_right_pres == True or self.Area1_left_pres == True):
-                    
-                    print('current counter: ', self.current_counter)
                     self.ReadyForPull = True
                     self.counter = self.counter + self.NumEvents
                     # EV26, EV28, EV30 EV32
@@ -1006,223 +1006,219 @@ class MonkeyImages(tk.Frame,):
             num_blocks_to_output = max_block_output
         # If a keyboard event is in the returned data, perform action
         for i in range(new_data.num_data_blocks):
-            
-                if new_data.source_num_or_type[i] == self.keyboard_event_source and new_data.channel[i] == 1: #Alt 1
-                    pass
-                elif new_data.source_num_or_type[i] == self.keyboard_event_source and new_data.channel[i] == 2: #Alt 2
-                    pass
-                elif new_data.source_num_or_type[i] == self.keyboard_event_source and new_data.channel[i] == 8: #Alt 8
-                    pass
             #For other new data find the AI channel 1 data for pedal
-                try:
-                    if source_numbers_types[new_data.source_num_or_type[i]] == CONTINUOUS_TYPE and (new_data.channel[i] in self.ActiveJoystickChans
-                         or new_data.channel[i] == self.Area1_right or new_data.channel[i] == self.Area2_right or new_data.channel[i] == self.Area1_left
-                         or new_data.channel[i] == self.Area2_left):
-                        # Output info
-                        tmp_source_number = new_data.source_num_or_type[i]
-                        tmp_channel = new_data.channel[i]
-                        tmp_source_name = source_numbers_names[tmp_source_number]
-                        tmp_voltage_scaler = source_numbers_voltage_scalers[tmp_source_number]
-                        tmp_rate = source_numbers_rates[tmp_source_number]
-                        tmp_samples = new_data.waveform[i][:max_samples_output]
-                        tmp_samples = [s * tmp_voltage_scaler for s in tmp_samples]
-                        tmp_timestamp = new_data.timestamp[i]
-                        tmp_unit = new_data.unit[i]
-                        
-        
-                        # Convert the samples from AD units to voltage using the voltage scaler, use tmp_samples[0] because it could be a list.
-                        
-                        if new_data.channel[i] == 1:
-        
-                            if self.Pedal1 < self.PullThreshold and tmp_samples[0] >= self.PullThreshold:
-                                print('start press')
-                                self.StartTimestamp = tmp_timestamp
-                                if self.CurrentPress == False and self.ReadyForPull == True:
-                                    self.CurrentPress = True
-                            elif self.Pedal1 >= self.PullThreshold and tmp_samples[0] < self.PullThreshold:
-                                print('stop press')
-                                self.StopTimestamp = tmp_timestamp
-                                self.DurationTimestamp = self.StopTimestamp - self.StartTimestamp
-        
-                            self.Pedal1 = tmp_samples[0] # Assign Pedal from AI continuous
-                            # Construct a string with the samples for convenience
-                            tmp_samples_str = float(self.Pedal1)
-                        elif new_data.channel[i] == 2:
-        
-                            if self.Pedal2 < self.PullThreshold and tmp_samples[0] >= self.PullThreshold:
-                                print('start press')
-                                self.StartTimestamp = tmp_timestamp
-                                if self.CurrentPress == False and self.ReadyForPull == True:
-                                    self.CurrentPress = True
-                            elif self.Pedal2 >= self.PullThreshold and tmp_samples[0] < self.PullThreshold:
-                                print('stop press')
-                                self.StopTimestamp = tmp_timestamp
-                                self.DurationTimestamp = self.StopTimestamp - self.StartTimestamp
-        
-                            self.Pedal2 = tmp_samples[0] # Assign Pedal from AI continuous
-                            # Construct a string with the samples for convenience
-                            tmp_samples_str = float(self.Pedal2)
-                        elif new_data.channel[i] == 3:
-                            if self.Pedal3 < self.PullThreshold and tmp_samples[0] >= self.PullThreshold:
-                                print('start press')
-                                self.StartTimestamp = tmp_timestamp
-                                if self.CurrentPress == False and self.ReadyForPull == True:
-                                    self.CurrentPress = True
-                            elif self.Pedal3 >= self.PullThreshold and tmp_samples[0] < self.PullThreshold:
-                                print('stop press')
-                                self.StopTimestamp = tmp_timestamp
-                                self.DurationTimestamp = self.StopTimestamp - self.StartTimestamp
-        
-                            self.Pedal3 = tmp_samples[0] # Assign Pedal from AI continuous
-                            # Construct a string with the samples for convenience
-                            tmp_samples_str = float(self.Pedal3)
-                        elif new_data.channel[i] == 4:
-        
-                            if self.Pedal4 < self.PullThreshold and tmp_samples[0] >= self.PullThreshold:
-                                print('start press')
-                                self.StartTimestamp = tmp_timestamp
-                                if self.CurrentPress == False and self.ReadyForPull == True:
-                                    self.CurrentPress = True
-                            elif self.Pedal4 >= self.PullThreshold and tmp_samples[0] < self.PullThreshold:
-                                print('stop press')
-                                self.StopTimestamp = tmp_timestamp
-                                self.DurationTimestamp = self.StopTimestamp - self.StartTimestamp
-        
-                            self.Pedal4 = tmp_samples[0] # Assign Pedal from AI continuous
-                            # Construct a string with the samples for convenience
-                            tmp_samples_str = float(self.Pedal4)
-        
-                        ################################################################
-                        elif new_data.channel[i] == (self.Area1_right):
-                            if tmp_samples[0] >= 1:
-                                if self.Area1_right_pres == False and tmp_samples[0] >= 1: #Paw Into Home
-                                    pass
-                                   
-                                    # self.HandInTime = tmp_timestamp - self.RecordingStartTimestamp
-                                    # print(self.HandInTime)
-                                
-                            else:
-                                if self.Area1_right_pres == True and tmp_samples[0] <= 1: #Paw Out of Home
-                                    pass
-                                    # self.HandOutTime = tmp_timestamp - self.RecordingStartTimestamp
-
-        
-                        elif new_data.channel[i] == (self.Area1_left):
-                            if tmp_samples[0] >= 1:
-                                if self.Area1_left_pres == False and tmp_samples[0] >= 1: #Paw Into Home
-                                    print('Area1_left_pres set to True')
-                                    #self.AddPawInHome(tmp_timestamp - self.RecordingStartTimestamp)
-                                    #self.HandInTime = tmp_timestamp - self.RecordingStartTimestamp
-                                self.Area1_left_pres = True
-                            else:
-                                if self.Area1_left_pres == True and tmp_samples[0] <= 1: #Paw Out of Home
-                                    print('Area1_left_pres set to False')
-                                    #self.AddPawOutHome(tmp_timestamp - self.RecordingStartTimestamp)
-                                    #self.HandOutTime = tmp_timestamp - self.RecordingStartTimestamp
-                                    #self.HandDurationTime = self.HandOutTime - self.HandInTime
-                                    #self.csvdict['Duration in Home Zone'].append(self.HandDurationTime)
-                                # self.Area1_left_pres = False
-                                # self.StartTrialBool = True
-                                # self.TrainingStart = False
-                                # if self.StartTrialBool == False:
-                                #     if self.PictureBool == False:
-                                #         self.csvdict['Total t1 failures'][0] += 1
-                                #         self.csvdict['Trial Outcome'].append('t1 Fail')
-                                #     else:
-                                #         self.csvdict['Total t2 failures'][0] += 1
-                                #         self.csvdict['Trial Outcome'].append('t2 Fail')
-                                #     self.DiscrimStimDuration = self.RandomDuration(self.DiscrimStimMin,self.DiscrimStimMax)
-                                #     self.GoCueDuration = self.RandomDuration(self.GoCueMin,self.GoCueMax)
-        
-                        elif new_data.channel[i] == (self.Area2_right): 
-                            if tmp_samples[0] >= 1:
-                                if self.Area2_right_pres == False and tmp_samples[0] >= 1: #Paw Into Joystick
-                                    print('Area2_right_pres set to True')
-                                    self.AddPawInJoystick(tmp_timestamp - self.RecordingStartTimestamp)
-                                self.Area2_right_pres = True
-                            else:
-                                if self.Area2_right_pres == True and tmp_samples[0] <= 1: #Paw Out of Joystick
-                                    print('Area2_right_pres set to False')
-                                    self.AddPawOutJoystick(tmp_timestamp - self.RecordingStartTimestamp)
-                                self.Area2_right_pres = False
-                        elif new_data.channel[i] == (self.Area2_left):
-                            if tmp_samples[0] >= 1:
-                                if self.Area2_left_pres == False and tmp_samples[0] >= 1: #Paw Into Joystick
-                                    print('Area2_left_pres set to True')
-                                    self.AddPawInJoystick(tmp_timestamp - self.RecordingStartTimestamp)
-                                self.Area2_left_pres = True
-                            else:
-                                if self.Area2_left_pres == True and tmp_samples[0] <= 1: #Paw Out of Joystick
-                                    print('Area2_left_pres set to False')
-                                    self.AddPawOutJoystick(tmp_timestamp - self.RecordingStartTimestamp)
-                                self.Area2_left_pres = False
-                    ################################################################
-                except KeyError:
-                    pass
-                if new_data.source_num_or_type[i] == self.event_source: # Single-bit events EV01 - EV32
+            try:
+                if source_numbers_types[new_data.source_num_or_type[i]] == CONTINUOUS_TYPE and (new_data.channel[i] in self.ActiveJoystickChans
+                        or new_data.channel[i] == self.Area1_right or new_data.channel[i] == self.Area2_right or new_data.channel[i] == self.Area1_left
+                        or new_data.channel[i] == self.Area2_left):
+                    # Output info
                     tmp_source_number = new_data.source_num_or_type[i]
                     tmp_channel = new_data.channel[i]
-                    print('channel: ', tmp_channel)
-                    tmp_source_name = source_numbers_names[tmp_source_number]
+                    # tmp_source_name = source_numbers_names[tmp_source_number]
+                    tmp_voltage_scaler = source_numbers_voltage_scalers[tmp_source_number]
+                    # tmp_rate = source_numbers_rates[tmp_source_number]
+                    tmp_samples = new_data.waveform[i][:max_samples_output]
+                    tmp_samples = [s * tmp_voltage_scaler for s in tmp_samples]
                     tmp_timestamp = new_data.timestamp[i]
-                    tmp_unit = new_data.unit[i]
+                    # tmp_unit = new_data.unit[i]
                     
-                    if tmp_channel == 9: # Start Timestamps are inconsistent and missing some.
-                        print('Area1_right_pres set to True')
-                        self.Area1_right_pres = True
-                        self.HandInTime = tmp_timestamp - self.RecordingStartTimestamp
-                        print(self.HandInTime)
-                    elif tmp_channel == 10:
-                        print('Area1_right_pres set to False')
-                        self.Area1_right_pres = False
-                        self.HandOutTime = tmp_timestamp - self.RecordingStartTimestamp
-                        print(self.HandOutTime)
-                        self.HandDurationTime = self.HandOutTime - self.HandInTime
-                        if self.StartTrialBool == False:
-                            if self.PictureBool == False:
-                                self.csvdict['Total t1 failures'][0] += 1
-                                self.csvdict['Trial Outcome'].append('t1 Fail')
-                                self.csvdict['Trial DS Type'].append(0)
-                                self.csvdict['Discriminant Stimuli On'].append('X')
-                                self.csvdict['Go Cue On'].append('X')
-                                self.AddPawInHome(self.HandInTime)
-                                self.AddPawOutHome(self.HandOutTime)
-                                self.csvdict['Duration in Home Zone'].append(self.HandDurationTime)
-                            elif self.PictureBool == True and self.ReadyForPull == False:
-                                self.csvdict['Total t2 failures'][0] += 1
-                                self.csvdict['Trial Outcome'].append('t2 Fail')
-                                self.csvdict['Go Cue On'].append('X')
-                                self.AddPawInHome(self.HandInTime)
-                                self.AddPawOutHome(self.HandOutTime)
-                                self.csvdict['Duration in Home Zone'].append(self.HandDurationTime)
-                            elif self.PictureBool == True and self.ReadyForPull == True:
-                                self.csvdict['Total successes'][0] += 1
-                                self.csvdict['Trial Outcome'].append('Success')
-                                self.AddPawInHome(self.HandInTime)
-                                self.AddPawOutHome(self.HandOutTime)
-                                self.csvdict['Duration in Home Zone'].append(self.HandDurationTime)
-                            self.DiscrimStimDuration = self.RandomDuration(self.DiscrimStimMin,self.DiscrimStimMax)
-                            self.GoCueDuration = self.RandomDuration(self.GoCueMin,self.GoCueMax)
-                            self.counter = 0
-                            self.next_image()
-                        self.StartTrialBool = True
-                        self.TrainingStart = False
-                    elif tmp_channel == 21:
-                        pass
-                    elif tmp_channel == 23:
-                        pass
-                    elif tmp_channel == 24:
-                        #self.csvdict[('Trial End')].append(tmp_timestamp - self.RecordingStartTimestamp)
-                        pass
-                    elif tmp_channel == 25 or tmp_channel == 27 or tmp_channel == 29 or tmp_channel == 31:
-                        print('DS Event')
-                        self.AddDiscriminatoryStimulus(tmp_timestamp - self.RecordingStartTimestamp)
-                        self.csvdict['Discriminant Stimuli On'].append(tmp_timestamp - self.RecordingStartTimestamp)
-                    elif tmp_channel == 26 or tmp_channel == 28 or tmp_channel == 30 or tmp_channel == 32:
-                        print('GC Event')
-                        self.AddGoCue(tmp_timestamp - self.RecordingStartTimestamp)
-                        self.csvdict['Go Cue On'].append(tmp_timestamp - self.RecordingStartTimestamp)
-                        
+    
+                    # Convert the samples from AD units to voltage using the voltage scaler, use tmp_samples[0] because it could be a list.
+                    
+                    if new_data.channel[i] == 1: # Forward
+                        if self.Pedal1 < self.PullThreshold and tmp_samples[0] >= self.PullThreshold:
+                            # print('start press')
+                            self.StartTimestamp = tmp_timestamp
+                            if self.CurrentPress == False and self.ReadyForPull == True:
+                                self.CurrentPress = True
+                        elif self.Pedal1 >= self.PullThreshold and tmp_samples[0] < self.PullThreshold:
+                            # print('stop press')
+                            self.StopTimestamp = tmp_timestamp
+                            self.DurationTimestamp = self.StopTimestamp - self.StartTimestamp
+
+                        self.Pedal1 = tmp_samples[0] # Assign Pedal from AI continuous
+                        # Construct a string with the samples for convenience
+                        tmp_samples_str = float(self.Pedal1)
+                    elif new_data.channel[i] == 2: # Right
+
+                        if self.Pedal2 < self.PullThreshold and tmp_samples[0] >= self.PullThreshold:
+                            # print('start press')
+                            self.StartTimestamp = tmp_timestamp
+                            if self.CurrentPress == False and self.ReadyForPull == True:
+                                self.CurrentPress = True
+                        elif self.Pedal2 >= self.PullThreshold and tmp_samples[0] < self.PullThreshold:
+                            # print('stop press')
+                            self.StopTimestamp = tmp_timestamp
+                            self.DurationTimestamp = self.StopTimestamp - self.StartTimestamp
+
+                        self.Pedal2 = tmp_samples[0] # Assign Pedal from AI continuous
+                        # Construct a string with the samples for convenience
+                        tmp_samples_str = float(self.Pedal2)
+                    elif new_data.channel[i] == 3: # Pull
+                        if self.Pedal3 < self.PullThreshold and tmp_samples[0] >= self.PullThreshold:
+                            # print('start press')
+                            self.StartTimestamp = tmp_timestamp
+                            if self.CurrentPress == False and self.ReadyForPull == True:
+                                self.CurrentPress = True
+                        elif self.Pedal3 >= self.PullThreshold and tmp_samples[0] < self.PullThreshold:
+                            # print('stop press')
+                            self.StopTimestamp = tmp_timestamp
+                            self.DurationTimestamp = self.StopTimestamp - self.StartTimestamp
+
+                        self.Pedal3 = tmp_samples[0] # Assign Pedal from AI continuous
+                        # Construct a string with the samples for convenience
+                        tmp_samples_str = float(self.Pedal3)
+                    elif new_data.channel[i] == 4: # Left
+
+                        if self.Pedal4 < self.PullThreshold and tmp_samples[0] >= self.PullThreshold:
+                            # print('start press')
+                            self.StartTimestamp = tmp_timestamp
+                            if self.CurrentPress == False and self.ReadyForPull == True:
+                                self.CurrentPress = True
+                        elif self.Pedal4 >= self.PullThreshold and tmp_samples[0] < self.PullThreshold:
+                            # print('stop press')
+                            self.StopTimestamp = tmp_timestamp
+                            self.DurationTimestamp = self.StopTimestamp - self.StartTimestamp
+    
+                        self.Pedal4 = tmp_samples[0] # Assign Pedal from AI continuous
+                        # Construct a string with the samples for convenience
+                        tmp_samples_str = float(self.Pedal4)
+
+                    ################################################################
+                    elif new_data.channel[i] == (self.Area1_right): # Right Hand in Home Zone
+                        if tmp_samples[0] >= 1:
+                            if self.Area1_right_pres == False and tmp_samples[0] >= 1: #Paw Into Home
+                                pass
+                                # self.HandInTime = tmp_timestamp - self.RecordingStartTimestamp
+                                # print(self.HandInTime)
+                        else:
+                            if self.Area1_right_pres == True and tmp_samples[0] <= 1: #Paw Out of Home
+                                pass
+                                # self.HandOutTime = tmp_timestamp - self.RecordingStartTimestamp
+
+                    elif new_data.channel[i] == (self.Area1_left): # Right Hand out of Home Zone
+                        if tmp_samples[0] >= 1:
+                            if self.Area1_left_pres == False and tmp_samples[0] >= 1: #Paw Into Home
+                                pass
+                                # print('Area1_left_pres set to True')
+                                #self.AddPawInHome(tmp_timestamp - self.RecordingStartTimestamp)
+                                #self.HandInTime = tmp_timestamp - self.RecordingStartTimestamp
+                            self.Area1_left_pres = True
+                        else:
+                            if self.Area1_left_pres == True and tmp_samples[0] <= 1: #Paw Out of Home
+                                pass
+                                # print('Area1_left_pres set to False')
+                                #self.AddPawOutHome(tmp_timestamp - self.RecordingStartTimestamp)
+                                #self.HandOutTime = tmp_timestamp - self.RecordingStartTimestamp
+                                #self.HandDurationTime = self.HandOutTime - self.HandInTime
+                                #self.csvdict['Duration in Home Zone'].append(self.HandDurationTime)
+                            # self.Area1_left_pres = False
+                            # self.StartTrialBool = True
+                            # self.TrainingStart = False
+                            # if self.StartTrialBool == False:
+                            #     if self.PictureBool == False:
+                            #         self.csvdict['Total t1 failures'][0] += 1
+                            #         self.csvdict['Trial Outcome'].append('t1 Fail')
+                            #     else:
+                            #         self.csvdict['Total t2 failures'][0] += 1
+                            #         self.csvdict['Trial Outcome'].append('t2 Fail')
+                            #     self.DiscrimStimDuration = self.RandomDuration(self.DiscrimStimMin,self.DiscrimStimMax)
+                            #     self.GoCueDuration = self.RandomDuration(self.GoCueMin,self.GoCueMax)
+    
+                    elif new_data.channel[i] == (self.Area2_right): 
+                        if tmp_samples[0] >= 1:
+                            if self.Area2_right_pres == False and tmp_samples[0] >= 1: #Paw Into Joystick
+                                pass
+                                # print('Area2_right_pres set to True')
+                            #     self.AddPawInJoystick(tmp_timestamp - self.RecordingStartTimestamp)
+                            # self.Area2_right_pres = True
+                        else:
+                            if self.Area2_right_pres == True and tmp_samples[0] <= 1: #Paw Out of Joystick
+                                pass
+                                # print('Area2_right_pres set to False')
+                            #     self.AddPawOutJoystick(tmp_timestamp - self.RecordingStartTimestamp)
+                            # self.Area2_right_pres = False
+                    elif new_data.channel[i] == (self.Area2_left):
+                        if tmp_samples[0] >= 1:
+                            if self.Area2_left_pres == False and tmp_samples[0] >= 1: #Paw Into Joystick
+                                pass
+                                # print('Area2_left_pres set to True')
+                            #     self.AddPawInJoystick(tmp_timestamp - self.RecordingStartTimestamp)
+                            # self.Area2_left_pres = True
+                        else:
+                            if self.Area2_left_pres == True and tmp_samples[0] <= 1: #Paw Out of Joystick
+                                pass
+                                # print('Area2_left_pres set to False')
+                            #     self.AddPawOutJoystick(tmp_timestamp - self.RecordingStartTimestamp)
+                            # self.Area2_left_pres = False
+                ################################################################
+            except KeyError:
+                pass
+            if new_data.source_num_or_type[i] == self.event_source: # Single-bit events EV01 - EV32
+                tmp_source_number = new_data.source_num_or_type[i]
+                tmp_channel = new_data.channel[i]
+                #print('channel: ', tmp_channel)
+                # tmp_source_name = source_numbers_names[tmp_source_number]
+                tmp_timestamp = new_data.timestamp[i]
+                # tmp_unit = new_data.unit[i]
+                
+                if tmp_channel == 9:
+                    print('Area1_right_pres set to True')
+                    self.Area1_right_pres = True
+                    self.HandInTime = tmp_timestamp - self.RecordingStartTimestamp
+                elif tmp_channel == 10:
+                    print('Area1_right_pres set to False')
+                    self.Area1_right_pres = False
+                    self.HandOutTime = tmp_timestamp - self.RecordingStartTimestamp
+                    self.HandDurationTime = self.HandOutTime - self.HandInTime
+                    if self.StartTrialBool == False:
+                        if self.PictureBool == False:
+                            self.csvdict['Total t1 failures'][0] += 1
+                            self.csvdict['Trial Outcome'].append('t1 Fail')
+                            self.csvdict['Trial DS Type'].append(0)
+                            self.csvdict['Discriminant Stimuli On'].append('X')
+                            self.csvdict['Go Cue On'].append('X')
+                            self.AddPawInHome(self.HandInTime)
+                            self.AddPawOutHome(self.HandOutTime)
+                            self.csvdict['Duration in Home Zone'].append(self.HandDurationTime)
+                        elif self.PictureBool == True and self.ReadyForPull == False:
+                            self.csvdict['Total t2 failures'][0] += 1
+                            self.csvdict['Trial Outcome'].append('t2 Fail')
+                            self.csvdict['Go Cue On'].append('X')
+                            self.AddPawInHome(self.HandInTime)
+                            self.AddPawOutHome(self.HandOutTime)
+                            self.csvdict['Duration in Home Zone'].append(self.HandDurationTime)
+                        elif self.PictureBool == True and self.ReadyForPull == True:
+                            self.csvdict['Total successes'][0] += 1
+                            self.csvdict['Trial Outcome'].append('Success')
+                            self.AddPawInHome(self.HandInTime)
+                            self.AddPawOutHome(self.HandOutTime)
+                            self.csvdict['Duration in Home Zone'].append(self.HandDurationTime)
+                        self.DiscrimStimDuration = self.RandomDuration(self.DiscrimStimMin,self.DiscrimStimMax)
+                        self.GoCueDuration = self.RandomDuration(self.GoCueMin,self.GoCueMax)
+                        self.counter = 0
+                        self.next_image()
+                    self.StartTrialBool = True
+                    self.TrainingStart = False
+                elif tmp_channel == 11:
+                    self.AddPawInJoystick(tmp_timestamp - self.RecordingStartTimestamp)
+                    self.Area2_right_pres = True
+                elif tmp_channel == 12:
+                    self.AddPawOutJoystick(tmp_timestamp - self.RecordingStartTimestamp)
+                    self.Area2_right_pres = False
+                elif tmp_channel == 21:
+                    pass
+                elif tmp_channel == 23:
+                    pass
+                elif tmp_channel == 24:
+                    #self.csvdict[('Trial End')].append(tmp_timestamp - self.RecordingStartTimestamp)
+                    pass
+                elif tmp_channel == 25 or tmp_channel == 27 or tmp_channel == 29 or tmp_channel == 31:
+                    self.AddDiscriminatoryStimulus(tmp_timestamp - self.RecordingStartTimestamp)
+                    self.csvdict['Discriminant Stimuli On'].append(tmp_timestamp - self.RecordingStartTimestamp)
+                elif tmp_channel == 26 or tmp_channel == 28 or tmp_channel == 30 or tmp_channel == 32:
+                    self.AddGoCue(tmp_timestamp - self.RecordingStartTimestamp)
+                    self.csvdict['Go Cue On'].append(tmp_timestamp - self.RecordingStartTimestamp)
 
     #end of gathering data
 
@@ -1235,14 +1231,11 @@ class MonkeyImages(tk.Frame,):
             t.Thread.__init__(self)
         
         def run(self):
-            print('start')
             RewardDelay = MonkeyTest.RandomDuration(MonkeyTest.RewardDelayMin,MonkeyTest.RewardDelayMax)
             RewardDelayTime = time.time()
             RelRewardDelayTime = time.time() - RewardDelayTime
             while RelRewardDelayTime < (RewardDelay - MonkeyTest.gocuetoc):
                 RelRewardDelayTime = time.time() - RewardDelayTime
-            print(RelRewardDelayTime)
-            print(RewardDelay)
             if MonkeyTest.ImageReward == True:
                 MonkeyTest.counter = -1
                 MonkeyTest.next_image()
@@ -1256,10 +1249,7 @@ class MonkeyImages(tk.Frame,):
                 while RelRewardTime < MonkeyTest.RewardTime:
                     RelRewardTime = time.time() - RewardTime
                 MonkeyTest.plexdo.clear_bit(MonkeyTest.device_number, MonkeyTest.RewardDO_chan)
-                print(MonkeyTest.RewardTime)
-                print(RelRewardTime)
             print("Water Off")
-            # MonkeyTest.gathering_data_omni()
 
 
 if __name__ == "__main__":
