@@ -53,7 +53,6 @@ class MonkeyImages(tk.Frame,):
 
             for source_id in global_parameters.source_ids:
                 source_name, _, _, _ = self.client.get_source_info(source_id)
-                print(source_name)
                 if source_name == 'KBD':
                     self.keyboard_event_source = source_id
                 if source_name == 'AI':
@@ -159,7 +158,7 @@ class MonkeyImages(tk.Frame,):
         
         ############# Specific for pedal Press Tasks
         self.Pedal = 0 # Initialize Pedal/Press
-        self.PullThreshold = 3 # (Voltage)Amount that Monkey has to pull to. Will be 0 or 5, because digital signal from pedal. (Connected to Analog input in plexon)
+        self.PullThreshold = 4 # (Voltage)Amount that Monkey has to pull to. Will be 0 or 5, because digital signal from pedal. (Connected to Analog input in plexon)
         #self.TimeBeforeSound = 0.2 # (seconds) Not Currently Used
         self.Pedal1 = 0 # Push / Forward
         self.Pedal2 = 0 # Right
@@ -169,30 +168,37 @@ class MonkeyImages(tk.Frame,):
         source = "./TestImages/" # Name of folder in which you keep your images to be displayed
         for images in os.listdir(source):
             self.list_images.append(images)
-
+            
+        # PARAMETERS META DATA
+        self.StudyID = ['TIP']                              # 3 letter study code
+        self.SessionID = ['1']                              # Type of Session
+        self.AnimalID = ['001']                             # 3 digit number
+        self.Date = [time.strftime('%Y%m%d')]               # Today's Date
         # PARAMETERS
-        self.filename = 'dummy'
+        self.filename = self.StudyID[0] + '_' + self.AnimalID[0] + '_' + self.Date[0] + '_Joystick'
         self.fullfilename = self.filename + '.csv'
-        self.DiscrimStimMin = 0.5                           # (seconds) Minimum seconds to display Discrim Stim for before Go Cue
-        self.DiscrimStimMax = 2                             # (seconds) Maxiumum seconds to display Discrim Stim for before Go Cue
+        self.DiscrimStimMin = 0.1                           # (seconds) Minimum seconds to display Discrim Stim for before Go Cue
+        self.DiscrimStimMax = 0.25                             # (seconds) Maxiumum seconds to display Discrim Stim for before Go Cue
         self.DiscrimStimDuration = self.RandomDuration(self.DiscrimStimMin,self.DiscrimStimMax) # (seconds) How long is the Discriminative Stimulus displayed for.
-        self.GoCueMin = 0.5                                 # (seconds) Minimum seconds to display Discrim Stim for before Go Cue
-        self.GoCueMax = 2                                   # (seconds) Maxiumum seconds to display Discrim Stim for before Go Cue
+        self.GoCueMin = 0.25                                 # (seconds) Minimum seconds to display Discrim Stim for before Go Cue
+        self.GoCueMax = 0.5                                   # (seconds) Maxiumum seconds to display Discrim Stim for before Go Cue
         self.GoCueDuration = self.RandomDuration(self.GoCueMin,self.GoCueMax) # (seconds) How long is the Discriminative Stimulus displayed for.
         self.MaxTimeAfterSound = 20                         # (seconds) Maximum time Monkey has to pull. However, it is currently set so that it will not reset if the Pedal is being Pulled
         self.NumEvents = 3
-        self.InterTrialTime = 1                             # (seconds) Time between trials / Time before trial starts
+        self.InterTrialTime = 0.5                             # (seconds) Time between trials / Time before trial starts
         self.AdaptiveValue = 0.05                           # Probably going to use this in the form of a value
         self.AdaptiveAlgorithm = 1                          # 1: Percentage based change 2: mean, std, calculated shift of distribution (Don't move center?) 3: TBD Move center as well?
         self.AdaptiveFrequency = 50                         # Number of trials inbetween calling AdaptiveRewardThreshold()
         self.EarlyPullTimeOut = False                       # This Boolean sets if you want to have a timeout for a pull before the Go Red Rectangle.
-        self.RewardDelay = 0.020                            # (seconds) Length of Delay before Reward (Juice) is given.
+        self.RewardDelayMin = 0.020                         # (seconds) Length of Min Delay before Reward (Juice) is given.
+        self.RewardDelayMax = 0.020                         # (seconds) Length of Max Delay before Reward (Juice) is given.
+        self.RewardDelay = self.RandomDuration(self.RewardDelayMin, self.RewardDelayMax) # (seconds) Length of Delay before Reward (Juice) is given.
         self.UseMaximumRewardTime = False                   # This Boolean sets if you want to use the Maximum Reward Time for each Reward or to use scaled Reward Time relative to Pull Duration.
         self.MaxReward = 0.18                               # (seconds, maximum time to give water)
         self.EnableTimeOut = False                          # Toggle this to True if you want to include 'punishment' timeouts (black screen for self.TimeOut duration), or False for no TimeOuts.
         self.TimeOut = 0.5                                  # (seconds) Time for black time out screen
         self.EnableBlooperNoise = False                     # Toggle this to True if you want to include the blooper noise when an incorrect pull is detected (Either too long or too short / No Reward Given)
-        self.RewardClass(self.NumEvents,0.5,.45,0.75,0.68,1,0.9)   #Hi Ryan, I added this range for your testing for now, because I changed where the reward is given so that it has to fit into an interval now.
+        self.RewardClass(self.NumEvents,0.5,0.25,0.75,0.5,1,0.75)   #Hi Ryan, I added this range for your testing for now, because I changed where the reward is given so that it has to fit into an interval now.
         self.ImageRatio = 100 # EX: ImageRatio = 75 => 75% Image Reward, 25% Water Reward , Currently does not handle the both choice for water and image.
         self.WaterReward = self.WaterRewardThread()
         self.ActiveJoystickChans = [3]                  # This can be used if you only want him to pull in certain directions as commented above as self.Pedal#_chan.
@@ -234,6 +240,7 @@ class MonkeyImages(tk.Frame,):
         # Booleans (built into GUI Class functions):
         self.MonkeyLoop = False         # Overall for when the program is looping
         self.StartTrialBool = False     # Gives the flashing diamond signal before discrim stimulus
+        self.TrainingStart = False
         self.CurrentPress = False       # Changes to True to show that a Press has happened / recorded into plexon and on server.
         self.JoystickPulled = False     # Should RENAME this one. Is True when animal pull is within range of the wanted pull duration.
         self.PictureBool = False
@@ -250,6 +257,8 @@ class MonkeyImages(tk.Frame,):
 
         self.StartTime = time.time()
         self.RelStartTime = time.time() - self.StartTime
+        self.TrainingStartTime = time.time()
+        self.RelTrainingStartTime = time.time() - self.TrainingStartTime
         self.CueTime = time.time()
         self.RelCueTime = time.time() - self.CueTime
         self.DiscrimStimTime = time.time()
@@ -326,28 +335,35 @@ class MonkeyImages(tk.Frame,):
     def LOOP(self): #LOOP will be different for each experiment
         #try: #For Later when we want a try block to catch exceptions.
             if self.MonkeyLoop == True:
-                tic = time.time()
                 if self.readyforplexon == True:
                     #Gather new data
                     self.gathering_data_omni()
-                    toc_plexon = time.time() - tic
-                    print('toc plex', toc_plexon)
 
                 # Flashing box for trial start cue + low freq sound.
                 if self.StartTrialBool == True and self.PunishLockout == False and self.RelStartTime >= self.InterTrialTime:
                     if self.Area1_right_pres == False and self.Area1_left_pres == False:
                         self.StartTrialCue()
-                    else:
-                        # EV19 Ready
-                        self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event7,None,None)
-                        self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
-                        if self.counter == -2:
-                            self.counter = 0
-                            self.next_image()
-
-                if self.PictureBool == False and (self.Area1_right_pres == True or self.Area1_left_pres == True) and self.PunishLockout == False:
-                    winsound.PlaySound(None, winsound.SND_PURGE) #Purge looping sounds
+                        
+                #################################################################################################################
+                if (self.Area1_right_pres == True or self.Area1_left_pres == True) and self.TrainingStart == False: # Start of Hand in Home Zone
+                    winsound.PlaySound(winsound.Beep(100,0), winsound.SND_PURGE) #Purge looping sounds
+                    if self.counter != 0:
+                        self.counter = 0
+                        self.next_image()
+                    # EV19 Ready # TODO: Take this out when finish the connector since new start of trial comes from hand in home zone
+                    self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event7,None,None)
+                    self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
+                    print('hand in area, stop sound.')
+                    self.csvdict['Total Trials'][0] += 1
+                    self.TrainingStartTime = time.time()
+                    self.RelTrainingStartTime = time.time() - self.TrainingStartTime
                     self.StartTrialBool = False
+                    self.TrainingStart = True
+                    self.OutofHomeZoneOn = False
+                #################################################################################################################
+
+                    
+                if self.TrainingStart == True and self.PictureBool == False and (self.Area1_right_pres == True or self.Area1_left_pres == True) and self.PunishLockout == False and self.RelTrainingStartTime >= self.DiscrimStimDuration:
                     print('Discriminatory Stimulus')
                     self.PictureBool = True # This will be on for the duration of the trial
 ################################################################################################################################################################################################
@@ -360,20 +376,25 @@ class MonkeyImages(tk.Frame,):
                     self.RelCueTime = time.time() - self.CueTime
                     # EV25 , EV27, EV29, EV31
                     if self.current_counter == 1: # EV25
+                        self.csvdict['Trial DS Type'].append(1)
                         self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event5,None,None)
                         self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
                     elif self.current_counter == 2: # EV27
+                        self.csvdict['Trial DS Type'].append(2)
                         self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event3,None,None)
                         self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
                     elif self.current_counter == 3: # EV29
+                        self.csvdict['Trial DS Type'].append(3)
                         self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event1,None,None)
                         self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
                     elif self.current_counter == 4: # EV31
+                        self.csvdict['Trial DS Type'].append(4)
                         self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event2,None,None)
                         self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
                     self.next_image()
+            
 
-                elif self.PictureBool == True and self.RelCueTime >= self.DiscrimStimDuration and self.ReadyForPull == False:
+                elif self.PictureBool == True and self.RelCueTime >= self.GoCueDuration and (self.Area1_right_pres == True or self.Area1_left_pres == True) and self.ReadyForPull == False:
                     print('Go Cue')
                     self.ReadyForPull = True
                     self.counter = self.counter + self.NumEvents
@@ -419,43 +440,32 @@ class MonkeyImages(tk.Frame,):
                         #self.client.opx_wait(100)                               ### The Monkey is Pulling it for. This will reduce latency issues with running through the whole
                         self.gathering_data_omni()                               ### Loop.
                     winsound.PlaySound(None, winsound.SND_PURGE)
-                    print('Pull for: {} seconds'.format(self.DurationTimestamp))
-                    
                     if self.UseMaximumRewardTime == False:
                         self.RewardTime = self.ChooseReward(self.DurationTimestamp)
                     elif self.UseMaximumRewardTime == True:
                         self.RewardTime = self.MaxReward
-
-                    print(self.RewardTime)
                     if self.RewardTime > 0:                                      ### Reward will Only be Given if the Pull Duration Falls in one of the intervals.
                         self.JoystickPulled = True
                         self.AddCorrectStimCount(self.current_counter)
                         self.AddCorrectDuration(self.DurationTimestamp, self.RewardTime)
                         self.AddCorrectStartPress(self.StartTimestamp)
                         self.AddCorrectEndPress(self.StopTimestamp)
-                    elif self.EnableTimeOut == True and self.RewardTime == 0:
-                        self.PunishLockout = True
-                        self.AddIncorrectDuration(self.DurationTimestamp)
-                        self.AddIncorrectStartPress(self.StartTimestamp)
-                        self.AddIncorrectEndPress(self.StopTimestamp)
-                        # EV21
-                        self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event5,None,None)
-                        self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
-                        if self.EnableBlooperNoise == True:
-                            winsound.PlaySound('WrongHoldDuration.wav', winsound.SND_ALIAS + winsound.SND_ASYNC + winsound.SND_NOWAIT)
-                        self.PunishLockTime = time.time()
-                        self.RelPunishLockTime = time.time() - self.PunishLockTime
-                        self.counter = -3
-                        self.next_image()
                     elif self.RewardTime == 0:
+                        self.csvdict['Total t3 failures'][0] += 1
+                        self.csvdict['Trial Outcome'].append('t3 Fail')
                         self.AddIncorrectDuration(self.DurationTimestamp)
                         self.AddIncorrectStartPress(self.StartTimestamp)
                         self.AddIncorrectEndPress(self.StopTimestamp)
-                        # EV21
+                        # EV21 t3 failure
                         self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event5,None,None)
                         self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
                         if self.EnableBlooperNoise == True:
                             winsound.PlaySound('WrongHoldDuration.wav', winsound.SND_ALIAS + winsound.SND_ASYNC + winsound.SND_NOWAIT)
+                        if self.EnableTimeOut == True:
+                            self.RelPunishLockTime = time.time() - self.PunishLockTime
+                            self.PunishLockout = True
+                            self.counter = -3
+                            self.next_image()
                     self.CurrentPress = False
                     
                 if self.JoystickPulled == True and self.ReadyForPull == True:                                   ### Reward will be Water or Image or Both (Need to add Both Option)
@@ -489,7 +499,10 @@ class MonkeyImages(tk.Frame,):
                     # EV24
                     self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event6,None,None)
                     self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
+                    self.csvdict['Total successes'][0] += 1
+                    self.csvdict['Trial Outcome'].append('Success')
                     self.StartTrialBool = True
+                    self.TrainingStart = False
                     self.OutofHomeZoneOn = False
                     self.StartTime = time.time() #Update start time for next cue.
                     self.RelStartTime = time.time() - self.StartTime
@@ -497,7 +510,7 @@ class MonkeyImages(tk.Frame,):
                     self.RelPunishLockTime = time.time() - self.PunishLockTime
                     
 
-                # Reset
+                # Reset after Max Time
                 elif (self.RelDiscrimStimTime >= self.MaxTimeAfterSound and self.ReadyForPull == True and 
                          self.Pedal1 < self.PullThreshold and self.Pedal2 < self.PullThreshold and
                          self.Pedal3 < self.PullThreshold and self.Pedal4 < self.PullThreshold):
@@ -507,6 +520,7 @@ class MonkeyImages(tk.Frame,):
                     self.counter = 0
                     self.CurrentPress = False
                     self.StartTrialBool = True
+                    self.TrainingStart = False
                     self.JoystickPulled = False
                     self.PictureBool = False
                     self.ReadyForSound = False
@@ -536,14 +550,13 @@ class MonkeyImages(tk.Frame,):
                     self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event6,None,None)
                     self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
                     self.StartTrialBool = True
+                    self.TrainingStart = False
                     self.StartTime = time.time()
                     self.CueTime = time.time()
                     self.DiscrimStimTime = time.time()
                     self.SoundTime = time.time()
                     self.RelPunishLockTime = time.time() - self.PunishLockTime
                     self.OutofHomeZoneOn = False
-                    toc = time.time() - tic
-                    print('toc 1',toc)
                     self.after(1,func=self.LOOP)
                 else:
                     if self.counter == -3:
@@ -554,9 +567,10 @@ class MonkeyImages(tk.Frame,):
                     self.RelCueTime = time.time() - self.CueTime
                     self.RelDiscrimStimTime = time.time() - self.DiscrimStimTime
                     self.RelSoundTime = time.time() - self.SoundTime###This Timing is used for if animal surpasses max time to do task, needs to update every loop
-                    toc = time.time() - tic
-                    print('toc 2',toc)
+                    self.RelTrainingStartTime = time.time() - self.TrainingStartTime
+                    
                     self.after(1,func=self.LOOP)
+                
         #except: #For Later when we want a try block to deal with errors, will help to properly stop water in case of emergency.
         #    print('Error')
         #    if self.readyforplexon == True:
@@ -615,7 +629,36 @@ class MonkeyImages(tk.Frame,):
         return RewardDuration
 ############################################################################################################################################
     def DurationList(self):
-        self.csvdict = {'Joystick': [], 'Start': [], 'Paw into Home Box': [], 'Paw out of Home Box': [], 'Paw into Joystick Box': [], 'Paw out of Joystick Box': [], 'Trial End': []}
+        self.csvdict = {'Joystick': [], 'Study ID': self.StudyID, 'Session ID': self.SessionID, 'Animal ID': self.AnimalID, 'Date': self.Date, 'Session Start': [], 'Session Stop': [], 'Session Time': []}
+        self.csvdict['Pre Discrimanatory Stimulus Min delta t1'] = [self.DiscrimStimMin]
+        self.csvdict['Pre Discrimanatory Stimulus Max delta t1'] = [self.DiscrimStimMax]
+        self.csvdict['Pre Go Cue Min delta t2'] = [self.GoCueMin]
+        self.csvdict['Pre Go Cue Max delta t2'] = [self.GoCueMax]
+        self.csvdict['Pre Reward Delay Min delta t3'] = [self.RewardDelayMin]
+        self.csvdict['Pre Reward Delay Max delta t3'] = [self.RewardDelayMax]
+        self.csvdict['Use Maximum Reward Time'] = [self.UseMaximumRewardTime]
+        self.csvdict['Maximum Reward Time'] = [self.MaxReward]
+        self.csvdict['Enable Time Out'] = [self.EnableTimeOut]
+        self.csvdict['Time Out'] = [self.TimeOut]
+        self.csvdict['Total Trials'] = [0]
+        self.csvdict['Total t1 failures'] = [0]
+        self.csvdict['Total t2 failures'] = [0]
+        self.csvdict['Total t3 failures'] = [0]
+        self.csvdict['Total successes'] = [0]
+        self.csvdict['Check Trials'] = []
+        self.csvdict['Paw into Home Box: Start'] = []
+        self.csvdict['Paw out of Home Box: End'] = []
+        self.csvdict['Paw into Joystick Box'] = []
+        self.csvdict['Paw out of Joystick Box'] = []
+        self.csvdict['Discriminant Stimuli On'] = [] # Need to add these times from Plexon Events # EV25 27 29 31
+        self.csvdict['Discriminant Stimuli Off'] = [] # Need to create an event for this. and Ask about it.
+        self.csvdict['Go Cue On'] = [] # Need to add these times from Plexon Events # EV26 28 30 32
+        self.csvdict['Go Cue Off'] = [] # Need to ask about this.
+        self.csvdict['Trial DS Type'] = []
+        self.csvdict['Duration in Home Zone'] = []
+        self.csvdict['Trial Outcome'] = []
+        
+        self.csvdict['Trial End'] = [] # EV24 Use for Resets
         for i in range(self.NumEvents):
             self.csvdict[('Correct Start Press ' + str(i+1))] = []
             self.csvdict[('Correct End Press ' + str(i+1))] = []
@@ -629,30 +672,21 @@ class MonkeyImages(tk.Frame,):
             self.csvdict[('Go Cue ' + str(i+1))] = []
 
         self.csvdict['Ranges'] = [self.Ranges]
-        self.csvdict['Discrimanatory Stimulus Min'] = [self.DiscrimStimMin]
-        self.csvdict['Discrimanatory Stimulus Max'] = [self.DiscrimStimMax]
-        self.csvdict['Go Cue Min'] = [self.GoCueMin]
-        self.csvdict['Go Cue Max'] = [self.GoCueMax]
+        self.csvdict['End Ranges'] = []
         self.csvdict['Max Time After Sound'] = [self.MaxTimeAfterSound]
         self.csvdict['Inter Trial Time'] = [self.InterTrialTime]
         self.csvdict['Adaptive Value'] = [self.AdaptiveValue]
         self.csvdict['Adaptive Algorithm'] = [self.AdaptiveAlgorithm]
         self.csvdict['Adaptive Frequency'] = [self.AdaptiveFrequency]
         self.csvdict['Enable Early Pull Time Out'] = [self.EarlyPullTimeOut]
-        self.csvdict['Reward Delay'] = [self.RewardDelay]
-        self.csvdict['Use Maximum Reward Time'] = [self.UseMaximumRewardTime]
-        self.csvdict['Maximum Reward Time'] = [self.MaxReward]
-        self.csvdict['Enable Time Out'] = [self.EnableTimeOut]
-        self.csvdict['Time Out'] = [self.TimeOut]
         self.csvdict['Enable Blooper Noise'] = [self.EnableBlooperNoise]
         self.csvdict['Active Joystick Channels'] = [self.ActiveJoystickChans]
 
-        print('Duration Dictionary: {}'.format(self.csvdict))
+        # print('Duration Dictionary: {}'.format(self.csvdict))
 
     def AddCorrectDuration(self, Duration, Reward): 
         self.csvdict[('Correct Duration ' + str(self.current_counter))].append(Duration)
         self.csvdict[('Reward Duration ' + str(self.current_counter))].append(Reward)
-        
     
     def AddIncorrectDuration(self, Duration):
         self.csvdict[('Incorrect Duration ' + str(self.current_counter))].append(Duration)
@@ -679,10 +713,10 @@ class MonkeyImages(tk.Frame,):
         self.csvdict[('Go Cue ' + str(self.current_counter))].append(Timestamp)
         
     def AddPawInHome(self, Timestamp):
-        self.csvdict[('Paw into Home Box')].append(Timestamp)
+        self.csvdict[('Paw into Home Box: Start')].append(Timestamp)
         
     def AddPawOutHome(self, Timestamp):
-        self.csvdict[('Paw out of Home Box')].append(Timestamp)
+        self.csvdict[('Paw out of Home Box: End')].append(Timestamp)
         
     def AddPawInJoystick(self, Timestamp):
         self.csvdict[('Paw into Joystick Box')].append(Timestamp)
@@ -691,6 +725,9 @@ class MonkeyImages(tk.Frame,):
         self.csvdict[('Paw out of Joystick Box')].append(Timestamp)
     
     def FormatDurations(self):
+        self.csvdict['End Ranges'].append(self.Ranges)
+        self.csvdict['Session Stop'].append(self.SessionStopTime)
+        self.csvdict['Session Time'].append(self.SessionDuration)
         try:
             csvtest = True
             while csvtest == True:
@@ -738,8 +775,12 @@ class MonkeyImages(tk.Frame,):
         # TODO: Include a dump of Plexon data so that any initial pulls are not included here?
         self.MonkeyLoop = True
         self.StartTrialBool = True
+        self.TrainingStart = False
         self.StartTime = time.time()
+        self.SessionStart = time.time()
         self.RelStartTime = time.time() - self.StartTime
+        self.SessionStartTime = [time.strftime('%R:%S')]
+        self.csvdict['Session Start'].append(self.SessionStartTime)
         self.after(1,func=self.LOOP) #Polls for other inputs
     
     def Pause(self):
@@ -771,6 +812,11 @@ class MonkeyImages(tk.Frame,):
             pass
 
     def Stop(self): ###IMPORTANT###Need to make sure this End cleans up any loose ends, such as Water Reward being open. Anything Else?
+        self.SessionStop = time.time()
+        self.SessionStopTime = [time.strftime('%R:%S')]
+        hours, rem = divmod(self.SessionStop - self.SessionStart, 3600)
+        minutes, seconds = divmod(rem, 60)
+        self.SessionDuration = ["{:0>2}:{:0>2}:{:05.2f}".format(int(hours),int(minutes),seconds)]
         winsound.PlaySound(None, winsound.SND_PURGE)
         if self.readyforplexon == True:
             self.plexdo.clear_bit(self.device_number, self.RewardDO_chan)
@@ -849,7 +895,6 @@ class MonkeyImages(tk.Frame,):
         time.sleep(0.1)
         
     def StartTrialCue(self):
-        print('OutofHomeZone: ', self.OutofHomeZoneOn)
         if self.counter == 0:
             self.counter = -2
             self.next_image()
@@ -857,9 +902,6 @@ class MonkeyImages(tk.Frame,):
             self.counter = 0
             self.next_image()
         if self.OutofHomeZoneOn == False:
-            # EV19 Ready
-            self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event7,None,None)
-            self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
             winsound.PlaySound('OutOfHomeZone.wav', winsound.SND_ALIAS + winsound.SND_ASYNC + winsound.SND_NOWAIT + winsound.SND_LOOP) #Need to change the tone
             self.OutofHomeZoneOn = True
 
@@ -989,8 +1031,7 @@ class MonkeyImages(tk.Frame,):
                             print('start press')
                             self.StartTimestamp = tmp_timestamp - self.RecordingStartTimestamp
                             if self.CurrentPress == False and self.ReadyForPull == True:
-                                pass
-                                #self.CurrentPress = True
+                                self.CurrentPress = True
                         elif self.Pedal1 >= self.PullThreshold and tmp_samples[0] < self.PullThreshold:
                             print('stop press')
                             self.StopTimestamp = tmp_timestamp - self.RecordingStartTimestamp
@@ -1005,8 +1046,7 @@ class MonkeyImages(tk.Frame,):
                             print('start press')
                             self.StartTimestamp = tmp_timestamp - self.RecordingStartTimestamp
                             if self.CurrentPress == False and self.ReadyForPull == True:
-                                pass
-                                #self.CurrentPress = True
+                                self.CurrentPress = True
                         elif self.Pedal2 >= self.PullThreshold and tmp_samples[0] < self.PullThreshold:
                             print('stop press')
                             self.StopTimestamp = tmp_timestamp - self.RecordingStartTimestamp
@@ -1036,8 +1076,7 @@ class MonkeyImages(tk.Frame,):
                             print('start press')
                             self.StartTimestamp = tmp_timestamp - self.RecordingStartTimestamp
                             if self.CurrentPress == False and self.ReadyForPull == True:
-                                pass
-                                #self.CurrentPress = True
+                                self.CurrentPress = True
                         elif self.Pedal4 >= self.PullThreshold and tmp_samples[0] < self.PullThreshold:
                             print('stop press')
                             self.StopTimestamp = tmp_timestamp - self.RecordingStartTimestamp
@@ -1048,53 +1087,53 @@ class MonkeyImages(tk.Frame,):
                         tmp_samples_str = float(self.Pedal4)
     
                     ################################################################
-                    elif new_data.channel[i] == (self.Area1_right):
-                        if tmp_samples[0] >= 1:
-                            if self.Area1_right_pres == False and tmp_samples[0] >= 1: #Paw Into Home
-                                print('Area1_right_pres set to True')
-                                self.AddPawInHome(tmp_timestamp - self.RecordingStartTimestamp)
-                            self.Area1_right_pres = True
-                        else:
-                            if self.Area1_right_pres == True and tmp_samples[0] <= 1: #Paw Out of Home
-                                print('Area1_right_pres set to False')
-                                self.AddPawOutHome(tmp_timestamp - self.RecordingStartTimestamp)
-                            self.Area1_right_pres = False
+                    # elif new_data.channel[i] == (self.Area1_right):
+                    #     if tmp_samples[0] >= 1:
+                    #         if self.Area1_right_pres == False and tmp_samples[0] >= 1: #Paw Into Home
+                    #             print('Area1_right_pres set to True')
+                    #             self.AddPawInHome(tmp_timestamp - self.RecordingStartTimestamp)
+                    #         self.Area1_right_pres = True
+                    #     else:
+                    #         if self.Area1_right_pres == True and tmp_samples[0] <= 1: #Paw Out of Home
+                    #             print('Area1_right_pres set to False')
+                    #             self.AddPawOutHome(tmp_timestamp - self.RecordingStartTimestamp)
+                    #         self.Area1_right_pres = False
                             
                             
-                    elif new_data.channel[i] == (self.Area1_left):
-                        if tmp_samples[0] >= 1:
-                            if self.Area1_left_pres == False and tmp_samples[0] >= 1: #Paw Into Home
-                                print('Area1_left_pres set to True')
-                                self.AddPawInHome(tmp_timestamp - self.RecordingStartTimestamp)
-                            self.Area1_left_pres = True
-                        else:
-                            if self.Area1_left_pres == True and tmp_samples[0] <= 1: #Paw Out of Home
-                                print('Area1_left_pres set to False')
-                                self.AddPawOutHome(tmp_timestamp - self.RecordingStartTimestamp)
-                            self.Area1_left_pres = False
+                    # elif new_data.channel[i] == (self.Area1_left):
+                    #     if tmp_samples[0] >= 1:
+                    #         if self.Area1_left_pres == False and tmp_samples[0] >= 1: #Paw Into Home
+                    #             print('Area1_left_pres set to True')
+                    #             self.AddPawInHome(tmp_timestamp - self.RecordingStartTimestamp)
+                    #         self.Area1_left_pres = True
+                    #     else:
+                    #         if self.Area1_left_pres == True and tmp_samples[0] <= 1: #Paw Out of Home
+                    #             print('Area1_left_pres set to False')
+                    #             self.AddPawOutHome(tmp_timestamp - self.RecordingStartTimestamp)
+                    #         self.Area1_left_pres = False
     
-                    elif new_data.channel[i] == (self.Area2_right): 
-                        if tmp_samples[0] >= 1:
-                            if self.Area2_right_pres == False and tmp_samples[0] >= 1: #Paw Into Joystick
-                                print('Area2_right_pres set to True')
-                                self.AddPawInJoystick(tmp_timestamp - self.RecordingStartTimestamp)
-                            self.Area2_right_pres = True
-                        else:
-                            if self.Area2_right_pres == True and tmp_samples[0] <= 1: #Paw Out of Joystick
-                                print('Area2_right_pres set to False')
-                                self.AddPawOutJoystick(tmp_timestamp - self.RecordingStartTimestamp)
-                            self.Area2_right_pres = False
-                    elif new_data.channel[i] == (self.Area2_left):
-                        if tmp_samples[0] >= 1:
-                            if self.Area2_left_pres == False and tmp_samples[0] >= 1: #Paw Into Joystick
-                                print('Area2_left_pres set to True')
-                                self.AddPawInJoystick(tmp_timestamp - self.RecordingStartTimestamp)
-                            self.Area2_left_pres = True
-                        else:
-                            if self.Area2_left_pres == True and tmp_samples[0] <= 1: #Paw Out of Joystick
-                                print('Area2_left_pres set to False')
-                                self.AddPawOutJoystick(tmp_timestamp - self.RecordingStartTimestamp)
-                            self.Area2_left_pres = False
+                    # elif new_data.channel[i] == (self.Area2_right): 
+                    #     if tmp_samples[0] >= 1:
+                    #         if self.Area2_right_pres == False and tmp_samples[0] >= 1: #Paw Into Joystick
+                    #             print('Area2_right_pres set to True')
+                    #             self.AddPawInJoystick(tmp_timestamp - self.RecordingStartTimestamp)
+                    #         self.Area2_right_pres = True
+                    #     else:
+                    #         if self.Area2_right_pres == True and tmp_samples[0] <= 1: #Paw Out of Joystick
+                    #             print('Area2_right_pres set to False')
+                    #             self.AddPawOutJoystick(tmp_timestamp - self.RecordingStartTimestamp)
+                    #         self.Area2_right_pres = False
+                    # elif new_data.channel[i] == (self.Area2_left):
+                    #     if tmp_samples[0] >= 1:
+                    #         if self.Area2_left_pres == False and tmp_samples[0] >= 1: #Paw Into Joystick
+                    #             print('Area2_left_pres set to True')
+                    #             self.AddPawInJoystick(tmp_timestamp - self.RecordingStartTimestamp)
+                    #         self.Area2_left_pres = True
+                    #     else:
+                    #         if self.Area2_left_pres == True and tmp_samples[0] <= 1: #Paw Out of Joystick
+                    #             print('Area2_left_pres set to False')
+                    #             self.AddPawOutJoystick(tmp_timestamp - self.RecordingStartTimestamp)
+                    #         self.Area2_left_pres = False
                     #print values that we want from AI
                     #if new_data.channel[i] == 1:
                         #print("SRC:{} {} TS:{} CH:{} WF:{}".format(tmp_source_number, tmp_source_name, tmp_timestamp, tmp_channel, tmp_samples_str))
@@ -1104,12 +1143,57 @@ class MonkeyImages(tk.Frame,):
                 elif new_data.source_num_or_type[i] == self.event_source: # Single-bit events EV01 - EV32
                     tmp_source_number = new_data.source_num_or_type[i]
                     tmp_channel = new_data.channel[i]
-                    tmp_source_name = source_numbers_names[tmp_source_number]
+                    #tmp_source_name = source_numbers_names[tmp_source_number]
                     tmp_timestamp = new_data.timestamp[i]
-                    tmp_unit = new_data.unit[i]
+                    #tmp_unit = new_data.unit[i]
                     
+                    if tmp_channel == 9:
+                        print('Area1_right_pres set to True')
+                        self.Area1_right_pres = True
+                        self.HandInTime = tmp_timestamp - self.RecordingStartTimestamp
+                    elif tmp_channel == 10:
+                        print('Area1_right_pres set to False')
+                        self.Area1_right_pres = False
+                        self.HandOutTime = tmp_timestamp - self.RecordingStartTimestamp
+                        self.HandDurationTime = self.HandOutTime - self.HandInTime
+                        if self.StartTrialBool == False:
+                            if self.PictureBool == False:
+                                self.csvdict['Total t1 failures'][0] += 1
+                                self.csvdict['Trial Outcome'].append('t1 Fail')
+                                self.csvdict['Trial DS Type'].append(0)
+                                self.csvdict['Discriminant Stimuli On'].append('X')
+                                self.csvdict['Go Cue On'].append('X')
+                                self.AddPawInHome(self.HandInTime)
+                                self.AddPawOutHome(self.HandOutTime)
+                                self.csvdict['Duration in Home Zone'].append(self.HandDurationTime)
+                                self.StartTrialBool = True
+                                self.TrainingStart = False
+                                self.PictureBool = False
+                                self.counter = 0
+                                self.next_image()
+                            elif self.PictureBool == True and self.ReadyForPull == False:
+                                self.csvdict['Total t2 failures'][0] += 1
+                                self.csvdict['Trial Outcome'].append('t2 Fail')
+                                self.csvdict['Go Cue On'].append('X')
+                                self.AddPawInHome(self.HandInTime)
+                                self.AddPawOutHome(self.HandOutTime)
+                                self.csvdict['Duration in Home Zone'].append(self.HandDurationTime)
+                                self.StartTrialBool = True
+                                self.TrainingStart = False
+                                self.PictureBool = False
+                                self.counter = 0
+                                self.next_image()
+                            # elif self.PictureBool == True and self.ReadyForPull == True:
+                            #     self.csvdict['Total successes'][0] += 1
+                            #     self.csvdict['Trial Outcome'].append('Success')
+                            #     self.AddPawInHome(self.HandInTime)
+                            #     self.AddPawOutHome(self.HandOutTime)
+                            #     self.csvdict['Duration in Home Zone'].append(self.HandDurationTime)
+                            self.DiscrimStimDuration = self.RandomDuration(self.DiscrimStimMin,self.DiscrimStimMax)
+                            self.GoCueDuration = self.RandomDuration(self.GoCueMin,self.GoCueMax)
+                        
+                        
                     if tmp_channel == 19: # Start Timestamps are inconsistent and missing some.
-                        self.csvdict[('Start')].append(tmp_timestamp - self.RecordingStartTimestamp)
                         pass
                     elif tmp_channel == 20:
                         pass
