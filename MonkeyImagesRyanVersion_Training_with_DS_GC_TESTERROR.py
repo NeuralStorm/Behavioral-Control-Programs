@@ -174,7 +174,7 @@ class MonkeyImages(tk.Frame,):
         self.GoCueMin = 0.25#0.25                           # (seconds) Minimum seconds to display Discrim Stim for before Go Cue
         self.GoCueMax = 0.5#0.5                             # (seconds) Maxiumum seconds to display Discrim Stim for before Go Cue
         self.GoCueDuration = self.RandomDuration(self.GoCueMin,self.GoCueMax) # (seconds) How long is the Discriminative Stimulus displayed for.
-        self.InterTrialTime = 0.5                             # (seconds) Time between Trials / Reward Time
+        self.InterTrialTime = 0                             # (seconds) Time between Trials / Reward Time
         self.RewardDelayMin = 0.5#0.010                         # (seconds) Min Length of Delay before Reward (Juice) is given.
         self.RewardDelayMax = 0.5#0.010                         # (seconds) Max Length of Delay before Reward (Juice) is given.
         self.RewardDelay = self.RandomDuration(self.RewardDelayMin,self.RewardDelayMax) #(seconds) Time to delay before Reward. (Min: ~0.4 s from gathering data currently)
