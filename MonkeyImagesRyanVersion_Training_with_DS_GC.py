@@ -175,9 +175,9 @@ class MonkeyImages(tk.Frame,):
         self.GoCueMax = 0.5#0.5                             # (seconds) Maxiumum seconds to display Discrim Stim for before Go Cue
         self.GoCueDuration = self.RandomDuration(self.GoCueMin,self.GoCueMax) # (seconds) How long is the Discriminative Stimulus displayed for.
         self.InterTrialTime = 0                             # (seconds) Time between Trials / Reward Time
-        self.RewardDelayMin = 0.020                         # (seconds) Min Length of Delay before Reward (Juice) is given.
-        self.RewardDelayMax = 0.020                         # (seconds) Max Length of Delay before Reward (Juice) is given.
-        self.RewardDelay = self.RandomDuration(self.RewardDelayMin,self.RewardDelayMax) #(seconds) Time to delay before Reward.
+        self.RewardDelayMin = 0.5#0.010                         # (seconds) Min Length of Delay before Reward (Juice) is given.
+        self.RewardDelayMax = 0.5#0.010                         # (seconds) Max Length of Delay before Reward (Juice) is given.
+        self.RewardDelay = self.RandomDuration(self.RewardDelayMin,self.RewardDelayMax) #(seconds) Time to delay before Reward. (Min: ~0.4 s from gathering data currently)
         self.AdaptiveValue = 0.05                           # Probably going to use this in the form of a value
         self.AdaptiveAlgorithm = 1                          # 1: Percentage based change 2: mean, std, calculated shift of distribution (Don't move center?) 3: TBD Move center as well?
         self.AdaptiveFrequency = 50                         # Number of trials inbetween calling AdaptiveRewardThreshold()
@@ -450,7 +450,7 @@ class MonkeyImages(tk.Frame,):
                     self.ReadyForPull = False
                     self.RelStartTime = time.time() - self.StartTime
                 self.update_idletasks() # Check speeds with this / without it
-                self.after(1,func=self.LOOP)
+                self.after(0,func=self.LOOP)
 
 
 
@@ -798,7 +798,7 @@ class MonkeyImages(tk.Frame,):
         self.StartTrialBool = True
         self.StartTime = time.time()
         self.RelStartTime = time.time() - self.StartTime
-        self.after(1,func=self.LOOP) #Polls for other inputs
+        self.after(0,func=self.LOOP) #Polls for other inputs
     
     def Pause(self):
         print('pause')
@@ -820,7 +820,7 @@ class MonkeyImages(tk.Frame,):
         self.DiscrimStimTime = time.time() - self.Pause_RelDiscrimStimTime
         self.SoundTime = time.time() - self.Pause_RelSoundTime
         self.PunishLockTime = time.time() - self.Pause_RelPunishLockTime
-        self.after(1,func=self.LOOP)
+        self.after(0,func=self.LOOP)
 
     def Stop(self): ###IMPORTANT###Need to make sure this End cleans up any loose ends, such as Water Reward being open. Anything Else?
         self.SessionStop = time.time()
@@ -843,7 +843,7 @@ class MonkeyImages(tk.Frame,):
         self.OutofHomeZoneOn = False
         self.counter = 0
         self.next_image()
-        self.after(1,func=None)
+        self.after(0,func=None)
         
     def TotalTrials(self):
         print('Total Trials: %i' %self.csvdict['Total Trials'][0])
@@ -1100,17 +1100,24 @@ class MonkeyImages(tk.Frame,):
                         # Construct a string with the samples for convenience
                         tmp_samples_str = float(self.Pedal4)
 
-                    ################################################################
+                    ################################################################ No Connector #TEMPFIX
                     # elif new_data.channel[i] == (self.Area1_right): # Right Hand in Home Zone
                     #     if tmp_samples[0] >= 1:
                     #         if self.Area1_right_pres == False and tmp_samples[0] >= 1: #Paw Into Home
-                    #             pass
-                    #             # self.HandInTime = tmp_timestamp - self.RecordingStartTimestamp
-                    #             # print(self.HandInTime)
+                    #             self.Area1_right_pres = True
+                    #             self.HandInTime = tmp_timestamp - self.RecordingStartTimestamp
+                    #             print(self.HandInTime)
                     #     else:
                     #         if self.Area1_right_pres == True and tmp_samples[0] <= 1: #Paw Out of Home
-                    #             pass
-                    #             # self.HandOutTime = tmp_timestamp - self.RecordingStartTimestamp
+                    #             self.Area1_right_pres = False
+                    #             self.counter = 0
+                    #             self.next_image()
+                    #             self.OutofHomeZoneOn = False
+                    #             self.StartTrialBool = True
+                    #             self.TrainingStart = False
+                    #             self.HandOutTime = tmp_timestamp - self.RecordingStartTimestamp
+                    #             self.HandDurationTime = self.HandOutTime - self.HandInTime
+                    #             self.csvdict['Duration in Home Zone'].append(self.HandDurationTime)
 
                     # elif new_data.channel[i] == (self.Area1_left): # Right Hand out of Home Zone
                     #     if tmp_samples[0] >= 1:
@@ -1182,7 +1189,7 @@ class MonkeyImages(tk.Frame,):
                     print('Area1_right_pres set to True')
                     self.Area1_right_pres = True
                     self.HandInTime = tmp_timestamp - self.RecordingStartTimestamp
-                elif tmp_channel == 10:
+                elif tmp_channel == 14:  # TEMPFIX 10 --> 14 because of hardware issue
                     print('Area1_right_pres set to False')
                     self.Area1_right_pres = False
                     self.HandOutTime = tmp_timestamp - self.RecordingStartTimestamp
