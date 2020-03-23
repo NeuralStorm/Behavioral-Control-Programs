@@ -252,6 +252,9 @@ class MonkeyImages(tk.Frame,):
         self.OutofHomeZoneOn = False    # Used for StartTrialCue to turn on and off the dinging sound before DS / GC
         self.HandInBool = False         # Used for EV09 / EV14 (EV10) for the unlikely case that monkey leaves hand in Home Zone for the full duration and doesn't pull.
         self.HandInJoystickBool = False # Used for EV11 / EV12 Joystick Area Boolean?
+        self.T1FailBool = False         # True if last trial was T1 Failure
+        self.T2FailBool = False         # True if last trial was T2 Failure
+        
         #Rename Area1 and Area2
         self.Area1_right_pres = False   # Home Area
         self.Area2_right_pres = False   # Joystick Area
@@ -379,6 +382,12 @@ class MonkeyImages(tk.Frame,):
                     self.StartTrialBool = False
                     self.TrainingStart = True
                     self.OutofHomeZoneOn = False
+                    self.T1FailBool = False
+                    self.T2FailBool = False
+                    self.csvdict[('Post t1 failure pull counter')].append(0)
+                    self.csvdict[('Post t2 failure pull counter')].append(0)
+                    
+                    
                 #################################################################################################################
 
                     
@@ -724,6 +733,8 @@ class MonkeyImages(tk.Frame,):
         self.csvdict['Duration in Home Zone'] = []
         self.csvdict['Trial Outcome'] = []
         self.csvdict['Trial End'] = [] # EV24 Use for Resets
+        self.csvdict[('Post t1 failure pull counter')] = [0]
+        self.csvdict[('Post t2 failure pull counter')] = [0]
         
         for i in range(self.NumEvents):
             blankspace = ['_']
@@ -754,6 +765,9 @@ class MonkeyImages(tk.Frame,):
             self.csvdict[('Incorrect End Press ' + str(i+1))] = []
             self.csvdict[('Incorrect Duration ' + str(i+1))] = []
             self.csvdict[blankspaceconcat] = []
+        
+        # self.csvdict[('Testing Area:')] = []
+        
 
         
 
@@ -1149,6 +1163,7 @@ class MonkeyImages(tk.Frame,):
                             # print('stop press')
                             self.StopTimestamp = tmp_timestamp - self.RecordingStartTimestamp
                             self.DurationTimestamp = self.StopTimestamp - self.StartTimestamp
+                            #
     
                         self.Pedal1 = tmp_samples[0] # Assign Pedal from AI continuous
                         # Construct a string with the samples for convenience
@@ -1164,6 +1179,8 @@ class MonkeyImages(tk.Frame,):
                             # print('stop press')
                             self.StopTimestamp = tmp_timestamp - self.RecordingStartTimestamp
                             self.DurationTimestamp = self.StopTimestamp - self.StartTimestamp
+                            #
+                            
     
                         self.Pedal2 = tmp_samples[0] # Assign Pedal from AI continuous
                         # Construct a string with the samples for convenience
@@ -1179,7 +1196,12 @@ class MonkeyImages(tk.Frame,):
                             # print('stop press')
                             self.StopTimestamp = tmp_timestamp - self.RecordingStartTimestamp
                             self.DurationTimestamp = self.StopTimestamp - self.StartTimestamp
-    
+                            #
+                            if self.T1FailBool == True:
+                                self.csvdict[('Post t1 failure pull counter')][(len(self.csvdict['Trial Outcome'])-1)] += 1 # [0] Needs to be Trial number
+                            if self.T2FailBool == True:
+                                self.csvdict[('Post t2 failure pull counter')][(len(self.csvdict['Trial Outcome'])-1)] += 1 # [0] Needs to be Trial number
+                                
                         self.Pedal3 = tmp_samples[0] # Assign Pedal from AI continuous
                         # Construct a string with the samples for convenience
                         tmp_samples_str = float(self.Pedal3)
@@ -1194,6 +1216,7 @@ class MonkeyImages(tk.Frame,):
                             # print('stop press')
                             self.StopTimestamp = tmp_timestamp - self.RecordingStartTimestamp
                             self.DurationTimestamp = self.StopTimestamp - self.StartTimestamp
+                            #
     
                         self.Pedal4 = tmp_samples[0] # Assign Pedal from AI continuous
                         # Construct a string with the samples for convenience
@@ -1291,6 +1314,7 @@ class MonkeyImages(tk.Frame,):
                                 self.AddPawInHome(self.HandInTime)
                                 self.AddPawOutHome(self.HandOutTime)
                                 self.csvdict['Duration in Home Zone'].append(self.HandDurationTime)
+                                self.T1FailBool = True
                                 self.StartTrialBool = True
                                 self.TrainingStart = False
                                 self.PictureBool = False
@@ -1306,6 +1330,7 @@ class MonkeyImages(tk.Frame,):
                                 self.AddPawInHome(self.HandInTime)
                                 self.AddPawOutHome(self.HandOutTime)
                                 self.csvdict['Duration in Home Zone'].append(self.HandDurationTime)
+                                self.T2FailBool = True
                                 self.StartTrialBool = True
                                 self.TrainingStart = False
                                 self.PictureBool = False
@@ -1322,6 +1347,7 @@ class MonkeyImages(tk.Frame,):
                             #     self.csvdict['Duration in Home Zone'].append(self.HandDurationTime)
                             self.DiscrimStimDuration = self.RandomDuration(self.DiscrimStimMin,self.DiscrimStimMax)
                             self.GoCueDuration = self.RandomDuration(self.GoCueMin,self.GoCueMax)
+                            
                     
                     elif tmp_channel == 11:
                         pass
