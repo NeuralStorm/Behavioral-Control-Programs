@@ -482,9 +482,9 @@ class MonkeyImages(tk.Frame,):
                         self.AddCorrectStartPress(self.StartTimestamp)
                         self.AddCorrectEndPress(self.StopTimestamp)
                     elif self.RewardTime == 0:
-                        print('t3 fail')
-                        self.csvdict['Total t3 failures'][0] += 1
-                        self.csvdict['Trial Outcome'].append('t3 Fail')
+                        print('pull fail')
+                        self.csvdict['Total pull failures'][0] += 1
+                        self.csvdict['Trial Outcome'].append('Pull Fail')
                         self.csvdict['Discriminant Stimuli On'].insert(-1, '---------->')
                         self.csvdict['Go Cue On'].insert(-1, '---------->')
                         self.csvdict['Duration in Home Zone'].append('---------->')
@@ -494,10 +494,9 @@ class MonkeyImages(tk.Frame,):
                         self.AddIncorrectEndPress(self.StopTimestamp)
                         self.csvdict[('Incorrect Stim Count ' + str(self.current_counter))][0] += 1
                         self.csvdict[('Trial End')].append('---------->')
-                        self.csvdict['Duration in Home Zone'].append('---------->')
                         self.AddPawInHome('---------->')
                         self.AddPawOutHome('---------->')
-                        # EV21 t3 failure
+                        # EV21 Pull failure
                         self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event5,None,None)
                         self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
                         if self.EnableBlooperNoise == True:
@@ -544,7 +543,7 @@ class MonkeyImages(tk.Frame,):
                         print('success')
                         self.csvdict['Total successes'][0] += 1
                         self.csvdict['Trial Outcome'].append('Success')
-                        self.csvdict['Duration in Home Zone'].append(self.self.HandDurationGCTime)
+                        self.csvdict['Duration in Home Zone'].append(self.HandDurationGCTime)
                         self.AddPawOutHome(self.HandOutGCTime)
                         self.AddPawInHome(self.HandInTime)
                         self.StartTrialBool = True
@@ -682,7 +681,8 @@ class MonkeyImages(tk.Frame,):
         return RewardDuration
 ############################################################################################################################################
     def DurationList(self):
-        self.csvdict = {'Joystick': [], 'Meta Data': [], 'Study ID': self.StudyID, 'Session ID': self.SessionID, 'Animal ID': self.AnimalID, 'Date': self.Date, 'Session Start': [], 'Session Stop': [], 'Session Time': []}
+        self.csvdict = {'Joystick': [], 'Meta Data:': [], 'Study ID': self.StudyID, 'Session ID': self.SessionID, 'Animal ID': self.AnimalID, 'Date': self.Date, 'Session Start': [], 'Session Stop': [], 'Session Time': []}
+        self.csvdict[('Number of Events')] = [self.NumEvents]
         self.csvdict['Pre Discrimanatory Stimulus Min delta t1'] = [self.DiscrimStimMin]
         self.csvdict['Pre Discrimanatory Stimulus Max delta t1'] = [self.DiscrimStimMax]
         self.csvdict['Pre Go Cue Min delta t2'] = [self.GoCueMin]
@@ -704,13 +704,11 @@ class MonkeyImages(tk.Frame,):
         self.csvdict['Enable Blooper Noise'] = [self.EnableBlooperNoise]
         self.csvdict['Active Joystick Channels'] = [self.ActiveJoystickChans]
         self.csvdict[''] = []
-        self.csvdict['Data'] = []
-
-
+        self.csvdict['Data:'] = []
         self.csvdict['Total Trials'] = [0]
         self.csvdict['Total t1 failures'] = [0]
         self.csvdict['Total t2 failures'] = [0]
-        self.csvdict['Total t3 failures'] = [0]
+        self.csvdict['Total pull failures'] = [0]
         self.csvdict['No Pull'] = [0]
         self.csvdict['Total successes'] = [0]
         self.csvdict['Check Trials'] = []
@@ -725,14 +723,27 @@ class MonkeyImages(tk.Frame,):
         self.csvdict['Trial DS Type'] = []
         self.csvdict['Duration in Home Zone'] = []
         self.csvdict['Trial Outcome'] = []
-        
         self.csvdict['Trial End'] = [] # EV24 Use for Resets
+        
         for i in range(self.NumEvents):
+            blankspace = ['_']
+            for j in range(i):
+                blankspace.append('_')
+            blankspaceconcat = "".join(blankspace)
+            self.csvdict[blankspaceconcat] = []
             self.csvdict[('Discriminatory Stimulus Trial Count ' + str(i+1))] = [0]
             self.csvdict[('Correct Stim Count ' + str(i+1))] = [0]
             self.csvdict[('Incorrect Stim Count ' + str(i+1))] = [0]
             self.csvdict[('Correct Average ' + str(i+1))] = [0]
             self.csvdict[('Correct St Dev ' + str(i+1))] = [0]
+            
+        self.csvdict[(' _ ')] = []
+        self.csvdict[('Timestamps:')] = []
+        for i in range(self.NumEvents):
+            blankspace = ['.']
+            for j in range(i):
+                blankspace.append('.')
+            blankspaceconcat = "".join(blankspace)
             self.csvdict[('Discriminatory Stimulus ' + str(i+1))] = []
             self.csvdict[('Go Cue ' + str(i+1))] = []
             self.csvdict[('Correct Start Press ' + str(i+1))] = []
@@ -742,8 +753,7 @@ class MonkeyImages(tk.Frame,):
             self.csvdict[('Incorrect Start Press ' + str(i+1))] = []
             self.csvdict[('Incorrect End Press ' + str(i+1))] = []
             self.csvdict[('Incorrect Duration ' + str(i+1))] = []
-            
-            
+            self.csvdict[blankspaceconcat] = []
 
         
 
@@ -792,7 +802,7 @@ class MonkeyImages(tk.Frame,):
     def CheckTrialFunc(self):
         self.checklengthlist = ['Paw into Home Box: Start', 'Paw out of Home Box: End',
             'Discriminant Stimuli On', 'Go Cue On', ' Trial DS Type', 'Duration in Home Zone', 'Trial Outcome']
-        truelen = (self.csvdict['Total Trials'][0] + self.csvdict['Total t3 failures'][0])
+        truelen = (self.csvdict['Total Trials'][0] + self.csvdict['Total pull failures'][0])
         for i in self.checklengthlist:
             keylen = len(self.csvdict[i][0])
             if keylen > truelen:
@@ -931,7 +941,7 @@ class MonkeyImages(tk.Frame,):
             print('Total Trials: %i' %self.csvdict['Total Trials'][0])
             print('Total t1 fails: %i' %self.csvdict['Total t1 failures'][0])
             print('Total t2 fails: %i' %self.csvdict['Total t2 failures'][0])
-            print('Total t3 fails: %i' %self.csvdict['Total t3 failures'][0])
+            print('Total pull fails: %i' %self.csvdict['Total pull failures'][0])
             print('Total no pulls: %i' %self.csvdict['No Pull'][0])
             print('Total successes: %i' %self.csvdict['Total successes'][0])
             
