@@ -384,8 +384,7 @@ class MonkeyImages(tk.Frame,):
                     self.OutofHomeZoneOn = False
                     self.T1FailBool = False
                     self.T2FailBool = False
-                    self.csvdict[('Post t1 failure pull counter')].append(0)
-                    self.csvdict[('Post t2 failure pull counter')].append(0)
+                    
                     
                     
                 #################################################################################################################
@@ -494,6 +493,8 @@ class MonkeyImages(tk.Frame,):
                         print('pull fail')
                         self.csvdict['Total pull failures'][0] += 1
                         self.csvdict['Trial Outcome'].append('Pull Fail')
+                        self.csvdict[('Post t1 failure pull counter')].append(0)
+                        self.csvdict[('Post t2 failure pull counter')].append(0)
                         self.csvdict['Discriminant Stimuli On'].insert(-1, '---------->')
                         self.csvdict['Go Cue On'].insert(-1, '---------->')
                         self.csvdict['Duration in Home Zone'].append('---------->')
@@ -552,6 +553,8 @@ class MonkeyImages(tk.Frame,):
                         print('success')
                         self.csvdict['Total successes'][0] += 1
                         self.csvdict['Trial Outcome'].append('Success')
+                        self.csvdict[('Post t1 failure pull counter')].append(0)
+                        self.csvdict[('Post t2 failure pull counter')].append(0)
                         self.csvdict['Duration in Home Zone'].append(self.HandDurationGCTime)
                         self.AddPawOutHome(self.HandOutGCTime)
                         self.AddPawInHome(self.HandInTime)
@@ -571,6 +574,8 @@ class MonkeyImages(tk.Frame,):
                     print('Time Elapsed, wait for Cue again.')
                     self.csvdict['No Pull'][0] += 1
                     self.csvdict['Trial Outcome'].append('No Pull')
+                    self.csvdict[('Post t1 failure pull counter')].append(0)
+                    self.csvdict[('Post t2 failure pull counter')].append(0)
                     if self.HandInBool == True:
                         self.csvdict['Duration in Home Zone'].append('No exit')
                         self.AddPawOutHome('No exit')
@@ -1308,6 +1313,8 @@ class MonkeyImages(tk.Frame,):
                             if self.PictureBool == False:
                                 self.csvdict['Total t1 failures'][0] += 1
                                 self.csvdict['Trial Outcome'].append('t1 Fail')
+                                self.csvdict[('Post t1 failure pull counter')].append(0)
+                                self.csvdict[('Post t2 failure pull counter')].append(0)
                                 self.csvdict['Trial DS Type'].append(0)
                                 self.csvdict['Discriminant Stimuli On'].append('X')
                                 self.csvdict['Go Cue On'].append('X')
@@ -1326,6 +1333,8 @@ class MonkeyImages(tk.Frame,):
                             elif self.PictureBool == True and self.ReadyForPull == False:
                                 self.csvdict['Total t2 failures'][0] += 1
                                 self.csvdict['Trial Outcome'].append('t2 Fail')
+                                self.csvdict[('Post t1 failure pull counter')].append(0)
+                                self.csvdict[('Post t2 failure pull counter')].append(0)
                                 self.csvdict['Go Cue On'].append('X')
                                 self.AddPawInHome(self.HandInTime)
                                 self.AddPawOutHome(self.HandOutTime)
