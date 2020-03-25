@@ -819,17 +819,20 @@ class MonkeyImages(tk.Frame,):
     #     self.csvdict[('Paw out of Joystick Box')].append(Timestamp)
 
     def CheckTrialFunc(self):
-        self.checklengthlist = ['Paw into Home Box: Start', 'Paw out of Home Box: End',
-            'Discriminant Stimuli On', 'Go Cue On', ' Trial DS Type', 'Duration in Home Zone', 'Trial Outcome']
-        truelen = (self.csvdict['Total Trials'][0] + self.csvdict['Total pull failures'][0])
-        for i in self.checklengthlist:
-            keylen = len(self.csvdict[i][0])
-            if keylen > truelen:
-                self.csvdict[i][0].pop()
-        if self.csvdict['Total Trials'][0] == (self.csvdict['Total t1 failures'][0] + self.csvdict['Total t2 failures'][0] + self.csvdict['No Pull'][0] + self.csvdict['Total successes'][0]):
-            self.csvdict['Check Trials'].append('True, Fixed')
-        else:
-            self.csvdict['Check Trials'].append('False, Error')
+        try:
+            self.checklengthlist = ['Paw into Home Box: Start', 'Paw out of Home Box: End',
+                'Discriminant Stimuli On', 'Go Cue On', ' Trial DS Type', 'Duration in Home Zone', 'Trial Outcome']
+            truelen = (self.csvdict['Total Trials'][0] + self.csvdict['Total pull failures'][0])
+            for i in self.checklengthlist:
+                keylen = len(self.csvdict[i][0])
+                if keylen > truelen:
+                    self.csvdict[i][0].pop()
+            if self.csvdict['Total Trials'][0] == (self.csvdict['Total t1 failures'][0] + self.csvdict['Total t2 failures'][0] + self.csvdict['No Pull'][0] + self.csvdict['Total successes'][0]):
+                self.csvdict['Check Trials'].append('True, Fixed')
+            else:
+                self.csvdict['Check Trials'].append('False, Error')
+        except:
+            pass
 
     
     def FormatDurations(self):
