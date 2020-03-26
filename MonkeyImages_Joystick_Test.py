@@ -842,9 +842,9 @@ class MonkeyImages(tk.Frame,):
 
     
     def FormatDurations(self):
-        self.csvdict['End Ranges'].append(self.Ranges)
-        self.csvdict['Session Stop'].append(self.SessionStopTime)
-        self.csvdict['Session Time'].append(self.SessionDuration)
+        self.metadict['End Ranges'].append(self.Ranges)
+        self.metadict['Session Stop'].append(self.SessionStopTime)
+        self.metadict['Session Time'].append(self.SessionDuration)
         
         for i in range(self.NumEvents):
             try:
@@ -852,7 +852,7 @@ class MonkeyImages(tk.Frame,):
                 self.csvdict[('Correct St Dev ' + str(i+1))][0] = statistics.stdev(self.tsdict[('Correct Duration ' + str(i+1))])
             except:
                 errormsg = traceback.format_exc()
-                self.csvdict['Errors:'].append(errormsg)
+                self.tsdict['Errors:'].append(errormsg)
         if self.csvdict['Total Trials'][0] == (self.csvdict['Total t1 failures'][0] + self.csvdict['Total t2 failures'][0] + self.csvdict['No Pull'][0] + self.csvdict['Total successes'][0]):
             self.csvdict['Check Trials'].append('True')
         else:
@@ -883,7 +883,13 @@ class MonkeyImages(tk.Frame,):
             print('saved')
         except RuntimeError:
             print('Error with File name')
-            self.filename = None
+            self.filename = self.StudyID[0] + '_' + self.AnimalID[0] + '_' + self.Date[0] + '_Joystick'
+            self.fullfilename = self.filename + '.csv'
+        except OSError:
+            print('Invalid File Name, Please select save CSV again.')
+            self.filename = self.StudyID[0] + '_' + self.AnimalID[0] + '_' + self.Date[0] + '_Joystick'
+            self.fullfilename = self.filename + '.csv'
+
 ############################################################################################################################################
     def AdaptiveRewardThreshold(self, AdaptiveValue, AdaptiveAlgorithm):
         #Take each self.csvdict and analyze duration times. (Average, sliding average?, etc)
@@ -913,7 +919,7 @@ class MonkeyImages(tk.Frame,):
         self.SessionStart = time.time()
         self.RelStartTime = time.time() - self.StartTime
         self.SessionStartTime = [time.strftime('%R:%S')]
-        self.csvdict['Session Start'].append(self.SessionStartTime)
+        self.metadict['Session Start'].append(self.SessionStartTime)
         self.after(0,func=self.LOOP) #Polls for other inputs
     
     def Pause(self):
