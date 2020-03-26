@@ -28,6 +28,7 @@ import winsound
 import math
 import queue
 import statistics
+import sys, traceback
 
 # from definitions import *
 ##############################################################################################
@@ -695,29 +696,29 @@ class MonkeyImages(tk.Frame,):
         return RewardDuration
 ############################################################################################################################################
     def DurationList(self):
-        self.csvdict = {'Joystick': [], 'Meta Data:': [], 'Study ID': self.StudyID, 'Session ID': self.SessionID, 'Animal ID': self.AnimalID, 'Date': self.Date, 'Session Start': [], 'Session Stop': [], 'Session Time': []}
-        self.csvdict[('Number of Events')] = [self.NumEvents]
-        self.csvdict['Pre Discrimanatory Stimulus Min delta t1'] = [self.DiscrimStimMin]
-        self.csvdict['Pre Discrimanatory Stimulus Max delta t1'] = [self.DiscrimStimMax]
-        self.csvdict['Pre Go Cue Min delta t2'] = [self.GoCueMin]
-        self.csvdict['Pre Go Cue Max delta t2'] = [self.GoCueMax]
-        self.csvdict['Pre Reward Delay Min delta t3'] = [self.RewardDelayMin]
-        self.csvdict['Pre Reward Delay Max delta t3'] = [self.RewardDelayMax]
-        self.csvdict['Use Maximum Reward Time'] = [self.UseMaximumRewardTime]
-        self.csvdict['Maximum Reward Time'] = [self.MaxReward]
-        self.csvdict['Enable Time Out'] = [self.EnableTimeOut]
-        self.csvdict['Time Out'] = [self.TimeOut]
-        self.csvdict['Ranges'] = [self.Ranges]
-        self.csvdict['End Ranges'] = []
-        self.csvdict['Max Time After Sound'] = [self.MaxTimeAfterSound]
-        self.csvdict['Inter Trial Time'] = [self.InterTrialTime]
-        self.csvdict['Adaptive Value'] = [self.AdaptiveValue]
-        self.csvdict['Adaptive Algorithm'] = [self.AdaptiveAlgorithm]
-        self.csvdict['Adaptive Frequency'] = [self.AdaptiveFrequency]
-        self.csvdict['Enable Early Pull Time Out'] = [self.EarlyPullTimeOut]
-        self.csvdict['Enable Blooper Noise'] = [self.EnableBlooperNoise]
-        self.csvdict['Active Joystick Channels'] = [self.ActiveJoystickChans]
-        self.csvdict[''] = []
+        self.metadict = {'Joystick': [], 'Meta Data:': [], 'Study ID': self.StudyID, 'Session ID': self.SessionID, 'Animal ID': self.AnimalID, 'Date': self.Date, 'Session Start': [], 'Session Stop': [], 'Session Time': []}
+        self.metadict[('Number of Events')] = [self.NumEvents]
+        self.metadict['Pre Discrimanatory Stimulus Min delta t1'] = [self.DiscrimStimMin]
+        self.metadict['Pre Discrimanatory Stimulus Max delta t1'] = [self.DiscrimStimMax]
+        self.metadict['Pre Go Cue Min delta t2'] = [self.GoCueMin]
+        self.metadict['Pre Go Cue Max delta t2'] = [self.GoCueMax]
+        self.metadict['Pre Reward Delay Min delta t3'] = [self.RewardDelayMin]
+        self.metadict['Pre Reward Delay Max delta t3'] = [self.RewardDelayMax]
+        self.metadict['Use Maximum Reward Time'] = [self.UseMaximumRewardTime]
+        self.metadict['Maximum Reward Time'] = [self.MaxReward]
+        self.metadict['Enable Time Out'] = [self.EnableTimeOut]
+        self.metadict['Time Out'] = [self.TimeOut]
+        self.metadict['Ranges'] = [self.Ranges]
+        self.metadict['End Ranges'] = []
+        self.metadict['Max Time After Sound'] = [self.MaxTimeAfterSound]
+        self.metadict['Inter Trial Time'] = [self.InterTrialTime]
+        self.metadict['Adaptive Value'] = [self.AdaptiveValue]
+        self.metadict['Adaptive Algorithm'] = [self.AdaptiveAlgorithm]
+        self.metadict['Adaptive Frequency'] = [self.AdaptiveFrequency]
+        self.metadict['Enable Early Pull Time Out'] = [self.EarlyPullTimeOut]
+        self.metadict['Enable Blooper Noise'] = [self.EnableBlooperNoise]
+        self.metadict['Active Joystick Channels'] = [self.ActiveJoystickChans]
+        self.csvdict = {'': []}
         self.csvdict['Data:'] = []
         self.csvdict['Total Trials'] = [0]
         self.csvdict['Total t1 failures'] = [0]
@@ -754,24 +755,27 @@ class MonkeyImages(tk.Frame,):
             self.csvdict[('Correct St Dev ' + str(i+1))] = [0]
             
         self.csvdict[(' _ ')] = []
-        self.csvdict[('Timestamps:')] = []
+        self.tsdict = {'Timestamps:': []}
         for i in range(self.NumEvents):
             blankspace = ['.']
             for j in range(i):
                 blankspace.append('.')
             blankspaceconcat = "".join(blankspace)
-            self.csvdict[('Discriminatory Stimulus ' + str(i+1))] = []
-            self.csvdict[('Go Cue ' + str(i+1))] = []
-            self.csvdict[('Correct Start Press ' + str(i+1))] = []
-            self.csvdict[('Correct End Press ' + str(i+1))] = []
-            self.csvdict[('Correct Duration ' + str(i+1))] = []
-            self.csvdict[('Reward Duration ' + str(i+1))] = []
-            self.csvdict[('Incorrect Start Press ' + str(i+1))] = []
-            self.csvdict[('Incorrect End Press ' + str(i+1))] = []
-            self.csvdict[('Incorrect Duration ' + str(i+1))] = []
-            self.csvdict[blankspaceconcat] = []
+            self.tsdict[('Discriminatory Stimulus ' + str(i+1))] = []
+            self.tsdict[('Go Cue ' + str(i+1))] = []
+            self.tsdict[('Correct Start Press ' + str(i+1))] = []
+            self.tsdict[('Correct End Press ' + str(i+1))] = []
+            self.tsdict[('Correct Duration ' + str(i+1))] = []
+            self.tsdict[('Reward Duration ' + str(i+1))] = []
+            self.tsdict[('Incorrect Start Press ' + str(i+1))] = []
+            self.tsdict[('Incorrect End Press ' + str(i+1))] = []
+            self.tsdict[('Incorrect Duration ' + str(i+1))] = []
+            self.tsdict[blankspaceconcat] = []
         
+        self.tsdict[('Errors:')] = []
         # self.csvdict[('Testing Area:')] = []
+
+    
         
 
         
@@ -779,32 +783,32 @@ class MonkeyImages(tk.Frame,):
         # print('Duration Dictionary: {}'.format(self.csvdict))
 
     def AddCorrectDuration(self, Duration, Reward): 
-        self.csvdict[('Correct Duration ' + str(self.current_counter))].append(Duration)
-        self.csvdict[('Reward Duration ' + str(self.current_counter))].append(Reward)
+        self.tsdict[('Correct Duration ' + str(self.current_counter))].append(Duration)
+        self.tsdict[('Reward Duration ' + str(self.current_counter))].append(Reward)
     
     def AddIncorrectDuration(self, Duration):
-        self.csvdict[('Incorrect Duration ' + str(self.current_counter))].append(Duration)
+        self.tsdict[('Incorrect Duration ' + str(self.current_counter))].append(Duration)
     
     def AddCorrectStimCount(self, event):
         self.csvdict['Correct Stim Count ' + str(event)][0] += 1
     
     def AddCorrectStartPress(self, Start):
-        self.csvdict[('Correct Start Press ' + str(self.current_counter))].append(Start)
+        self.tsdict[('Correct Start Press ' + str(self.current_counter))].append(Start)
     
     def AddCorrectEndPress(self, End):
-        self.csvdict[('Correct End Press ' + str(self.current_counter))].append(End)
+        self.tsdict[('Correct End Press ' + str(self.current_counter))].append(End)
 
     def AddIncorrectStartPress(self, Start):
-        self.csvdict[('Incorrect Start Press ' + str(self.current_counter))].append(Start)
+        self.tsdict[('Incorrect Start Press ' + str(self.current_counter))].append(Start)
     
     def AddIncorrectEndPress(self, End):
-        self.csvdict[('Incorrect End Press ' + str(self.current_counter))].append(End)
+        self.tsdict[('Incorrect End Press ' + str(self.current_counter))].append(End)
     
     def AddDiscriminatoryStimulus(self, Timestamp):
-        self.csvdict[('Discriminatory Stimulus ' + str(self.current_counter))].append(Timestamp)
+        self.tsdict[('Discriminatory Stimulus ' + str(self.current_counter))].append(Timestamp)
         
     def AddGoCue(self, Timestamp):
-        self.csvdict[('Go Cue ' + str(self.current_counter))].append(Timestamp)
+        self.tsdict[('Go Cue ' + str(self.current_counter))].append(Timestamp)
         
     def AddPawInHome(self, Timestamp):
         self.csvdict[('Paw into Home Box: Start')].append(Timestamp)
@@ -832,6 +836,8 @@ class MonkeyImages(tk.Frame,):
             else:
                 self.csvdict['Check Trials'].append('False, Error')
         except:
+            errormsg = traceback.format_exc()
+            self.csvdict['Errors:'].append(errormsg)
             print('CheckTrialFunc error, continuing')
 
     
@@ -842,10 +848,11 @@ class MonkeyImages(tk.Frame,):
         
         for i in range(self.NumEvents):
             try:
-                self.csvdict[('Correct Average ' + str(i+1))][0] = statistics.mean(self.csvdict[('Correct Duration ' + str(i+1))])
-                self.csvdict[('Correct St Dev ' + str(i+1))][0] = statistics.stdev(self.csvdict[('Correct Duration ' + str(i+1))])
+                self.csvdict[('Correct Average ' + str(i+1))][0] = statistics.mean(self.tsdict[('Correct Duration ' + str(i+1))])
+                self.csvdict[('Correct St Dev ' + str(i+1))][0] = statistics.stdev(self.tsdict[('Correct Duration ' + str(i+1))])
             except:
-                pass
+                errormsg = traceback.format_exc()
+                self.csvdict['Errors:'].append(errormsg)
         if self.csvdict['Total Trials'][0] == (self.csvdict['Total t1 failures'][0] + self.csvdict['Total t2 failures'][0] + self.csvdict['No Pull'][0] + self.csvdict['Total successes'][0]):
             self.csvdict['Check Trials'].append('True')
         else:
@@ -863,8 +870,12 @@ class MonkeyImages(tk.Frame,):
     
                 with open(self.filename + '.csv', 'w', newline = '') as csvfile:
                     csv_writer = writer(csvfile, delimiter = ',')
+                    for key in self.metadict.keys():
+                        csv_writer.writerow([key]+self.metadict[key])
                     for key in self.csvdict.keys():
                         csv_writer.writerow([key]+self.csvdict[key])
+                    for key in self.tsdict.keys():
+                        csv_writer.writerow([key]+self.tsdict[key])
                 csvtest = False
                     # with open(name + '.csv', newline = '') as csv_read, open(data +'.csv', 'w', newline = '') as csv_write:
                     #     writer(csv_write, delimiter= ',').writerows(zip(*reader(csv_read, delimiter=',')))
