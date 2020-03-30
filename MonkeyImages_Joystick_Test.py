@@ -8,8 +8,9 @@
 
 # For keypad controls, search "def KeyPress"
 
-# Defs- DS: Discriminatory Stimuli, GC: Go Cue, 
+# Defs- DS: Discriminatory Stimuli, GC: Go Cue, Rel: Reltive, 
 
+# TODO: Finish testing bugs,
 
 
 
