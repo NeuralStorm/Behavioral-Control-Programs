@@ -1063,6 +1063,8 @@ class MonkeyImages(tk.Frame,):
             self.WaterReward.run()
         elif key == 'x':
             self.TotalTrials()
+        elif key == 'c':
+            self.FormatDurations()
 
     def WaterButton(self):
         self.WaterReward.run()
