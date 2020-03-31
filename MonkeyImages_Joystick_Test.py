@@ -10,7 +10,7 @@
 
 # Defs- DS: Discriminatory Stimuli, GC: Go Cue, Rel: Reltive, 
 
-# TODO: Finish testing bugs,
+# TODO: Finish testing bugs
 
 
 
@@ -153,6 +153,8 @@ class MonkeyImages(tk.Frame,):
             self.task2.CreateDOChan("/Dev2/port1/line0:7","",PyDAQmx.DAQmx_Val_ChanForAllLines)
             self.task2.StartTask()
             self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
+        else: # For testing without plexon, initialize vars here
+            self.RecordingStartTimestamp = 0
         
         #self.task3 = Task()
         #self.task3.CreateDOChan("/Dev2/port0/line0","",PyDAQmx.DAQmx_Val_ChanForAllLines)
@@ -182,7 +184,7 @@ class MonkeyImages(tk.Frame,):
         self.filename = self.StudyID[0] + '_' + self.AnimalID[0] + '_' + self.Date[0] + '_Joystick'
         self.fullfilename = self.filename + '.csv'
         self.DiscrimStimMin = 0.15                           # (seconds) Minimum seconds to display Discrim Stim for before Go Cue
-        self.DiscrimStimMax = 0.25                             # (seconds) Maxiumum seconds to display Discrim Stim for before Go Cue
+        self.DiscrimStimMax = 0.25                           # (seconds) Maxiumum seconds to display Discrim Stim for before Go Cue
         self.DiscrimStimDuration = self.RandomDuration(self.DiscrimStimMin,self.DiscrimStimMax) # (seconds) How long is the Discriminative Stimulus displayed for.
         self.GoCueMin = 0.35                                 # (seconds) Minimum seconds to display Discrim Stim for before Go Cue
         self.GoCueMax = 0.75                                   # (seconds) Maxiumum seconds to display Discrim Stim for before Go Cue
@@ -257,6 +259,8 @@ class MonkeyImages(tk.Frame,):
         self.T1FailBool = False         # True if last trial was T1 Failure
         self.T2FailBool = False         # True if last trial was T2 Failure
         
+        self.StartButtonBool = False
+        self.PauseButtonBool = False
         #Rename Area1 and Area2
         self.Area1_right_pres = False   # Home Area
         self.Area2_right_pres = False   # Joystick Area
@@ -314,6 +318,9 @@ class MonkeyImages(tk.Frame,):
 
         durationbutton = tk.Button(self.root, text = "Print Durations", height = 5, width = 12, command = self.Durationbutton)
         durationbutton.pack(side = LEFT)
+
+        metabutton = tk.Button(self.root, text = "Print Meta Data", height = 5, width = 12, command = self.Metabutton)
+        metabutton.pack(side = LEFT)
 
         rangesbutton = tk.Button(self.root, text = " Print Ranges", height = 5, width = 10, command = self.Rangesbutton)
         rangesbutton.pack(side = LEFT)
@@ -534,7 +541,7 @@ class MonkeyImages(tk.Frame,):
                         winsound.PlaySound('550Hz_0.5s_test.wav', winsound.SND_ALIAS + winsound.SND_ASYNC + winsound.SND_NOWAIT)
                         #winsound.PlaySound(self.RewardSound, winsound.SND_ALIAS + winsound.SND_ASYNC)
                         try:
-                            if len(self.csvdict[self.current_counter])%self.AdaptiveFrequency == 0 and len(self.csvdict[self.current_counter]) > 0:
+                            if self.csvdict['Discriminatory Stimulus Trial Count ' + str(self.current_counter)]%self.AdaptiveFrequency == 0 and self.csvdict['Discriminatory Stimulus Trial Count ' + str(self.current_counter)] > 0:
                                 self.AdaptiveRewardThreshold(self.AdaptiveValue,self.AdaptiveAlgorithm)
                         except KeyError:
                             pass
@@ -775,12 +782,6 @@ class MonkeyImages(tk.Frame,):
         
         self.tsdict[('Errors:')] = []
         # self.csvdict[('Testing Area:')] = []
-
-    
-        
-
-        
-
         # print('Duration Dictionary: {}'.format(self.csvdict))
 
     def AddCorrectDuration(self, Duration, Reward): 
@@ -793,14 +794,14 @@ class MonkeyImages(tk.Frame,):
     def AddCorrectStimCount(self, event):
         self.csvdict['Correct Stim Count ' + str(event)][0] += 1
     
-    def AddCorrectStartPress(self, Start):
-        self.tsdict[('Correct Start Press ' + str(self.current_counter))].append(Start)
+    def AddCorrectStartPress(self, Startts):
+        self.tsdict[('Correct Start Press ' + str(self.current_counter))].append(Startts)
     
     def AddCorrectEndPress(self, End):
         self.tsdict[('Correct End Press ' + str(self.current_counter))].append(End)
 
-    def AddIncorrectStartPress(self, Start):
-        self.tsdict[('Incorrect Start Press ' + str(self.current_counter))].append(Start)
+    def AddIncorrectStartPress(self, Startts):
+        self.tsdict[('Incorrect Start Press ' + str(self.current_counter))].append(Startts)
     
     def AddIncorrectEndPress(self, End):
         self.tsdict[('Incorrect End Press ' + str(self.current_counter))].append(End)
@@ -852,8 +853,7 @@ class MonkeyImages(tk.Frame,):
                 self.csvdict[('Correct Average ' + str(i+1))][0] = statistics.mean(self.tsdict[('Correct Duration ' + str(i+1))])
                 self.csvdict[('Correct St Dev ' + str(i+1))][0] = statistics.stdev(self.tsdict[('Correct Duration ' + str(i+1))])
             except:
-                errormsg = traceback.format_exc()
-                self.tsdict['Errors:'].append(errormsg)
+                pass
         if self.csvdict['Total Trials'][0] == (self.csvdict['Total t1 failures'][0] + self.csvdict['Total t2 failures'][0] + self.csvdict['No Pull'][0] + self.csvdict['Total successes'][0]):
             self.csvdict['Check Trials'].append('True')
         else:
@@ -886,10 +886,14 @@ class MonkeyImages(tk.Frame,):
             print('Error with File name')
             self.filename = self.StudyID[0] + '_' + self.AnimalID[0] + '_' + self.Date[0] + '_Joystick'
             self.fullfilename = self.filename + '.csv'
+            errormsg = traceback.format_exc()
+            self.tsdict['Errors:'].append(errormsg)
         except OSError:
             print('Invalid File Name, Please select save CSV again.')
             self.filename = self.StudyID[0] + '_' + self.AnimalID[0] + '_' + self.Date[0] + '_Joystick'
             self.fullfilename = self.filename + '.csv'
+            errormsg = traceback.format_exc()
+            self.tsdict['Errors:'].append(errormsg)
 
 ############################################################################################################################################
     def AdaptiveRewardThreshold(self, AdaptiveValue, AdaptiveAlgorithm):
@@ -913,70 +917,87 @@ class MonkeyImages(tk.Frame,):
 ############################################################################################################################################
     def Start(self):
         # TODO: Include a dump of Plexon data so that any initial pulls are not included here?
-        self.MonkeyLoop = True
-        self.StartTrialBool = True
-        self.TrainingStart = False
-        self.StartTime = time.time()
-        self.SessionStart = time.time()
-        self.RelStartTime = time.time() - self.StartTime
-        self.SessionStartTime = [time.strftime('%R:%S')]
-        self.metadict['Session Start'].append(self.SessionStartTime)
-        self.after(0,func=self.LOOP) #Polls for other inputs
-    
+        if self.StartButtonBool == False:
+            print('Start')
+            self.MonkeyLoop = True
+            self.StartTrialBool = True
+            self.TrainingStart = False
+            self.StartTime = time.time()
+            self.SessionStart = time.time()
+            self.RelStartTime = time.time() - self.StartTime
+            self.SessionStartTime = [time.strftime('%R:%S')]
+            self.metadict['Session Start'].append(self.SessionStartTime)
+            self.after(0,func=self.LOOP) #Polls for other inputs
+        else:
+            print('Already Started')
     def Pause(self):
-        print('pause')
-        if self.StartTrialBool == True:
-            self.OutofHomeZoneOn = False
-        winsound.PlaySound(None, winsound.SND_PURGE)
-        if self.readyforplexon == True:
-            self.plexdo.clear_bit(self.device_number, self.RewardDO_chan)
-        self.MonkeyLoop = False
-        self.Pause_RelStartTime = self.RelStartTime
-        self.Pause_RelCueTime = self.RelCueTime
-        self.Pause_RelDiscrimStimTime = self.RelDiscrimStimTime
-        self.Pause_RelSoundTime = self.RelSoundTime
-        self.Pause_RelPunishLockTime = self.RelPunishLockTime
+        if self.StartButtonBool == True and self.PauseButtonBool == False:
+            print('pause')
+            self.PauseButtonBool = True
+            if self.StartTrialBool == True:
+                self.OutofHomeZoneOn = False
+            winsound.PlaySound(None, winsound.SND_PURGE)
+            if self.readyforplexon == True:
+                self.plexdo.clear_bit(self.device_number, self.RewardDO_chan)
+            self.MonkeyLoop = False
+            self.Pause_RelStartTime = self.RelStartTime
+            self.Pause_RelCueTime = self.RelCueTime
+            self.Pause_RelDiscrimStimTime = self.RelDiscrimStimTime
+            self.Pause_RelSoundTime = self.RelSoundTime
+            self.Pause_RelPunishLockTime = self.RelPunishLockTime
+        else:
+            if self.StartButtonBool == False:
+                print('Not Started')
+            elif self.PauseButtonBool == True:
+                print('Already Paused')
 
     def Unpause(self):
-        try:
-            print('unpause')
-            self.MonkeyLoop = True
-            self.StartTime = time.time() - self.Pause_RelStartTime
-            self.CueTime = time.time() - self.Pause_RelCueTime
-            self.DiscrimStimTime = time.time() - self.Pause_RelDiscrimStimTime
-            self.SoundTime = time.time() - self.Pause_RelSoundTime
-            self.PunishLockTime = time.time() - self.Pause_RelPunishLockTime
-            self.after(0,func=self.LOOP)
-        except AttributeError:
+        if self.StartButtonBool == True and self.PauseButtonBool == True:
+            try:
+                print('unpause')
+                self.PauseButtonBool = False
+                self.MonkeyLoop = True
+                self.StartTime = time.time() - self.Pause_RelStartTime
+                self.CueTime = time.time() - self.Pause_RelCueTime
+                self.DiscrimStimTime = time.time() - self.Pause_RelDiscrimStimTime
+                self.SoundTime = time.time() - self.Pause_RelSoundTime
+                self.PunishLockTime = time.time() - self.Pause_RelPunishLockTime
+                self.after(0,func=self.LOOP)
+            except AttributeError:
+                print('Need to start and pause before unpause / try loop')
+                pass
+        else:
             print('Need to start and pause before unpause')
-            pass
 
     def Stop(self): ###IMPORTANT###Need to make sure this End cleans up any loose ends, such as Water Reward being open. Anything Else?
-        self.SessionStop = time.time()
-        self.SessionStopTime = [time.strftime('%R:%S')]
-        try:
-            hours, rem = divmod(self.SessionStop - self.SessionStart, 3600)
-            minutes, seconds = divmod(rem, 60)
-            self.SessionDuration = ["{:0>2}:{:0>2}:{:05.2f}".format(int(hours),int(minutes),seconds)]
-        except:
-            print("Didn't start session")
-        winsound.PlaySound(None, winsound.SND_PURGE)
-        if self.readyforplexon == True:
-            self.plexdo.clear_bit(self.device_number, self.RewardDO_chan)
-        print('Stop')
-        self.MonkeyLoop = False
-        self.StartTrialBool = False
-        self.PictureBool = False
-        self.CurrentPress = False
-        self.JoystickPulled = False
-        self.ReadyForSound = False
-        self.PunishLockout = False
-        self.ReadyForPull = False
-        self.OutofHomeZoneOn = False
-        self.counter = 0
-        self.next_image()
-        self.after(0,func=None)
-    
+        if self.StartButtonBool == True:
+            self.SessionStop = time.time()
+            self.SessionStopTime = [time.strftime('%R:%S')]
+            try:
+                hours, rem = divmod(self.SessionStop - self.SessionStart, 3600)
+                minutes, seconds = divmod(rem, 60)
+                self.SessionDuration = ["{:0>2}:{:0>2}:{:05.2f}".format(int(hours),int(minutes),seconds)]
+            except:
+                print("Didn't start session")
+            winsound.PlaySound(None, winsound.SND_PURGE)
+            if self.readyforplexon == True:
+                self.plexdo.clear_bit(self.device_number, self.RewardDO_chan)
+            print('Stop')
+            self.MonkeyLoop = False
+            self.StartTrialBool = False
+            self.PictureBool = False
+            self.CurrentPress = False
+            self.JoystickPulled = False
+            self.ReadyForSound = False
+            self.PunishLockout = False
+            self.ReadyForPull = False
+            self.OutofHomeZoneOn = False
+            self.counter = 0
+            self.next_image()
+            self.after(0,func=None)
+        else:
+            print('Start First')
+        
     def TotalTrials(self):
             print('Total Trials: %i' %self.csvdict['Total Trials'][0])
             print('Total t1 fails: %i' %self.csvdict['Total t1 failures'][0])
@@ -1060,6 +1081,9 @@ class MonkeyImages(tk.Frame,):
         self.counter = 0
         self.next_image()
     
+    def Metabutton(self):
+        print(self.metadict)
+
     def Durationbutton(self):
         print(self.csvdict)
 
@@ -1081,6 +1105,8 @@ class MonkeyImages(tk.Frame,):
             self.WaterReward.run()
         elif key == 'x':
             self.TotalTrials()
+        elif key == 'c':
+            self.FormatDurations()
 
     def WaterButton(self):
         self.WaterReward.run()
@@ -1390,7 +1416,7 @@ class MonkeyImages(tk.Frame,):
 
                         
                         
-                    elif tmp_channel == 19: # Start Timestamps are inconsistent and missing some.
+                    elif tmp_channel == 19: 
                         pass
                     elif tmp_channel == 20:
                         pass
