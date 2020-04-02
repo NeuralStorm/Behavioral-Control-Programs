@@ -541,7 +541,7 @@ class MonkeyImages(tk.Frame,):
                         winsound.PlaySound('550Hz_0.5s_test.wav', winsound.SND_ALIAS + winsound.SND_ASYNC + winsound.SND_NOWAIT)
                         #winsound.PlaySound(self.RewardSound, winsound.SND_ALIAS + winsound.SND_ASYNC)
                         try:
-                            if self.csvdict['Discriminatory Stimulus Trial Count ' + str(self.current_counter)]%self.AdaptiveFrequency == 0 and self.csvdict['Discriminatory Stimulus Trial Count ' + str(self.current_counter)] > 0:
+                            if self.csvdict['Discriminatory Stimulus Trial Count ' + str(self.current_counter)][0]%self.AdaptiveFrequency == 0 and self.csvdict['Discriminatory Stimulus Trial Count ' + str(self.current_counter)][0] > 0:
                                 self.AdaptiveRewardThreshold(self.AdaptiveValue,self.AdaptiveAlgorithm)
                         except KeyError:
                             pass
@@ -919,6 +919,7 @@ class MonkeyImages(tk.Frame,):
         # TODO: Include a dump of Plexon data so that any initial pulls are not included here?
         if self.StartButtonBool == False:
             print('Start')
+            self.StartButtonBool = True
             self.MonkeyLoop = True
             self.StartTrialBool = True
             self.TrainingStart = False
@@ -983,6 +984,7 @@ class MonkeyImages(tk.Frame,):
             if self.readyforplexon == True:
                 self.plexdo.clear_bit(self.device_number, self.RewardDO_chan)
             print('Stop')
+            self.StartButtonBool = False
             self.MonkeyLoop = False
             self.StartTrialBool = False
             self.PictureBool = False

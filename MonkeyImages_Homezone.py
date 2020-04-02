@@ -168,15 +168,15 @@ class MonkeyImages(tk.Frame,):
         # PARAMETERS EXPERIMENTAL
         self.TrainingDuration = 1.0                         # (seconds) how long should monkey hand be in Area1 to get a Training Reward
         self.PullThreshold = 3                              # (Voltage) Amount that Monkey has to pull to. Will be 0 or 5, because digital signal from pedal. (Connected to Analog input in plexon)
-        self.DiscrimStimMin = 0.1#0.05                           # (seconds) Minimum seconds to display Discrim Stim for before Go Cue
+        self.DiscrimStimMin = 0.15#0.05                           # (seconds) Minimum seconds to display Discrim Stim for before Go Cue
         self.DiscrimStimMax = 0.25#0.05                             # (seconds) Maxiumum seconds to display Discrim Stim for before Go Cue
         self.DiscrimStimDuration = self.RandomDuration(self.DiscrimStimMin,self.DiscrimStimMax) # (seconds) How long is the Discriminative Stimulus displayed for.
-        self.GoCueMin = 0.25#0.25                           # (seconds) Minimum seconds to display Discrim Stim for before Go Cue
-        self.GoCueMax = 0.5#0.5                             # (seconds) Maxiumum seconds to display Discrim Stim for before Go Cue
+        self.GoCueMin = 0.35#0.25                           # (seconds) Minimum seconds to display Discrim Stim for before Go Cue
+        self.GoCueMax = 0.75#0.5                             # (seconds) Maxiumum seconds to display Discrim Stim for before Go Cue
         self.GoCueDuration = self.RandomDuration(self.GoCueMin,self.GoCueMax) # (seconds) How long is the Discriminative Stimulus displayed for.
         self.InterTrialTime = 0                             # (seconds) Time between Trials / Reward Time
-        self.RewardDelayMin = 0.5#0.010                         # (seconds) Min Length of Delay before Reward (Juice) is given.
-        self.RewardDelayMax = 0.5#0.010                         # (seconds) Max Length of Delay before Reward (Juice) is given.
+        self.RewardDelayMin = 0.6#0.010                         # (seconds) Min Length of Delay before Reward (Juice) is given.
+        self.RewardDelayMax = 0.6#0.010                         # (seconds) Max Length of Delay before Reward (Juice) is given.
         self.RewardDelay = self.RandomDuration(self.RewardDelayMin,self.RewardDelayMax) #(seconds) Time to delay before Reward. (Min: ~0.4 s from gathering data currently)
         self.AdaptiveValue = 0.05                           # Probably going to use this in the form of a value
         self.AdaptiveAlgorithm = 1                          # 1: Percentage based change 2: mean, std, calculated shift of distribution (Don't move center?) 3: TBD Move center as well?

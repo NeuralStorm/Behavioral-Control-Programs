@@ -192,8 +192,8 @@ class MonkeyImages(tk.Frame,):
         self.AdaptiveAlgorithm = 1                          # 1: Percentage based change 2: mean, std, calculated shift of distribution (Don't move center?) 3: TBD Move center as well?
         self.AdaptiveFrequency = 50                         # Number of trials inbetween calling AdaptiveRewardThreshold()
         self.EarlyPullTimeOut = False                       # This Boolean sets if you want to have a timeout for a pull before the Go Red Rectangle.
-        self.RewardDelayMin = 0.020                         # (seconds) Length of Min Delay before Reward (Juice) is given.
-        self.RewardDelayMax = 0.020                         # (seconds) Length of Max Delay before Reward (Juice) is given.
+        self.RewardDelayMin = 0.6                         # (seconds) Length of Min Delay before Reward (Juice) is given.
+        self.RewardDelayMax = 0.6                         # (seconds) Length of Max Delay before Reward (Juice) is given.
         self.RewardDelay = self.RandomDuration(self.RewardDelayMin, self.RewardDelayMax) # (seconds) Length of Delay before Reward (Juice) is given.
         self.UseMaximumRewardTime = False                   # This Boolean sets if you want to use the Maximum Reward Time for each Reward or to use scaled Reward Time relative to Pull Duration.
         self.MaxReward = 0.18                               # (seconds, maximum time to give water)
@@ -1303,17 +1303,17 @@ class MonkeyImages(tk.Frame,):
                         print('Area1_right_pres set to True')
                         self.Area1_right_pres = True
                         if self.TrainingStart == False:
-                            self.HandInTime = tmp_timestamp - self.RecordingStartTimestamp
+                            self.HandInTime = float(tmp_timestamp - self.RecordingStartTimestamp)
                             self.HandInBool = True
                     elif tmp_channel == 14:  # TEMPFIX 10 --> 14 because of hardware issue
                         print('Area1_right_pres set to False')
                         self.Area1_right_pres = False
-                        self.HandOutTime = tmp_timestamp - self.RecordingStartTimestamp
+                        self.HandOutTime = float(tmp_timestamp - self.RecordingStartTimestamp)
                         self.HandDurationTime = self.HandOutTime - self.HandInTime
                         if self.ReadyForPull == True:
                             self.HandInBool = False
-                            self.HandOutGCTime = tmp_timestamp - self.RecordingStartTimestamp
-                            self.HandDurationGCTime = self.HandOutTime - self.HandInTime
+                            self.HandOutGCTime = float(tmp_timestamp - self.RecordingStartTimestamp)
+                            self.HandDurationGCTime = float(self.HandOutTime - self.HandInTime)
                         if self.StartTrialBool == False:
                             if self.PictureBool == False:
                                 self.csvdict['Total t1 failures'][0] += 1
