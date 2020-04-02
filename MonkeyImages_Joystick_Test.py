@@ -270,11 +270,11 @@ class MonkeyImages(tk.Frame,):
         
         
         #Error Handling while fixing connector
-        self.HandInTime = 'Connector'
-        self.HandOutTime = 'Connector'
-        self.HandOutGCTime = 'Connector'
-        self.HandDurationTime = 'Connector'
-        self.HandDurationGCTime = 'Connector'
+        self.HandInTime = float(0)
+        self.HandOutTime = float(0)
+        self.HandOutGCTime = float(0)
+        self.HandDurationTime = float(0)
+        self.HandDurationGCTime = float(0)
         
         
         self.StartTime = time.time()
