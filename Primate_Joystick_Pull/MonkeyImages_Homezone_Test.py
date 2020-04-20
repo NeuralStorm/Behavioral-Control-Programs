@@ -147,50 +147,73 @@ class MonkeyImages(tk.Frame,):
         self.Pedal2 = 0 # Right
         self.Pedal3 = 0 # Pull / Backwards
         self.Pedal4 = 0 # Left
-        self.NumEvents = 3
+
         self.list_images = [] # Image list for Discriminative Stimuli
         source = "./TestImages/" # Name of folder in which you keep your images to be displayed
         for images in os.listdir(source):
             self.list_images.append(images)
+            
+        root = Tk()
+        root.filename =  filedialog.askopenfilename(initialdir = "/",title = "Select file",filetypes = (("all files","*.*"), ("jpeg files","*.jpg")))
+        print (root.filename)
+        csvreaderdict = {}
+        with open(root.filename, newline='') as csvfile:
+            spamreader = csv.reader(csvfile) #, delimiter=' ', quotechar='|')
+            for row in spamreader:
+                data = list(spamreader)
+
+        for row in range(0,len(data)):
+            for entry in range(0,len(data[row])):
+                if entry == 0:
+                    csvreaderdict[data[row][0]] = []
+                else:
+                    csvreaderdict[data[row][0]].append(data[row][entry])
+        
 
         #Not Used Here
-        self.TimeBeforeSound = 0.2 # (seconds)
-        self.MaxTimeAfterSound = 20 # (seconds) Maximum time Monkey has to pull. However, it is currently set so that it will not reset if the Pedal is being Pulled
-        self.TimeOut = 0.5 # (seconds) Time for black time out screen
-
+        # self.TimeBeforeSound = 0.2 # (seconds)
+        # self.MaxTimeAfterSound = 20 # (seconds) Maximum time Monkey has to pull. However, it is currently set so that it will not reset if the Pedal is being Pulled
         # PARAMETERS META DATA
-        self.StudyID = ['TIP']                              # 3 letter study code
-        self.SessionID = ['1']                              # Type of Session
-        self.AnimalID = ['001']                               # 3 digit number
+        self.StudyID = csvreaderdict['Study ID'][0]                              # 3 letter study code
+        self.SessionID = csvreaderdict['Session ID'][0]                              # Type of Session
+        self.AnimalID = csvreaderdict['Animal ID'][0]                               # 3 digit number
         self.Date = [time.strftime('%Y%m%d')]               # Today's Date
         self.filename = self.StudyID[0] +'_' + self.AnimalID[0] + '_' + self.Date[0] + '_HomeZone'
         self.fullfilename = self.filename + '.csv'
+
+
+        self.NumEvents = int(csvreaderdict['Number of Events'][0])
+        self.TimeOut = float(csvreaderdict['Time Out'][0]) # (seconds) Time for black time out screen
+
         # PARAMETERS EXPERIMENTAL
-        self.TrainingDuration = 1.0                         # (seconds) how long should monkey hand be in Area1 to get a Training Reward
         self.PullThreshold = 3                              # (Voltage) Amount that Monkey has to pull to. Will be 0 or 5, because digital signal from pedal. (Connected to Analog input in plexon)
-        self.DiscrimStimMin = 0.1#0.05                           # (seconds) Minimum seconds to display Discrim Stim for before Go Cue
-        self.DiscrimStimMax = 0.25#0.05                             # (seconds) Maxiumum seconds to display Discrim Stim for before Go Cue
+        self.DiscrimStimMin = float(csvreaderdict['Pre Discriminatory Stimulus Min delta t1'][0])                           # (seconds) Minimum seconds to display Discrim Stim for before Go Cue
+        self.DiscrimStimMax = float(csvreaderdict['Pre Discriminatory Stimulus Max delta t1'][0])                             # (seconds) Maxiumum seconds to display Discrim Stim for before Go Cue
         self.DiscrimStimDuration = self.RandomDuration(self.DiscrimStimMin,self.DiscrimStimMax) # (seconds) How long is the Discriminative Stimulus displayed for.
-        self.GoCueMin = 0.25#0.25                           # (seconds) Minimum seconds to display Discrim Stim for before Go Cue
-        self.GoCueMax = 0.5#0.5                             # (seconds) Maxiumum seconds to display Discrim Stim for before Go Cue
+        self.GoCueMin = float(csvreaderdict['Pre Go Cue Min delta t2'][0])#0.25                           # (seconds) Minimum seconds to display Discrim Stim for before Go Cue
+        self.GoCueMax = float(csvreaderdict['Pre Go Cue Max delta t2'][0])#0.5                             # (seconds) Maxiumum seconds to display Discrim Stim for before Go Cue
         self.GoCueDuration = self.RandomDuration(self.GoCueMin,self.GoCueMax) # (seconds) How long is the Discriminative Stimulus displayed for.
-        self.InterTrialTime = 0                             # (seconds) Time between Trials / Reward Time
-        self.RewardDelayMin = 0.5#0.010                         # (seconds) Min Length of Delay before Reward (Juice) is given.
-        self.RewardDelayMax = 0.5#0.010                         # (seconds) Max Length of Delay before Reward (Juice) is given.
+        self.InterTrialTime = float(csvreaderdict['Inter Trial Time'][0])                             # (seconds) Time between Trials / Reward Time
+        self.RewardDelayMin = float(csvreaderdict['Pre Reward Delay Min delta t3'][0])#0.010                         # (seconds) Min Length of Delay before Reward (Juice) is given.
+        self.RewardDelayMax = float(csvreaderdict['Pre Reward Delay Max delta t3'][0])#0.010                         # (seconds) Max Length of Delay before Reward (Juice) is given.
         self.RewardDelay = self.RandomDuration(self.RewardDelayMin,self.RewardDelayMax) #(seconds) Time to delay before Reward. (Min: ~0.4 s from gathering data currently)
-        self.AdaptiveValue = 0.05                           # Probably going to use this in the form of a value
-        self.AdaptiveAlgorithm = 1                          # 1: Percentage based change 2: mean, std, calculated shift of distribution (Don't move center?) 3: TBD Move center as well?
-        self.AdaptiveFrequency = 50                         # Number of trials inbetween calling AdaptiveRewardThreshold()
+        self.AdaptiveValue = int(csvreaderdict['Adaptive Value'][0])                           # Probably going to use this in the form of a value
+        self.AdaptiveAlgorithm = int(csvreaderdict['Adaptive Algorithm'][0])                          # 1: Percentage based change 2: mean, std, calculated shift of distribution (Don't move center?) 3: TBD Move center as well?
+        self.AdaptiveFrequency = int(csvreaderdict['Adaptive Frequency'][0])                         # Number of trials inbetween calling AdaptiveRewardThreshold()
         self.EarlyPullTimeOut = False                       # This Boolean sets if you want to have a timeout for a pull before the Go Red Rectangle.
-        self.RewardTime = 0.18                              #
-        self.MaxReward = 0.18                               # (seconds) maximum time to give water
+        self.RewardTime = float(csvreaderdict['Maximum Reward Time'][0])                              #
+        self.MaxReward = float(csvreaderdict['Maximum Reward Time'][0])                               # (seconds) maximum time to give water
         self.EnableTimeOut = False # Toggle this True if you want to include 'punishment' timeouts (black screen for self.TimeOut duration), or False for no TimeOuts.
-        self.UseMaximumRewardTime = True                   # This Boolean sets if you want to use the Maximum Reward Time for each Reward or to use scaled Reward Time relative to Pull Duration.
-        self.EnableBlooperNoise = False                     # Toggle this to True if you want to include the blooper noise when an incorrect pull is detected (Either too long or too short / No Reward Given)
+        self.UseMaximumRewardTime = bool(csvreaderdict['Use Maximum Reward Time'][0])                   # This Boolean sets if you want to use the Maximum Reward Time for each Reward or to use scaled Reward Time relative to Pull Duration.
+        self.EnableBlooperNoise = bool(csvreaderdict['Enable Blooper Noise'][0])                     # Toggle this to True if you want to include the blooper noise when an incorrect pull is detected (Either too long or too short / No Reward Given)
+        self.ActiveJoystickChans = csvreaderdict['Active Joystick Channels'][0] # This can be used if you only want him to pull in certain directions as commented above as self.Pedal#_chan.
 
 
         #Not Used Here
-        self.RewardClass(self.NumEvents,0.5,0.45,0.75,0.68,1,0.9)   #Hi Ryan, I added this range for your testing for now, because I changed where the reward is given so that it has to fit into an interval now.
+        self.RewardClassArgs = []
+        for i in range(0,len(csvreaderdict['Ranges'])):
+            self.RewardClassArgs.append(float(csvreaderdict['Ranges'][i]))
+        self.RewardClass(self.RewardClassArgs)   #Hi Ryan, I added this range for your testing for now, because I changed where the reward is given so that it has to fit into an interval now.
         self.counter = 0 # Counter Values: Alphabetic from TestImages folder
         # Blank(white screen), disc stim 1, disc stim 2, disc stim 3, disc stim go 1, disc stim go 2, disc stim go 3, black(timeout), Prepare(to put hand in position), Monkey image
         self.current_counter = 0
@@ -208,7 +231,6 @@ class MonkeyImages(tk.Frame,):
         self.Area1_left = 7 # Home Area (Area 1)
         self.Area2_left = 8 # Joystick Area (Area 2)
         self.StartTimestamp = 0
-        self.ActiveJoystickChans = [3] # This can be used if you only want him to pull in certain directions as commented above as self.Pedal#_chan.
         self.DurationList()                                 # Creates dict of lists to encapsulate press durations. Will be used for Adaptive Reward Control
         #############
         # Queue
