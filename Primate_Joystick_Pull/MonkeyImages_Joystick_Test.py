@@ -205,7 +205,7 @@ class MonkeyImages(tk.Frame,):
         self.GoCueMin = float(csvreaderdict['Pre Go Cue Min delta t2'][0])#0.25                           # (seconds) Minimum seconds to display Discrim Stim for before Go Cue
         self.GoCueMax = float(csvreaderdict['Pre Go Cue Max delta t2'][0])#0.5                             # (seconds) Maxiumum seconds to display Discrim Stim for before Go Cue
         self.GoCueDuration = self.RandomDuration(self.GoCueMin,self.GoCueMax) # (seconds) How long is the Discriminative Stimulus displayed for.
-        self.MaxTimeAfterSound = 20                         # (seconds) Maximum time Monkey has to pull. However, it is currently set so that it will not reset if the Pedal is being Pulled
+        self.MaxTimeAfterSound = int(csvreaderdict['Maximum Time After Sound'][0])                         # (seconds) Maximum time Monkey has to pull. However, it is currently set so that it will not reset if the Pedal is being Pulled
         self.NumEvents = int(csvreaderdict['Number of Events'][0])
         self.InterTrialTime = float(csvreaderdict['Inter Trial Time'][0])                             # (seconds) Time between Trials / Reward Time
         self.AdaptiveValue = int(csvreaderdict['Adaptive Value'][0])                           # Probably going to use this in the form of a value

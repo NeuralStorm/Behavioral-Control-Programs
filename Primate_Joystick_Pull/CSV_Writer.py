@@ -29,6 +29,7 @@ metadict['Adaptive Frequency'] = [50]
 metadict['Enable Early Pull Time Out'] = [False]
 metadict['Enable Blooper Noise'] = [False]
 metadict['Active Joystick Channels'] = [3]
+metadict['Maximum Time After Sound'] = [20]
 
 
 filename = 'csvconfig'
