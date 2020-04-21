@@ -18,8 +18,10 @@ from definitionsRyan import * #Given definitions to Ryan. It might need updates 
 ###################### These are all called in line 4 above from definitionsRyan import *. -They are listed here for Nathan's testing
 import tkinter as tk
 from tkinter import *
+from tkinter import filedialog
 import threading as t
 from PIL import Image, ImageTk
+import csv
 from csv import reader, writer
 import os
 import os.path
