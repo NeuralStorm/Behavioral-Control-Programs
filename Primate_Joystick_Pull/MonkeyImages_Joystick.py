@@ -177,8 +177,9 @@ class MonkeyImages(tk.Frame,):
         self.Date = [time.strftime('%Y%m%d')]               # Today's Date
         # PARAMETERS
         # self.filename = 'test'
+        self.savepath = os.path.join('D:', os.sep, 'IntervalTimingTaskData')  # Path to outside target directory for saving csv file
         self.filename = self.StudyID[0] + '_' + self.AnimalID[0] + '_' + self.Date[0] + '_Joystick'
-        self.fullfilename = self.filename + '.csv'
+        self.fullfilename = os.path.join(self.savepath, self.filename + '.csv')  # Have fullfilename include the save path as well.
         self.DiscrimStimMin = 0.15                           # (seconds) Minimum seconds to display Discrim Stim for before Go Cue
         self.DiscrimStimMax = 0.25                             # (seconds) Maxiumum seconds to display Discrim Stim for before Go Cue
         self.DiscrimStimDuration = self.RandomDuration(self.DiscrimStimMin,self.DiscrimStimMax) # (seconds) How long is the Discriminative Stimulus displayed for.
@@ -850,6 +851,10 @@ class MonkeyImages(tk.Frame,):
             self.csvdict['Check Trials'].append('True')
         else:
             self.CheckTrialFunc()
+            
+        # Save the task csv file here.  Note: file is currently save to same directory
+        # as this code. Intend to add a path for saving datafiles outside of
+        # the code directory.
         try:
             csvtest = True
             while csvtest == True:
