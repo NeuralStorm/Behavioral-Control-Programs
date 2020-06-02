@@ -179,12 +179,12 @@ class MonkeyImages(tk.Frame,):
         # self.filename = 'test'
         self.savepath = os.path.join('D:', os.sep, 'IntervalTimingTaskData')  # Path to outside target directory for saving csv file
         self.filename = self.StudyID[0] + '_' + self.AnimalID[0] + '_' + self.Date[0] + '_Joystick'
-        self.fullfilename = os.path.join(self.savepath, self.filename + '.csv')  # Have fullfilename include the save path as well.
-        self.DiscrimStimMin = 0.15                           # (seconds) Minimum seconds to display Discrim Stim for before Go Cue
-        self.DiscrimStimMax = 0.25                             # (seconds) Maxiumum seconds to display Discrim Stim for before Go Cue
+        self.fullfilename = self.filename + '.csv'
+        self.DiscrimStimMin = 0.2                           # (seconds) Minimum seconds to display Discrim Stim for before Go Cue
+        self.DiscrimStimMax = 0.4                             # (seconds) Maxiumum seconds to display Discrim Stim for before Go Cue
         self.DiscrimStimDuration = self.RandomDuration(self.DiscrimStimMin,self.DiscrimStimMax) # (seconds) How long is the Discriminative Stimulus displayed for.
-        self.GoCueMin = 0.35                                 # (seconds) Minimum seconds to display Discrim Stim for before Go Cue
-        self.GoCueMax = 0.75                                   # (seconds) Maxiumum seconds to display Discrim Stim for before Go Cue
+        self.GoCueMin = 0.4                                 # (seconds) Minimum seconds to display Discrim Stim for before Go Cue
+        self.GoCueMax = 0.8                                   # (seconds) Maxiumum seconds to display Discrim Stim for before Go Cue
         self.GoCueDuration = self.RandomDuration(self.GoCueMin,self.GoCueMax) # (seconds) How long is the Discriminative Stimulus displayed for.
         self.MaxTimeAfterSound = 20                         # (seconds) Maximum time Monkey has to pull. However, it is currently set so that it will not reset if the Pedal is being Pulled
         self.NumEvents = 3
@@ -201,7 +201,7 @@ class MonkeyImages(tk.Frame,):
         self.EnableTimeOut = False                          # Toggle this to True if you want to include 'punishment' timeouts (black screen for self.TimeOut duration), or False for no TimeOuts.
         self.TimeOut = 0.5                                  # (seconds) Time for black time out screen
         self.EnableBlooperNoise = False                     # Toggle this to True if you want to include the blooper noise when an incorrect pull is detected (Either too long or too short / No Reward Given)
-        self.RewardClass(self.NumEvents,0.5,0.25,0.75,0.5,1,0.75)   #Hi Ryan, I added this range for your testing for now, because I changed where the reward is given so that it has to fit into an interval now.
+        self.RewardClass(self.NumEvents,0.5,0.20625,0.75,0.4125,1.0875,0.69375)   #Hi Ryan, I added this range for your testing for now, because I changed where the reward is given so that it has to fit into an interval now.
         self.ImageRatio = 100 # EX: ImageRatio = 75 => 75% Image Reward, 25% Water Reward , Currently does not handle the both choice for water and image.
         self.WaterReward = self.WaterRewardThread()
         self.ActiveJoystickChans = [3]                  # This can be used if you only want him to pull in certain directions as commented above as self.Pedal#_chan.
@@ -237,7 +237,9 @@ class MonkeyImages(tk.Frame,):
         self.pyay = 0 # Predicted: Yes, Actual: Yes
         ############# Rewards
         self.RewardSound = 'Exclamation'
-        self.Bloop       = 'Question'
+        #self.Bloop       = 'Question'
+        self.Bloop = '.\\TaskSounds\\WrongHoldDuration.wav'
+        self.OutOfHomeZoneSound = '.\\TaskSounds\\OutOfHomeZone.wav'
         ##############
         
         # Booleans (built into GUI Class functions):
@@ -858,22 +860,25 @@ class MonkeyImages(tk.Frame,):
         try:
             csvtest = True
             while csvtest == True:
-                check = os.path.isfile(self.fullfilename)
+                check = os.path.isfile(os.path.join(self.savepath, self.fullfilename))
                 while check == True:
                     print('File name already exists')
                     self.filename = input('Enter File name: ')
                     self.fullfilename = self.filename + '.csv'
-                    check = os.path.isfile(self.fullfilename)
+                    #check = os.path.isfile(self.fullfilename)
+                    check = os.path.isfile(os.path.join(self.savepath, self.fullfilename))               # Change made to save files outside of code directory
                 print('File name not currently used, saving.')
     
-                with open(self.filename + '.csv', 'w', newline = '') as csvfile:
+                #with open(self.filename + '.csv', 'w', newline = '') as csvfile:
+                with open(os.path.join(self.savepath, self.fullfilename), 'w', newline='') as csvfile:   # Change made to save .csv output files outside of the code directory.
                     csv_writer = writer(csvfile, delimiter = ',')
                     for key in self.csvdict.keys():
                         csv_writer.writerow([key]+self.csvdict[key])
                 csvtest = False
                     # with open(name + '.csv', newline = '') as csv_read, open(data +'.csv', 'w', newline = '') as csv_write:
                     #     writer(csv_write, delimiter= ',').writerows(zip(*reader(csv_read, delimiter=',')))
-            print(self.fullfilename)
+            #print(self.fullfilename)
+            print(os.path.join(self.savepath, self.fullfilename))
             print('saved')
         except RuntimeError:
             print('Error with File name')
@@ -1040,7 +1045,9 @@ class MonkeyImages(tk.Frame,):
             self.counter = 0
             self.next_image()
         if self.OutofHomeZoneOn == False:
-            winsound.PlaySound('OutOfHomeZone.wav', winsound.SND_ALIAS + winsound.SND_ASYNC + winsound.SND_NOWAIT + winsound.SND_LOOP) #Need to change the tone
+            #winsound.PlaySound('OutOfHomeZone.wav', winsound.SND_ALIAS + winsound.SND_ASYNC + winsound.SND_NOWAIT + winsound.SND_LOOP) #Need to change the tone
+            winsound.PlaySound(self.OutOfHomeZoneSound, winsound.SND_ALIAS + winsound.SND_ASYNC + winsound.SND_NOWAIT + winsound.SND_LOOP) #Need to change the tone
+
             self.OutofHomeZoneOn = True
 
     def EndTrialCue(self):
