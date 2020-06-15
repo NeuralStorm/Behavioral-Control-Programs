@@ -202,6 +202,7 @@ class MonkeyImages(tk.Frame,):
         self.SessionID = csvreaderdict['Session ID']                              # Type of Session
         self.AnimalID = csvreaderdict['Animal ID']                               # 3 digit number
         self.Date = [time.strftime('%Y%m%d')]               # Today's Date
+        self.TaskType = 'HomezoneExit'                                      # Added for Homezone exit version.  Leave blank for original Joystick version.
         # PARAMETERS
         # self.filename = 'test'
         self.savepath = os.path.join('D:', os.sep, 'IntervalTimingTaskData')  # Path to outside target directory for saving csv file
@@ -322,6 +323,9 @@ class MonkeyImages(tk.Frame,):
         self.RelSoundTime = time.time() - self.SoundTime
         self.PunishLockTime = time.time()
         self.RelPunishLockTime = time.time() - self.PunishLockTime
+        self.WaitTime = time.time()                                         # Added by R.E. for HomezoneExit version 2020-06-11
+        self.RelWaitTime = time.time() - self.WaitTime                      # Added by R.E. for HomezoneExit version 2020-06-11
+
 
         print("ready for plexon:" , self.readyforplexon)
         tk.Frame.__init__(self, parent, *args, **kwargs)
@@ -483,6 +487,9 @@ class MonkeyImages(tk.Frame,):
                     self.DiscrimStimTime = time.time()
                     self.RelDiscrimStimTime = time.time() - self.DiscrimStimTime
 
+                    if self.TaskType == 'HomezoneExit':      # Added for Homezone exit version
+                        self.CurrentPress = True            #
+
 
 
                 ##################################################################################################### Unused Currently.
@@ -510,12 +517,22 @@ class MonkeyImages(tk.Frame,):
 
                 # If Lever is Pulled On and ready for Pull
                 elif self.ReadyForPull == True and self.CurrentPress == True and self.PunishLockout == False:
-                    print('Pull')
-                    #winsound.PlaySound('550Hz_1s_test.wav', winsound.SND_ASYNC + winsound.SND_LOOP + winsound.SND_NOWAIT)
-                    while self.Pedal3 >= self.PullThreshold:                     ### While loop in place to continuously and quickly update the Press Time for the Duration that
-                        #self.client.opx_wait(100)                               ### The Monkey is Pulling it for. This will reduce latency issues with running through the whole
-                        self.gathering_data_omni()                               ### Loop.
-                    winsound.PlaySound(None, winsound.SND_PURGE)
+                    
+                    if self.TaskType == 'HomezoneExit':                                         ## Block added for HomezoneExit verion
+                        while (self.Area1_right_pres == True or self.Area1_left_pres == True):  ### While loop in place to continuously and quickly update the Post-Go in-homezone duration.
+                            #self.client.opx_wait(100)                                          ### This will reduce latency issues with running through the whole loop.
+                            self.gathering_data_omni()                                          #
+                        print('Post-go to exit time: {:.3f}'.format(self.RelWaitTime))          #
+                        self.DurationTimestamp = self.RelWaitTime                               #
+                        #winsound.PlaySound(self.RewardSound, winsound.SND_ALIAS + winsound.SND_ASYNC)
+
+                    else:
+                        print('Pull')
+                        #winsound.PlaySound('550Hz_1s_test.wav', winsound.SND_ASYNC + winsound.SND_LOOP + winsound.SND_NOWAIT)
+                        while self.Pedal3 >= self.PullThreshold:                     ### While loop in place to continuously and quickly update the Press Time for the Duration that
+                            #self.client.opx_wait(100)                               ### The Monkey is Pulling it for. This will reduce latency issues with running through the whole
+                            self.gathering_data_omni()                               ### Loop.
+                            winsound.PlaySound(None, winsound.SND_PURGE)
                     
                     if self.UseMaximumRewardTime == False:
                         self.RewardTime = self.ChooseReward(self.DurationTimestamp)
@@ -1349,6 +1366,11 @@ class MonkeyImages(tk.Frame,):
                     #tmp_source_name = source_numbers_names[tmp_source_number]
                     tmp_timestamp = new_data.timestamp[i]
                     #tmp_unit = new_data.unit[i]
+
+                    if self.TaskType == 'HomezoneExit':
+                        if tmp_channel in [26,28,30,32]:                                            # Added for homezone exit version
+                            #self.GoCueTimestamp = tmp_timestamp - self.RecordingStartTimestamp      #
+                            self.StartTimestamp = tmp_timestamp - self.RecordingStartTimestamp
                     
                     if tmp_channel == 9:
                         print('Area1_right_pres set to True')
@@ -1365,6 +1387,9 @@ class MonkeyImages(tk.Frame,):
                             self.HandInBool = False
                             self.HandOutGCTime = float(tmp_timestamp - self.RecordingStartTimestamp)
                             self.HandDurationGCTime = float(self.HandOutTime - self.HandInTime)
+                            if self.TaskType == 'HomezoneExit':                                             # added for HomezoneExit version
+                                self.RelWaitTime = float(self.HandOutTime - self.StartTimestamp)            #
+                                self.StopTimestamp = self.HandOutTime                                       #
                         if self.StartTrialBool == False:
                             if self.PictureBool == False:
                                 self.csvdict['Total t1 failures'][0] += 1
