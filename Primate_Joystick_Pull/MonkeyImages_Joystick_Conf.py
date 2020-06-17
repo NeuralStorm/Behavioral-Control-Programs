@@ -202,11 +202,12 @@ class MonkeyImages(tk.Frame,):
         self.SessionID = csvreaderdict['Session ID']                              # Type of Session
         self.AnimalID = csvreaderdict['Animal ID']                               # 3 digit number
         self.Date = [time.strftime('%Y%m%d')]               # Today's Date
+        #self.TaskType = 'Joystick'
         self.TaskType = 'HomezoneExit'                                      # Added for Homezone exit version.  String should be 'HomezoneExit'  Leave blank for original Joystick version.
         # PARAMETERS
         # self.filename = 'test'
         self.savepath = os.path.join('D:', os.sep, 'IntervalTimingTaskData')  # Path to outside target directory for saving csv file
-        self.filename = self.StudyID[0] + '_' + self.AnimalID[0] + '_' + self.Date[0] + '_Joystick'
+        self.filename = self.StudyID[0] + '_' + self.AnimalID[0] + '_' + self.Date[0] + '_' + self.TaskType
         self.fullfilename = self.filename + '.csv'
         self.DiscrimStimMin = float(csvreaderdict['Pre Discriminatory Stimulus Min delta t1'][0])                           # (seconds) Minimum seconds to display Discrim Stim for before Go Cue
         self.DiscrimStimMax = float(csvreaderdict['Pre Discriminatory Stimulus Max delta t1'][0])                             # (seconds) Maxiumum seconds to display Discrim Stim for before Go Cue
