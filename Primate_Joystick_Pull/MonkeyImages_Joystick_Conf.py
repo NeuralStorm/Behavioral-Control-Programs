@@ -202,7 +202,7 @@ class MonkeyImages(tk.Frame,):
         self.SessionID = csvreaderdict['Session ID']                              # Type of Session
         self.AnimalID = csvreaderdict['Animal ID']                               # 3 digit number
         self.Date = [time.strftime('%Y%m%d')]               # Today's Date
-        self.TaskType = 'HomezoneExit'                                      # Added for Homezone exit version.  Leave blank for original Joystick version.
+        self.TaskType = 'HomezoneExit'                                      # Added for Homezone exit version.  String should be 'HomezoneExit'  Leave blank for original Joystick version.
         # PARAMETERS
         # self.filename = 'test'
         self.savepath = os.path.join('D:', os.sep, 'IntervalTimingTaskData')  # Path to outside target directory for saving csv file
@@ -325,6 +325,7 @@ class MonkeyImages(tk.Frame,):
         self.RelPunishLockTime = time.time() - self.PunishLockTime
         self.WaitTime = time.time()                                         # Added by R.E. for HomezoneExit version 2020-06-11
         self.RelWaitTime = time.time() - self.WaitTime                      # Added by R.E. for HomezoneExit version 2020-06-11
+        self.tmp_timestamp = time.time()                                    # Added by R.E. for HomezoneExit version
 
 
         print("ready for plexon:" , self.readyforplexon)
@@ -443,6 +444,7 @@ class MonkeyImages(tk.Frame,):
 ################################################################################################################################################################################################
                     self.counter = random.randint(1,self.NumEvents) #Randomly chooses next image -Current,will change the range depending on which images are to be shown here.
                     self.current_counter = self.counter
+                    self.current_range_index = self.counter
                     self.CueTime = time.time()
                     self.RelCueTime = time.time() - self.CueTime
                     # EV25 , EV27, EV29, EV31
@@ -518,12 +520,31 @@ class MonkeyImages(tk.Frame,):
                 # If Lever is Pulled On and ready for Pull
                 elif self.ReadyForPull == True and self.CurrentPress == True and self.PunishLockout == False:
                     
-                    if self.TaskType == 'HomezoneExit':                                         ## Block added for HomezoneExit verion
+                    ### Block added for HomezoneExit version
+                    if self.TaskType == 'HomezoneExit':
+                        
+                        self.WaitStart = time.time()                                            ### Begin post-go waiting clock
                         while (self.Area1_right_pres == True or self.Area1_left_pres == True):  ### While loop in place to continuously and quickly update the Post-Go in-homezone duration.
                             #self.client.opx_wait(100)                                          ### This will reduce latency issues with running through the whole loop.
-                            self.gathering_data_omni()                                          #
-                        print('Post-go to exit time: {:.3f}'.format(self.RelWaitTime))          #
-                        self.DurationTimestamp = self.RelWaitTime                               #
+                            self.gathering_data_omni()
+                            self.WaitTime = time.time() - self.WaitStart
+                            #print('Current in zone wait time is {:.3f}'.format(round(self.WaitTime,3)))
+                            
+                            # Impose time out after maximum wait time reached.
+                            if (self.HandInBool == True) and (self.WaitTime > self.Ranges[self.current_range_index][2]):
+                                self.Area1_right_pres = False                       # This set to exit out of hand-in-zone while loop
+                                self.Area2_left_pres = False                        # Lines that follow set object state to enter into
+                                self.StopTimestamp = self.WaitTime                  # the MaxTimeAfterSound time-out loop.
+                                self.RelWaitTime = self.WaitTime                    #
+                                self.RewardTime = 0                                 # 
+                                self.RelDiscrimStimTime = self.MaxTimeAfterSound    #
+                                self.Pedal1 = 0
+                                self.Pedal2 = 0
+                                self.Pedal3 = 0
+                                self.Pedal4 = 0                                                 #
+                        print('Post-go to exit time: {:.3f}'.format(self.RelWaitTime))          # RelWaitTime comes from gathering_data_omni unless
+                        self.DurationTimestamp = self.RelWaitTime                               # maximum wait time reached--in which case it set to 
+                                                                                                # wait time.
                         #winsound.PlaySound(self.RewardSound, winsound.SND_ALIAS + winsound.SND_ASYNC)
 
                     else:
@@ -566,7 +587,7 @@ class MonkeyImages(tk.Frame,):
                         self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event5,None,None)
                         self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
                         if self.EnableBlooperNoise == True:
-                            winsound.PlaySound('WrongHoldDuration.wav', winsound.SND_ALIAS + winsound.SND_ASYNC + winsound.SND_NOWAIT)
+                            winsound.PlaySound(self.Bloop, winsound.SND_ALIAS + winsound.SND_ASYNC + winsound.SND_NOWAIT)  # Change made to correctly call blooper wav file.
                         if self.EnableTimeOut == True:
                             self.RelPunishLockTime = time.time() - self.PunishLockTime
                             self.PunishLockout = True
@@ -1367,17 +1388,25 @@ class MonkeyImages(tk.Frame,):
                     tmp_timestamp = new_data.timestamp[i]
                     #tmp_unit = new_data.unit[i]
 
+                    self.tmp_timestamp = tmp_timestamp                                            # Added to acceess timestamp in waiting loop outside of this function
                     if self.TaskType == 'HomezoneExit':
-                        if tmp_channel in [26,28,30,32]:                                            # Added for homezone exit version
-                            #self.GoCueTimestamp = tmp_timestamp - self.RecordingStartTimestamp      #
-                            self.StartTimestamp = tmp_timestamp - self.RecordingStartTimestamp
-                    
+                        if tmp_channel in [26,28,30,32]:                                            # Added for homezone exit version     #
+                            self.StartTimestamp = tmp_timestamp - self.RecordingStartTimestamp     # This event captures go cue onset
+                        #self.WaitTime = tmp_timestamp - self.RecordingStartTimestamp - self.StartTimestamp
+                        #print('Current in zone wait time is {:.3f}'.format(round(self.WaitTime,3)))
+                        #if (self.HandInBool == True) and (self.WaitTime > 100.0):  # Impose time out after maximum duration of wait time reached.
+                        #        self.Area1_right_pres = False                                               # This set to exit out of hand-in-zone while loop to measure duration
+                        #        self.Area2_left_pres = False                                                #
+                        #        self.StopTimestamp = self.WaitTime                                          #
+                        #        self.RewardTime = 0.                                                        #
+
                     if tmp_channel == 9:
                         print('Area1_right_pres set to True')
                         self.Area1_right_pres = True
                         if self.TrainingStart == False:
                             self.HandInTime = float(tmp_timestamp - self.RecordingStartTimestamp)
                             self.HandInBool = True
+                        
                     elif tmp_channel == 14:  # TEMPFIX 10 --> 14 because of hardware issue
                         print('Area1_right_pres set to False')
                         self.Area1_right_pres = False
@@ -1438,7 +1467,6 @@ class MonkeyImages(tk.Frame,):
                             self.DiscrimStimDuration = self.RandomDuration(self.DiscrimStimMin,self.DiscrimStimMax)
                             self.GoCueDuration = self.RandomDuration(self.GoCueMin,self.GoCueMax)
                             
-                    
                     elif tmp_channel == 11:
                         pass
                         # self.HandInJoystickTime = tmp_timestamp - self.RecordingStartTimestamp
