@@ -173,7 +173,9 @@ class MonkeyImages(tk.Frame,):
         self.Pedal3 = 0 # Pull / Backwards
         self.Pedal4 = 0 # Left
         self.list_images = [] # Image list for Discriminative Stimuli
-        source = "./TestImages/" # Name of folder in which you keep your images to be displayed
+        #source = "./TestImages/" # Name of folder in which you keep your images to be displayed
+        source = "./TestImagesSingleDS/" # Name of folder in which you keep your images to be displayed.  This directory contains ONLY the
+                                         # graphics files required for the single DS version of the task.
         for images in os.listdir(source):
             self.list_images.append(images)
             
