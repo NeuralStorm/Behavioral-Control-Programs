@@ -25,6 +25,7 @@ import csv
 from csv import reader, writer
 import os
 import os.path
+from pathlib import Path
 import time
 import random
 import winsound
@@ -173,11 +174,16 @@ class MonkeyImages(tk.Frame,):
         self.Pedal3 = 0 # Pull / Backwards
         self.Pedal4 = 0 # Left
         self.list_images = [] # Image list for Discriminative Stimuli
-        #source = "./TestImages/" # Name of folder in which you keep your images to be displayed
-        source = "./TestImagesSingleDS/" # Name of folder in which you keep your images to be displayed.  This directory contains ONLY the
+
+        ### FOLLOWING KEPT AS BACKUP.  DELETE AFTER DEBUGGING CONFIG FILE LOAD FUNCTIONALITY  2020-07-29 #####
+        #self.source = "./TestImages/" # Name of folder in which you keep your images to be displayed
+        #self.source = "./TestImagesSingleDS/" # Name of folder in which you keep your images to be displayed.  This directory contains ONLY the
                                          # graphics files required for the single DS version of the task.
-        for images in os.listdir(source):
-            self.list_images.append(images)
+        #self.source = "./TaskImages_HomezoneExit/" # Folder containing images for the HomezoneExit version of the task.  As above, this directory
+                                         # contains ONLY the graphics files required for this specific version of the task.
+        #for images in os.listdir(self.source):
+        #    self.list_images.append(images)
+        ###########
             
         root = Tk()
         self.ConfigFilename =  filedialog.askopenfilename(initialdir = "/",title = "Select file",filetypes = (("all files","*.*"), ("jpeg files","*.jpg")))
@@ -200,39 +206,47 @@ class MonkeyImages(tk.Frame,):
                     csvreaderdict[data[row][0]].append(data[row][entry])
         
         # PARAMETERS META DATA
-        self.StudyID = csvreaderdict['Study ID']                              # 3 letter study code
-        self.SessionID = csvreaderdict['Session ID']                              # Type of Session
-        self.AnimalID = csvreaderdict['Animal ID']                               # 3 digit number
-        self.Date = [time.strftime('%Y%m%d')]               # Today's Date
+        self.StudyID = csvreaderdict['Study ID']                            # 3 letter study code
+        self.SessionID = csvreaderdict['Session ID']                        # Type of Session
+        self.AnimalID = csvreaderdict['Animal ID']                          # 3 digit number
+        self.Date = [time.strftime('%Y%m%d')]                               # Today's Date
         #self.TaskType = 'Joystick'
-        self.TaskType = 'HomezoneExit'                                      # Added for Homezone exit version.  String should be 'HomezoneExit'  Leave blank for original Joystick version.
+        #self.TaskType = 'HomezoneExit'                                     # Added for Homezone exit version.  String should be 'HomezoneExit'  Leave blank for original Joystick version.
+        self.TaskType = csvreaderdict['Task Type'][0]                       # Added additional rows into the config file to reduce
+        self.source = Path(csvreaderdict['Path To Graphics Dir'][0])              # required in-code edits to change task versions. R.E. 7-29-2020
+        for images in os.listdir(self.source):                              # Copied from above (~line 181) 7-29-2020 R.E.
+            self.list_images.append(images)
         # PARAMETERS
         # self.filename = 'test'
-        self.savepath = os.path.join('D:', os.sep, 'IntervalTimingTaskData')  # Path to outside target directory for saving csv file
-        self.filename = self.StudyID[0] + '_' + self.AnimalID[0] + '_' + self.Date[0] + '_' + self.TaskType
-        self.fullfilename = self.filename + '.csv'
-        self.DiscrimStimMin = float(csvreaderdict['Pre Discriminatory Stimulus Min delta t1'][0])                           # (seconds) Minimum seconds to display Discrim Stim for before Go Cue
-        self.DiscrimStimMax = float(csvreaderdict['Pre Discriminatory Stimulus Max delta t1'][0])                             # (seconds) Maxiumum seconds to display Discrim Stim for before Go Cue
-        self.DiscrimStimDuration = self.RandomDuration(self.DiscrimStimMin,self.DiscrimStimMax) # (seconds) How long is the Discriminative Stimulus displayed for.
-        self.GoCueMin = float(csvreaderdict['Pre Go Cue Min delta t2'][0])#0.25                           # (seconds) Minimum seconds to display Discrim Stim for before Go Cue
-        self.GoCueMax = float(csvreaderdict['Pre Go Cue Max delta t2'][0])#0.5                             # (seconds) Maxiumum seconds to display Discrim Stim for before Go Cue
-        self.GoCueDuration = self.RandomDuration(self.GoCueMin,self.GoCueMax) # (seconds) How long is the Discriminative Stimulus displayed for.
-        self.MaxTimeAfterSound = int(csvreaderdict['Maximum Time After Sound'][0])                         # (seconds) Maximum time Monkey has to pull. However, it is currently set so that it will not reset if the Pedal is being Pulled
-        self.NumEvents = int(csvreaderdict['Number of Events'][0])
-        self.InterTrialTime = float(csvreaderdict['Inter Trial Time'][0])                             # (seconds) Time between Trials / Reward Time
-        self.AdaptiveValue = float(csvreaderdict['Adaptive Value'][0])                           # Probably going to use this in the form of a value
-        self.AdaptiveAlgorithm = int(csvreaderdict['Adaptive Algorithm'][0])                          # 1: Percentage based change 2: mean, std, calculated shift of distribution (Don't move center?) 3: TBD Move center as well?
-        self.AdaptiveFrequency = int(csvreaderdict['Adaptive Frequency'][0])                         # Number of trials inbetween calling AdaptiveRewardThreshold()
-        self.EarlyPullTimeOut = (csvreaderdict['Enable Early Pull Time Out'][0] == 'TRUE')                      # This Boolean sets if you want to have a timeout for a pull before the Go Red Rectangle.
-        self.RewardDelayMin = float(csvreaderdict['Pre Reward Delay Min delta t3'][0])#0.010                         # (seconds) Min Length of Delay before Reward (Juice) is given.
-        self.RewardDelayMax = float(csvreaderdict['Pre Reward Delay Max delta t3'][0])#0.010                         # (seconds) Max Length of Delay before Reward (Juice) is given.
-        self.RewardDelay = self.RandomDuration(self.RewardDelayMin, self.RewardDelayMax) # (seconds) Length of Delay before Reward (Juice) is given.
-        self.UseMaximumRewardTime = (csvreaderdict['Use Maximum Reward Time'][0] == 'TRUE')                   # This Boolean sets if you want to use the Maximum Reward Time for each Reward or to use scaled Reward Time relative to Pull Duration.
-        self.RewardTime = float(csvreaderdict['Maximum Reward Time'][0])                              #
-        self.MaxReward = float(csvreaderdict['Maximum Reward Time'][0])                               # (seconds) maximum time to give water
-        self.EnableTimeOut = (csvreaderdict['Enable Time Out'][0] == 'TRUE')                          # Toggle this to True if you want to include 'punishment' timeouts (black screen for self.TimeOut duration), or False for no TimeOuts.
-        self.TimeOut = float(csvreaderdict['Time Out'][0]) # (seconds) Time for black time out screen
-        self.EnableBlooperNoise = (csvreaderdict['Enable Blooper Noise'][0] == 'TRUE')                     # Toggle this to True if you want to include the blooper noise when an incorrect pull is detected (Either too long or too short / No Reward Given)
+        #self.savepath = os.path.join('D:', os.sep, 'IntervalTimingTaskData')            # Path to outside target directory for saving csv file
+        self.savepath = Path(csvreaderdict['Task Data Save Dir'][0])
+        self.filename = self.StudyID[0] + '_' + self.AnimalID[0] + '_' + self.Date[0] + '_' + self.TaskType # Consolidate metadata into filename
+        self.fullfilename = self.filename + '.csv'                                                          # Append filename extension to indicate type
+        self.DiscrimStimMin = float(csvreaderdict['Pre Discriminatory Stimulus Min delta t1'][0])           # (seconds) Minimum seconds to display Discrim Stim for before Go Cue
+        self.DiscrimStimMax = float(csvreaderdict['Pre Discriminatory Stimulus Max delta t1'][0])           # (seconds) Maxiumum seconds to display Discrim Stim for before Go Cue
+        self.DiscrimStimDuration = self.RandomDuration(self.DiscrimStimMin,self.DiscrimStimMax)             # (seconds) How long is the Discriminative Stimulus displayed for.
+        self.GoCueMin = float(csvreaderdict['Pre Go Cue Min delta t2'][0])#0.25                             # (seconds) Minimum seconds to display Discrim Stim for before Go Cue
+        self.GoCueMax = float(csvreaderdict['Pre Go Cue Max delta t2'][0])#0.5                              # (seconds) Maxiumum seconds to display Discrim Stim for before Go Cue
+        self.GoCueDuration = self.RandomDuration(self.GoCueMin,self.GoCueMax)                               # (seconds) How long is the Discriminative Stimulus displayed for.
+        self.MaxTimeAfterSound = int(csvreaderdict['Maximum Time After Sound'][0])                          # (seconds) Maximum time Monkey has to pull. However, it is currently set so that it will not reset if the Pedal is being Pulled
+        self.NumEvents = int(csvreaderdict['Number of Events'][0])                                          # Number of different (desired) interval durations for the animal to produce,
+                                                                                                            # corresponds to the number of unique discriminative stimuli.
+        self.InterTrialTime = float(csvreaderdict['Inter Trial Time'][0])                                   # (seconds) Time between Trials / Reward Time
+        self.AdaptiveValue = float(csvreaderdict['Adaptive Value'][0])                                      # Probably going to use this in the form of a value
+        self.AdaptiveAlgorithm = int(csvreaderdict['Adaptive Algorithm'][0])                                # 1: Percentage based change 2: mean, std, calculated shift of distribution (Don't move center?) 3: TBD Move center as well?
+        self.AdaptiveFrequency = int(csvreaderdict['Adaptive Frequency'][0])                                # Number of trials inbetween calling AdaptiveRewardThreshold()
+        self.EarlyPullTimeOut = (csvreaderdict['Enable Early Pull Time Out'][0] == 'TRUE')                  # This Boolean sets if you want to have a timeout for a pull before the Go Red Rectangle.
+        self.RewardDelayMin = float(csvreaderdict['Pre Reward Delay Min delta t3'][0])#0.010                # (seconds) Min Length of Delay before Reward (Juice) is given.
+        self.RewardDelayMax = float(csvreaderdict['Pre Reward Delay Max delta t3'][0])#0.010                # (seconds) Max Length of Delay before Reward (Juice) is given.
+        self.RewardDelay = self.RandomDuration(self.RewardDelayMin, self.RewardDelayMax)                    # (seconds) Length of Delay before Reward (Juice) is given.
+        self.UseMaximumRewardTime = (csvreaderdict['Use Maximum Reward Time'][0] == 'TRUE')                 # This Boolean sets if you want to use the Maximum Reward Time for each Reward or to
+                                                                                                            # simply use scaled Reward Time relative to Pull Duration.  "Reward Time" is the duration of the 
+                                                                                                            # trigger pulse that advances the feeder pump.  
+        self.RewardTime = float(csvreaderdict['Maximum Reward Time'][0])                                    #
+        self.MaxReward = float(csvreaderdict['Maximum Reward Time'][0])                                     # (seconds) maximum time to give water
+        self.EnableTimeOut = (csvreaderdict['Enable Time Out'][0] == 'TRUE')                                # Toggle this to True if you want to include 'punishment' timeouts (black screen for self.TimeOut duration), or False for no TimeOuts.
+        self.TimeOut = float(csvreaderdict['Time Out'][0])                                                  # (seconds) Time for black time out screen
+        self.EnableBlooperNoise = (csvreaderdict['Enable Blooper Noise'][0] == 'TRUE')                      # Toggle this to True if you want to include the blooper noise when an incorrect pull is detected (Either too long or too short / No Reward Given)
         #self.RewardClassArgs = []
         #for i in range(0,len(csvreaderdict['Ranges'])):
         #    self.RewardClassArgs.append(float(csvreaderdict['Ranges'][i]))
@@ -243,7 +257,17 @@ class MonkeyImages(tk.Frame,):
         #for k in range(0,len(csvreaderdict['Active Joystick Channels'])):
         #    self.ActiveJoystickChans.append(int(csvreaderdict['Active Joystick Channels'][k]))
         filt = numpy.array(csvreaderdict['Active Joystick Channels']) != ''
-        self.ActiveJoystickChans = numpy.array(csvreaderdict['Active Joystick Channels'])[filt].astype(int).tolist()        
+        self.ActiveJoystickChans = numpy.array(csvreaderdict['Active Joystick Channels'])[filt].astype(int).tolist()
+
+        ############# Task sounds 
+        self.RewardSound = 'Exclamation'
+        #self.Bloop       = 'Question'
+        #self.Bloop = '.\\TaskSounds\\WrongHoldDuration.wav'
+        self.Bloop = str(Path('./TaskSounds/WrongHoldDuration.wav'))
+        #self.OutOfHomeZoneSound = '.\\TaskSounds\\OutOfHomeZone.wav'
+        self.OutOfHomeZoneSound = str(Path('./TaskSounds/OutOfHomeZone.wav'))
+        ##############
+
         ############# Initializing vars
         self.DurationList()                                 # Creates dict of lists to encapsulate press durations. Will be used for Adaptive Reward Control
         self.counter = 0 # Counter Values: Alphabetic from TestImages folder
@@ -273,12 +297,6 @@ class MonkeyImages(tk.Frame,):
         self.pyan = 0 # Predicted: Yes, Actual: No
         self.pnay = 0 # Predicted: No, Actual: Yes
         self.pyay = 0 # Predicted: Yes, Actual: Yes
-        ############# Rewards
-        self.RewardSound = 'Exclamation'
-        #self.Bloop       = 'Question'
-        self.Bloop = '.\\TaskSounds\\WrongHoldDuration.wav'
-        self.OutOfHomeZoneSound = '.\\TaskSounds\\OutOfHomeZone.wav'
-        ##############
         
         # Booleans (built into GUI Class functions):
         self.MonkeyLoop = False         # Overall for when the program is looping
@@ -937,17 +955,20 @@ class MonkeyImages(tk.Frame,):
         try:
             csvtest = True
             while csvtest == True:
-                check = os.path.isfile(os.path.join(self.savepath, self.fullfilename))
+                #check = os.path.isfile(os.path.join(self.savepath, self.fullfilename))
+                check = os.path.isfile(self.savepath / self.fullfilename)
                 while check == True:
                     print('File name already exists')
                     self.filename = input('Enter File name: ')
                     self.fullfilename = self.filename + '.csv'
                     #check = os.path.isfile(self.fullfilename)
-                    check = os.path.isfile(os.path.join(self.savepath, self.fullfilename))               # Change made to save files outside of code directory
+                    #check = os.path.isfile(os.path.join(self.savepath, self.fullfilename))               # Change made to save files outside of code directory
+                    check = os.path.isfile(self.savepath / self.fullfilename)
                 print('File name not currently used, saving.')
     
                 #with open(self.filename + '.csv', 'w', newline = '') as csvfile:
-                with open(os.path.join(self.savepath, self.fullfilename), 'w', newline='') as csvfile:   # Change made to save .csv output files outside of the code directory.
+                #with open(os.path.join(self.savepath, self.fullfilename), 'w', newline='') as csvfile:   # Change made to save .csv output files outside of the code directory.
+                with open(self.savepath / self.fullfilename, 'w', newline='') as csvfile: 
                     csv_writer = writer(csvfile, delimiter = ',')
                     for key in self.csvdict.keys():
                         csv_writer.writerow([key]+self.csvdict[key])    # 
@@ -955,7 +976,8 @@ class MonkeyImages(tk.Frame,):
                     # with open(name + '.csv', newline = '') as csv_read, open(data +'.csv', 'w', newline = '') as csv_write:
                     #     writer(csv_write, delimiter= ',').writerows(zip(*reader(csv_read, delimiter=',')))
             #print(self.fullfilename)
-            print(os.path.join(self.savepath, self.fullfilename))
+            #print(os.path.join(self.savepath, self.fullfilename))
+            print(self.savepath / self.fullfilename)
             print('saved')
         except RuntimeError:
             print('Error with File name')
@@ -1201,7 +1223,9 @@ class MonkeyImages(tk.Frame,):
         self.ImageReward = False
 
     def next_image(self): #This is the call for nextimage, set counter to 0 and run next_image to get blank. For this to work need a blank image in first position in directory.
-        im = Image.open("{}{}".format("./TestImages/", self.list_images[self.counter]))
+        #im = Image.open("{}{}".format("./TestImages/", self.list_images[self.counter]))
+        #im = Image.open("{}{}".format(self.source, self.list_images[self.counter]))
+        im = Image.open(self.source / self.list_images[self.counter])    # Bypassing hard-coded path strings (above lines) R.E. 7/29/2020
         if (490-im.size[0])<(390-im.size[1]):
             width = 1600
             height = width*im.size[1]/im.size[0]
@@ -1212,7 +1236,9 @@ class MonkeyImages(tk.Frame,):
             self.next_step(height, width)
 
     def next_step(self, height, width):
-        self.im = Image.open("{}{}".format("./TestImages/", self.list_images[self.counter]))
+        #self.im = Image.open("{}{}".format("./TestImages/", self.list_images[self.counter]))
+        #self.im = Image.open("{}{}".format(self.source, self.list_images[self.counter]))
+        self.im = Image.open(self.source / self.list_images[self.counter])   # Bypassing hard-coded path strings (above lines) R.E. 7/29/2020
         self.im.thumbnail((width, height), Image.ANTIALIAS)
         self.root.photo = ImageTk.PhotoImage(self.im)
         self.photo = ImageTk.PhotoImage(self.im)
