@@ -1,0 +1,26 @@
+Study ID,TIP
+Session ID,001
+Animal ID,1
+Number of Events,1
+Task Type,HomezoneExit
+Path To Graphics Dir,./TaskImages_HomezoneExit/
+Task Data Save Dir,D:/IntervalTimingTaskData
+Pre Discriminatory Stimulus Min delta t1,0.2
+Pre Discriminatory Stimulus Max delta t1,0.3
+Pre Go Cue Min delta t2,0.2
+Pre Go Cue Max delta t2,0.3
+Pre Reward Delay Min delta t3,0.4
+Pre Reward Delay Max delta t3,0.7
+Use Maximum Reward Time,FALSE
+Maximum Reward Time,0.18
+Enable Time Out,FALSE
+Time Out,1.0
+Ranges,1,0.0,3.0
+Inter Trial Time,1
+Adaptive Value,0.05
+Adaptive Algorithm,1
+Adaptive Frequency,50
+Enable Early Pull Time Out,FALSE
+Enable Blooper Noise,TRUE
+Active Joystick Channels,3
+Maximum Time After Sound,3

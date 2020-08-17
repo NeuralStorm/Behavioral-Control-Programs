@@ -18,8 +18,10 @@ from definitionsRyan import * #Given definitions to Ryan. It might need updates 
 ###################### These are all called in line 4 above from definitionsRyan import *. -They are listed here for Nathan's testing
 import tkinter as tk
 from tkinter import *
+from tkinter import filedialog
 import threading as t
 from PIL import Image, ImageTk
+import csv
 from csv import reader, writer
 import os
 import os.path
@@ -30,6 +32,7 @@ import math
 import queue
 import statistics
 import sys, traceback
+import numpy
 
 # from definitions import *
 ##############################################################################################
@@ -175,14 +178,18 @@ class MonkeyImages(tk.Frame,):
             self.list_images.append(images)
         
         root = Tk()
-        root.filename =  filedialog.askopenfilename(initialdir = "/",title = "Select file",filetypes = (("all files","*.*"), ("jpeg files","*.jpg")))
-        print (root.filename)
+        self.ConfigFilename =  filedialog.askopenfilename(initialdir = "/",title = "Select file",filetypes = (("all files","*.*"), ("jpeg files","*.jpg")))
+        root.withdraw()
+        print (self.ConfigFilename)
         csvreaderdict = {}
-        with open(root.filename, newline='') as csvfile:
+        data = []
+        with open(self.ConfigFilename, newline='') as csvfile:
             spamreader = csv.reader(csvfile) #, delimiter=' ', quotechar='|')
             for row in spamreader:
-                data = list(spamreader)
-
+                #data = list(spamreader)
+                data.append(row)
+        csvfile.close()
+        
         for row in range(0,len(data)):
             for entry in range(0,len(data[row])):
                 if entry == 0:
@@ -197,7 +204,8 @@ class MonkeyImages(tk.Frame,):
         self.Date = [time.strftime('%Y%m%d')]               # Today's Date
         # PARAMETERS
         # self.filename = 'test'
-        self.filename = self.StudyID[0] + '_' + self.AnimalID[0] + '_' + self.Date[0] + '_Joystick'
+        self.savepath = os.path.join('D:', os.sep, 'IntervalTimingTaskData')  # Path to outside target directory for saving csv file        
+        self.filename = self.StudyID + '_' + self.AnimalID + '_' + self.Date[0] + '_Joystick'
         self.fullfilename = self.filename + '.csv'
         self.DiscrimStimMin = float(csvreaderdict['Pre Discriminatory Stimulus Min delta t1'][0])                           # (seconds) Minimum seconds to display Discrim Stim for before Go Cue
         self.DiscrimStimMax = float(csvreaderdict['Pre Discriminatory Stimulus Max delta t1'][0])                             # (seconds) Maxiumum seconds to display Discrim Stim for before Go Cue
@@ -208,7 +216,7 @@ class MonkeyImages(tk.Frame,):
         self.MaxTimeAfterSound = int(csvreaderdict['Maximum Time After Sound'][0])                         # (seconds) Maximum time Monkey has to pull. However, it is currently set so that it will not reset if the Pedal is being Pulled
         self.NumEvents = int(csvreaderdict['Number of Events'][0])
         self.InterTrialTime = float(csvreaderdict['Inter Trial Time'][0])                             # (seconds) Time between Trials / Reward Time
-        self.AdaptiveValue = int(csvreaderdict['Adaptive Value'][0])                           # Probably going to use this in the form of a value
+        self.AdaptiveValue = float(csvreaderdict['Adaptive Value'][0])                           # Probably going to use this in the form of a value
         self.AdaptiveAlgorithm = int(csvreaderdict['Adaptive Algorithm'][0])                          # 1: Percentage based change 2: mean, std, calculated shift of distribution (Don't move center?) 3: TBD Move center as well?
         self.AdaptiveFrequency = int(csvreaderdict['Adaptive Frequency'][0])                         # Number of trials inbetween calling AdaptiveRewardThreshold()
         self.EarlyPullTimeOut = bool(csvreaderdict['Enable Early Pull Time Out'][0])                       # This Boolean sets if you want to have a timeout for a pull before the Go Red Rectangle.
@@ -221,15 +229,17 @@ class MonkeyImages(tk.Frame,):
         self.EnableTimeOut = bool(csvreaderdict['Enable Time Out'][0])                          # Toggle this to True if you want to include 'punishment' timeouts (black screen for self.TimeOut duration), or False for no TimeOuts.
         self.TimeOut = float(csvreaderdict['Time Out'][0]) # (seconds) Time for black time out screen
         self.EnableBlooperNoise = bool(csvreaderdict['Enable Blooper Noise'][0])                     # Toggle this to True if you want to include the blooper noise when an incorrect pull is detected (Either too long or too short / No Reward Given)
-        self.RewardClassArgs = []
-        for i in range(0,len(csvreaderdict['Ranges'])):
-            self.RewardClassArgs.append(float(csvreaderdict['Ranges'][i]))
-        self.RewardClass(self.RewardClassArgs)   #Hi Ryan, I added this range for your testing for now, because I changed where the reward is given so that it has to fit into an interval now.
+        #self.RewardClassArgs = []
+        #for i in range(0,len(csvreaderdict['Ranges'])):
+        #    self.RewardClassArgs.append(float(csvreaderdict['Ranges'][i]))
+        self.RewardClass(int(csvreaderdict['Ranges'][0]), *numpy.array(csvreaderdict['Ranges'][1:], dtype=float))   #Hi Ryan, I added this range for your testing for now, because I changed where the reward is given so that it has to fit into an interval now.
         self.ImageRatio = 100 # EX: ImageRatio = 75 => 75% Image Reward, 25% Water Reward , Currently does not handle the both choice for water and image.
         self.WaterReward = self.WaterRewardThread()
-        self.ActiveJoystickChans = []                  # This can be used if you only want him to pull in certain directions as commented above as self.Pedal#_chan.
-        for k in range(0,len(csvreaderdict['Active Joysick Channels'])):
-            self.ActiveJoystickChans.append(int(csvreaderdict['Active Joysick Channels'][k]))
+        #self.ActiveJoystickChans = []                  # This can be used if you only want him to pull in certain directions as commented above as self.Pedal#_chan.
+        #for k in range(0,len(csvreaderdict['Active Joystick Channels'])):
+        #    self.ActiveJoystickChans.append(int(csvreaderdict['Active Joystick Channels'][k]))
+        filt = numpy.array(csvreaderdict['Active Joystick Channels']) != ''
+        self.ActiveJoystickChans = numpy.array(csvreaderdict['Active Joystick Channels'])[filt].astype(int).tolist()
         ############# Initializing vars
         self.DurationList()                                 # Creates dict of lists to encapsulate press durations. Will be used for Adaptive Reward Control
         self.counter = 0 # Counter Values: Alphabetic from TestImages folder
@@ -261,7 +271,9 @@ class MonkeyImages(tk.Frame,):
         self.pyay = 0 # Predicted: Yes, Actual: Yes
         ############# Rewards
         self.RewardSound = 'Exclamation'
-        self.Bloop       = 'Question'
+        #self.Bloop       = 'Question'
+        self.Bloop = '.\\TaskSounds\\WrongHoldDuration.wav'
+        self.OutOfHomeZoneSound = '.\\TaskSounds\\OutOfHomeZone.wav'
         ##############
         
         # Booleans (built into GUI Class functions):
@@ -882,15 +894,18 @@ class MonkeyImages(tk.Frame,):
         try:
             csvtest = True
             while csvtest == True:
-                check = os.path.isfile(self.fullfilename)
+                #check = os.path.isfile(self.fullfilename)
+                check = os.path.isfile(os.path.join(self.savepath, self.fullfilename))
                 while check == True:
                     print('File name already exists')
                     self.filename = input('Enter File name: ')
                     self.fullfilename = self.filename + '.csv'
-                    check = os.path.isfile(self.fullfilename)
+                    #check = os.path.isfile(self.fullfilename)
+                    check = os.path.isfile(os.path.join(self.savepath, self.fullfilename))               # Change made to save files outside of code directory
                 print('File name not currently used, saving.')
     
-                with open(self.filename + '.csv', 'w', newline = '') as csvfile:
+                #with open(self.filename + '.csv', 'w', newline = '') as csvfile:
+                with open(os.path.join(self.savepath, self.fullfilename), 'w', newline='') as csvfile:   # Change made to save .csv output files outside of the code directory.
                     csv_writer = writer(csvfile, delimiter = ',')
                     for key in self.metadict.keys():
                         csv_writer.writerow([key]+self.metadict[key])
@@ -901,7 +916,8 @@ class MonkeyImages(tk.Frame,):
                 csvtest = False
                     # with open(name + '.csv', newline = '') as csv_read, open(data +'.csv', 'w', newline = '') as csv_write:
                     #     writer(csv_write, delimiter= ',').writerows(zip(*reader(csv_read, delimiter=',')))
-            print(self.fullfilename)
+            #print(self.fullfilename)
+            print(os.path.join(self.savepath, self.fullfilename))
             print('saved')
         except RuntimeError:
             print('Error with File name')
@@ -1097,7 +1113,8 @@ class MonkeyImages(tk.Frame,):
             self.counter = 0
             self.next_image()
         if self.OutofHomeZoneOn == False:
-            winsound.PlaySound('OutOfHomeZone.wav', winsound.SND_ALIAS + winsound.SND_ASYNC + winsound.SND_NOWAIT + winsound.SND_LOOP) #Need to change the tone
+            #winsound.PlaySound('OutOfHomeZone.wav', winsound.SND_ALIAS + winsound.SND_ASYNC + winsound.SND_NOWAIT + winsound.SND_LOOP) #Need to change the tone
+            winsound.PlaySound(self.OutOfHomeZoneSound, winsound.SND_ALIAS + winsound.SND_ASYNC + winsound.SND_NOWAIT + winsound.SND_LOOP) #Need to change the tone
             self.OutofHomeZoneOn = True
 
     def EndTrialCue(self):
