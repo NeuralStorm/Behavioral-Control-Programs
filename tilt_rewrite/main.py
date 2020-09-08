@@ -5,12 +5,15 @@ from contextlib import ExitStack
 import csv
 from itertools import count
 from threading import Thread
+from queue import Queue, Empty as QEmpty
+import sys
 
 import PyDAQmx
 from PyDAQmx import Task
 import nidaqmx
-from nidaqmx.constants import LineGrouping, Edge, AcquisitionType
+from nidaqmx.constants import LineGrouping, Edge, AcquisitionType, WAIT_INFINITELY
 import numpy as np
+from psth_tilt import PsthTiltPlatform
 
 # start Dev4/port2/line1 True
 # stop  Dev4/port2/line2 False
@@ -32,7 +35,7 @@ class LineWait:
                 return
     
     def end(self):
-        self.task.end()
+        self.task.stop()
 
 # record stop line "Dev4/port2/line6"
 class LineReader:
@@ -135,7 +138,7 @@ def record_data():
         # task.timing.cfg_samp_clk_timing(1000, source = "", sample_mode= AcquisitionType.CONTINUOUS, samps_per_chan = 1000)
         # set sample rate slightly higher than actual sample rate, not sure if that's needed
         task.timing.cfg_samp_clk_timing(SAMPLE_RATE+5, source="Dev6/PFI6", sample_mode=AcquisitionType.CONTINUOUS, samps_per_chan=SAMPLE_BATCH_SIZE)
-        task.triggers.start_trigger.cfg_dig_edge_start_trig("/Dev6/PFI8", trigger_edge = Edge.RISING)
+        task.triggers.start_trigger.cfg_dig_edge_start_trig("/Dev6/PFI8", trigger_edge=Edge.RISING)
         
         csv_file = stack.enter_context(open(csv_path, 'w+', newline=''))
         writer = csv.writer(csv_file)
@@ -149,7 +152,7 @@ def record_data():
         for row_i in count(0):
             if row_i == 0:
                 # no timeout on first read to wait for start trigger
-                read_timeout = -1
+                read_timeout = WAIT_INFINITELY
             else:
                 read_timeout = 10 # default in nidaq
             
@@ -173,18 +176,7 @@ def spawn_thread(func, *args, **kwargs) -> Thread:
     thread.start()
     return thread
 
-def main():
-    line_wait("Dev4/port2/line1", True)
-    
-    platform = TiltPlatform()
-    
-    # line_wait("Dev4/port2/line2", False)
-    waiter = LineWait("Dev4/port2/line2")
-    
-    tilt_sequence = generate_tilt_sequence()
-    
-    spawn_thread(record_data)
-    
+def run_non_psth_loop(platform: TiltPlatform, waiter: LineWait, tilt_sequence):
     first_run = True
     i = 0
     while False:
@@ -205,6 +197,59 @@ def main():
             i += 1
             input("\nPausing... (Hit ENTER to continue, ctrl-c again to quit.)")
             continue
+
+def run_psth_loop(platform: PsthTiltPlatform, tilt_sequence):
+    input_queue: 'Queue[str]' = Queue(1)
+    def input_thread():
+        cmd = input(">")
+        input_queue.put(cmd)
+        input_queue.put("")
+        input_queue.join()
+    
+    spawn_thread(input_thread)
+    
+    for tilt_type in tilt_sequence:
+        platform.tilt(tilt_type)
+        
+        try:
+            _cmd: str = input_queue.get_nowait()
+        except QEmpty:
+            pass
+        else:
+            print("Press enter to resume")
+            input("paused>")
+            input_queue.get()
+
+def main():
+    line_wait("Dev4/port2/line1", True)
+    
+    platform = TiltPlatform()
+    
+    # line_wait("Dev4/port2/line2", False)
+    # waiter = LineWait("Dev4/port2/line2")
+    
+    tilt_sequence = generate_tilt_sequence()
+    
+    spawn_thread(record_data)
+    
+    input("Press enter to start")
+    print("Waiting 3 seconds ?")
+    time.sleep(3) # ?
+    
+    try:
+        mode = sys.argv[0]
+    except IndexError:
+        mode = ""
+    
+    if mode == 'psth':
+        print("running psth")
+        run_psth_loop(platform, tilt_sequence)
+    else:
+        waiter = LineWait("Dev4/port2/line2")
+        print("running non psth")
+        run_non_psth_loop(platform, waiter, tilt_sequence)
+    
+    
     
     waiter.wait(False)
     waiter.end()

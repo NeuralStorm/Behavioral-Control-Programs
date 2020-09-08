@@ -1,0 +1,3 @@
+nidaqmx==0.5.7
+PyDAQmx==1.4.3
+numpy==1.19.1
