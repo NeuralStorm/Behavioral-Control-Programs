@@ -44,7 +44,7 @@ class PsthTiltPlatform:
         baseline_recording = True
         self.baseline_recording = baseline_recording
         psth = Psth(channel_dict, pre_time, post_time, bin_size)
-        if baseline_recording == False:
+        if not baseline_recording:
             psth.loadtemplate()
         self.psth = psth
     
@@ -54,6 +54,10 @@ class PsthTiltPlatform:
     
     def close(self):
         self.task.StopTask()
+        self.plex_client.close_client()
+        
+        self.psth.psthtemplate()
+        self.psth.savetemplate()
     
     def tilt(self, tilt_type, water=False):
         water_duration = 0.15

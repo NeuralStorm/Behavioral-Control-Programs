@@ -187,9 +187,9 @@ def run_non_psth_loop(platform: TiltPlatform, waiter: LineWait, tilt_sequence):
                     break
                 
                 platform.tilt(tilt_sequence[i])
-                if first_run:
-                    first_run = False
-                    waiter.wait(False)
+                # if first_run:
+                #     first_run = False
+                #     waiter.wait(False)
                 
                 i += 1
         except KeyboardInterrupt:
@@ -216,9 +216,26 @@ def run_psth_loop(platform: PsthTiltPlatform, tilt_sequence):
         except QEmpty:
             pass
         else:
-            print("Press enter to resume")
-            input("paused>")
+            print("Press enter to resume, q, enter to stop")
+            cmd = input("paused>")
+            if cmd == 'q':
+                break
             input_queue.get()
+    
+    psthclass = platform.psth
+    
+    if not platform.baseline_recording:
+        from sklearn.metrics import confusion_matrix
+        
+        print('actual events:y axis, predicted events:x axis')
+        confusion_matrix_calc = confusion_matrix(psthclass.event_number_list,psthclass.decoder_list)
+        print(confusion_matrix_calc)
+        correct_trials = 0
+        for i in range(0,len(confusion_matrix_calc)):
+            correct_trials = correct_trials + confusion_matrix_calc[i][i]
+        decoder_accuracy = correct_trials / len(psthclass.event_number_list)
+        print(('Accuracy = {} / {} = {}').format(correct_trials, len(psthclass.event_number_list), decoder_accuracy))
+        print('Stop Plexon Recording.')
 
 def main():
     line_wait("Dev4/port2/line1", True)
