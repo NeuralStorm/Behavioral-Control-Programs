@@ -5,8 +5,10 @@ from contextlib import ExitStack
 import csv
 from itertools import count
 from threading import Thread
+from multiprocessing import Process
 from queue import Queue, Empty as QEmpty
 import sys
+import atexit
 
 import PyDAQmx
 from PyDAQmx import Task
@@ -137,7 +139,9 @@ def record_data():
         task.ai_channels.add_ai_voltage_chan("Dev6/ai8:10")
         # task.timing.cfg_samp_clk_timing(1000, source = "", sample_mode= AcquisitionType.CONTINUOUS, samps_per_chan = 1000)
         # set sample rate slightly higher than actual sample rate, not sure if that's needed
-        task.timing.cfg_samp_clk_timing(SAMPLE_RATE+5, source="Dev6/PFI6", sample_mode=AcquisitionType.CONTINUOUS, samps_per_chan=SAMPLE_BATCH_SIZE)
+        clock_source = "/Dev6/PFI6"
+        # clock_source = ""
+        task.timing.cfg_samp_clk_timing(SAMPLE_RATE+5, source=clock_source, sample_mode=AcquisitionType.CONTINUOUS, samps_per_chan=SAMPLE_BATCH_SIZE)
         task.triggers.start_trigger.cfg_dig_edge_start_trig("/Dev6/PFI8", trigger_edge=Edge.RISING)
         
         csv_file = stack.enter_context(open(csv_path, 'w+', newline=''))
@@ -176,10 +180,16 @@ def spawn_thread(func, *args, **kwargs) -> Thread:
     thread.start()
     return thread
 
+def spawn_process(func, *args, **kwargs) -> Process:
+    proc = Process(target=func, args=args, kwargs=kwargs)
+    proc.start()
+    atexit.register(lambda: proc.terminate())
+    return proc
+
 def run_non_psth_loop(platform: TiltPlatform, waiter: LineWait, tilt_sequence):
     first_run = True
     i = 0
-    while False:
+    while True:
         try:
             while True:
                 # check at start of loop in case of keyboard interrupt
@@ -197,6 +207,8 @@ def run_non_psth_loop(platform: TiltPlatform, waiter: LineWait, tilt_sequence):
             i += 1
             input("\nPausing... (Hit ENTER to continue, ctrl-c again to quit.)")
             continue
+        
+        break
 
 def run_psth_loop(platform: PsthTiltPlatform, tilt_sequence):
     input_queue: 'Queue[str]' = Queue(1)
@@ -216,7 +228,7 @@ def run_psth_loop(platform: PsthTiltPlatform, tilt_sequence):
         except QEmpty:
             pass
         else:
-            print("Press enter to resume, q, enter to stop")
+            print("Press enter to resume; q, enter to stop")
             cmd = input("paused>")
             if cmd == 'q':
                 break
@@ -238,35 +250,44 @@ def run_psth_loop(platform: PsthTiltPlatform, tilt_sequence):
         print('Stop Plexon Recording.')
 
 def main():
-    line_wait("Dev4/port2/line1", True)
+    try:
+        mode = sys.argv[1]
+    except IndexError:
+        mode = 'psth'
     
-    platform = TiltPlatform()
+    assert mode in ['psth', 'normal']
     
     # line_wait("Dev4/port2/line2", False)
     # waiter = LineWait("Dev4/port2/line2")
     
     tilt_sequence = generate_tilt_sequence()
     
-    spawn_thread(record_data)
+    spawn_process(record_data)
+    
+    print("waiting for plexon start pulse")
+    line_wait("Dev4/port2/line1", True)
     
     input("Press enter to start")
     print("Waiting 3 seconds ?")
     time.sleep(3) # ?
     
-    try:
-        mode = sys.argv[0]
-    except IndexError:
-        mode = ""
+    
     
     if mode == 'psth':
         print("running psth")
+        platform = PsthTiltPlatform()
         run_psth_loop(platform, tilt_sequence)
-    else:
+    elif mode == 'normal':
         waiter = LineWait("Dev4/port2/line2")
         print("running non psth")
+        platform = TiltPlatform()
         run_non_psth_loop(platform, waiter, tilt_sequence)
-    
+    else:
+        raise ValueError("Invalid mode")
     
     
     waiter.wait(False)
     waiter.end()
+
+if __name__ == '__main__':
+    main()
