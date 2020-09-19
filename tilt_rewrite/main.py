@@ -187,18 +187,27 @@ def spawn_thread(func, *args, **kwargs) -> Thread:
     thread.start()
     return thread
 
-def print_errors(f, *args, **kwargs):
+def print_errors(f):
     @functools.wraps(f)
-    def wrapper():
+    def wrapper(*args, **kwargs):
         try:
-            f()
+            return f(*args, **kwargs)
         except:
             traceback.print_exc()
+            raise
     
     return wrapper
 
+def _error_record_data(*args, **kwargs):
+    try:
+        return record_data(*args, **kwargs)
+    except:
+        print("record data process failed")
+        traceback.print_exc()
+        raise
+
 def spawn_process(func, *args, **kwargs) -> Process:
-    proc = Process(target=print_errors(func), args=args, kwargs=kwargs)
+    proc = Process(target=func, args=args, kwargs=kwargs)
     proc.start()
     atexit.register(lambda: proc.terminate())
     return proc
@@ -291,7 +300,7 @@ def main():
     tilt_sequence = generate_tilt_sequence()
     
     clock_source = '/Dev6/PFI6' if args.ext_clock else ''
-    spawn_process(record_data, clock_source=clock_source)
+    spawn_process(_error_record_data, clock_source=clock_source)
     
     if not args.no_start_pulse:
         print("waiting for plexon start pulse")
