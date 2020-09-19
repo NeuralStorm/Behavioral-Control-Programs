@@ -11,7 +11,7 @@ import numpy as np
 from psth import PSTH as Psth
 
 class PsthTiltPlatform(AbstractContextManager):
-    def __init__(self):
+    def __init__(self, *, baseline_recording: bool):
         begin = np.array([0,0,0,0,0,0,0,0], dtype=np.uint8)
         
         self.task = Task()
@@ -42,7 +42,7 @@ class PsthTiltPlatform(AbstractContextManager):
         pre_time = 0.200
         post_time = 0.200
         bin_size = 0.020
-        baseline_recording = True
+        # baseline_recording = True
         self.baseline_recording = baseline_recording
         psth = Psth(channel_dict, pre_time, post_time, bin_size)
         if not baseline_recording:

@@ -11,6 +11,7 @@ import sys
 import atexit
 import functools
 import traceback
+import argparse
 
 import PyDAQmx
 from PyDAQmx import Task
@@ -124,7 +125,7 @@ def generate_tilt_sequence():
     np.random.shuffle(a)
     return a
 
-def record_data():
+def record_data(*, clock_source: str=""):
     # samples per second
     SAMPLE_RATE = 1250
     SAMPLE_BATCH_SIZE = SAMPLE_RATE
@@ -144,7 +145,7 @@ def record_data():
         task.ai_channels.add_ai_voltage_chan("Dev6/ai8:10")
         # task.timing.cfg_samp_clk_timing(1000, source = "", sample_mode= AcquisitionType.CONTINUOUS, samps_per_chan = 1000)
         # set sample rate slightly higher than actual sample rate, not sure if that's needed
-        clock_source = "/Dev6/PFI6"
+        # clock_source = "/Dev6/PFI6"
         # clock_source = ""
         task.timing.cfg_samp_clk_timing(SAMPLE_RATE+1, source=clock_source, sample_mode=AcquisitionType.CONTINUOUS, samps_per_chan=SAMPLE_BATCH_SIZE)
         task.triggers.start_trigger.cfg_dig_edge_start_trig("/Dev6/PFI8", trigger_edge=Edge.RISING)
@@ -202,8 +203,7 @@ def spawn_process(func, *args, **kwargs) -> Process:
     atexit.register(lambda: proc.terminate())
     return proc
 
-def run_non_psth_loop(platform: TiltPlatform, waiter: LineWait, tilt_sequence):
-    # first_run = True
+def run_non_psth_loop(platform: TiltPlatform, tilt_sequence):
     i = 0
     while True:
         try:
@@ -213,9 +213,6 @@ def run_non_psth_loop(platform: TiltPlatform, waiter: LineWait, tilt_sequence):
                     break
                 
                 platform.tilt(tilt_sequence[i])
-                # if first_run:
-                #     first_run = False
-                #     waiter.wait(False)
                 
                 i += 1
         except KeyboardInterrupt:
@@ -266,11 +263,25 @@ def run_psth_loop(platform: PsthTiltPlatform, tilt_sequence):
         print(('Accuracy = {} / {} = {}').format(correct_trials, len(psthclass.event_number_list), decoder_accuracy))
         print('Stop Plexon Recording.')
 
+def parse_args():
+    parser = argparse.ArgumentParser(description='')
+    parser.add_argument('--non-psth', action='store_true',
+        help='run the non psth loop')
+    parser.add_argument('--ext-clock', action='store_true',
+        help='use external clock for nidaq')
+    parser.add_argument('--no-start-pulse', action='store_true',
+        help='do not wait for plexon start pulse')
+    parser.add_argument('--not-baseline-recording', action='store_true',
+        help='set psth to not be baseline recording')
+    
+    args = parser.parse_args()
+    
+    return args
+
 def main():
-    try:
-        mode = sys.argv[1]
-    except IndexError:
-        mode = 'psth'
+    args = parse_args()
+    
+    mode = 'normal' if args.non_psth else 'psth'
     
     assert mode in ['psth', 'normal']
     
@@ -279,10 +290,12 @@ def main():
     
     tilt_sequence = generate_tilt_sequence()
     
-    spawn_process(record_data)
+    clock_source = '/Dev6/PFI6' if args.ext_clock else ''
+    spawn_process(record_data, clock_source=clock_source)
     
-    print("waiting for plexon start pulse")
-    line_wait("Dev4/port2/line1", True)
+    if not args.no_start_pulse:
+        print("waiting for plexon start pulse")
+        line_wait("Dev4/port2/line1", True)
     
     input("Press enter to start")
     print("Waiting 3 seconds ?")
@@ -292,19 +305,19 @@ def main():
     
     if mode == 'psth':
         print("running psth")
-        with PsthTiltPlatform() as platform:
+        baseline_recording = not args.not_baseline_recording
+        with PsthTiltPlatform(baseline_recording=baseline_recording) as platform:
             run_psth_loop(platform, tilt_sequence)
     elif mode == 'normal':
-        waiter = LineWait("Dev4/port2/line2")
         print("running non psth")
         with TiltPlatform() as platform:
-            run_non_psth_loop(platform, waiter, tilt_sequence)
+            run_non_psth_loop(platform, tilt_sequence)
     else:
         raise ValueError("Invalid mode")
     
-    
-    waiter.wait(False)
-    waiter.end()
+    # waiter = LineWait("Dev4/port2/line2")
+    # waiter.wait(False)
+    # waiter.end()
 
 if __name__ == '__main__':
     main()
