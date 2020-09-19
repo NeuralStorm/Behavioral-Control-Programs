@@ -1,7 +1,7 @@
 
 import time
 from random import randint
-from contextlib import ExitStack
+from contextlib import ExitStack, AbstractContextManager
 import csv
 from itertools import count
 from threading import Thread
@@ -9,6 +9,8 @@ from multiprocessing import Process
 from queue import Queue, Empty as QEmpty
 import sys
 import atexit
+import functools
+import traceback
 
 import PyDAQmx
 from PyDAQmx import Task
@@ -58,13 +60,16 @@ class LineReader:
     def __exit__(self, *exc):
         return self.task.__exit__(*exc)
 
-class TiltPlatform:
+class TiltPlatform(AbstractContextManager):
     def __init__(self):
         self.task = Task()
         
         self.task.CreateDOChan("/Dev4/port0/line0:7","",PyDAQmx.DAQmx_Val_ChanForAllLines)
         self.task.StartTask()
         self.begin()
+    
+    def __exit__(self, *exc):
+        self.close()
     
     def begin(self):
         begin = np.array([0,0,0,0,0,0,0,0], dtype=np.uint8)
@@ -141,7 +146,7 @@ def record_data():
         # set sample rate slightly higher than actual sample rate, not sure if that's needed
         clock_source = "/Dev6/PFI6"
         # clock_source = ""
-        task.timing.cfg_samp_clk_timing(SAMPLE_RATE+5, source=clock_source, sample_mode=AcquisitionType.CONTINUOUS, samps_per_chan=SAMPLE_BATCH_SIZE)
+        task.timing.cfg_samp_clk_timing(SAMPLE_RATE+1, source=clock_source, sample_mode=AcquisitionType.CONTINUOUS, samps_per_chan=SAMPLE_BATCH_SIZE)
         task.triggers.start_trigger.cfg_dig_edge_start_trig("/Dev6/PFI8", trigger_edge=Edge.RISING)
         
         csv_file = stack.enter_context(open(csv_path, 'w+', newline=''))
@@ -177,17 +182,28 @@ def record_data():
 
 def spawn_thread(func, *args, **kwargs) -> Thread:
     thread = Thread(target=func, args=args, kwargs=kwargs)
+    thread.daemon = True
     thread.start()
     return thread
 
+def print_errors(f, *args, **kwargs):
+    @functools.wraps(f)
+    def wrapper():
+        try:
+            f()
+        except:
+            traceback.print_exc()
+    
+    return wrapper
+
 def spawn_process(func, *args, **kwargs) -> Process:
-    proc = Process(target=func, args=args, kwargs=kwargs)
+    proc = Process(target=print_errors(func), args=args, kwargs=kwargs)
     proc.start()
     atexit.register(lambda: proc.terminate())
     return proc
 
 def run_non_psth_loop(platform: TiltPlatform, waiter: LineWait, tilt_sequence):
-    first_run = True
+    # first_run = True
     i = 0
     while True:
         try:
@@ -237,6 +253,7 @@ def run_psth_loop(platform: PsthTiltPlatform, tilt_sequence):
     psthclass = platform.psth
     
     if not platform.baseline_recording:
+        # pylint: disable=import-error
         from sklearn.metrics import confusion_matrix
         
         print('actual events:y axis, predicted events:x axis')
@@ -275,13 +292,13 @@ def main():
     
     if mode == 'psth':
         print("running psth")
-        platform = PsthTiltPlatform()
-        run_psth_loop(platform, tilt_sequence)
+        with PsthTiltPlatform() as platform:
+            run_psth_loop(platform, tilt_sequence)
     elif mode == 'normal':
         waiter = LineWait("Dev4/port2/line2")
         print("running non psth")
-        platform = TiltPlatform()
-        run_non_psth_loop(platform, waiter, tilt_sequence)
+        with TiltPlatform() as platform:
+            run_non_psth_loop(platform, waiter, tilt_sequence)
     else:
         raise ValueError("Invalid mode")
     

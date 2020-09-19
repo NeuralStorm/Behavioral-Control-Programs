@@ -1,6 +1,7 @@
 
 import time
 from random import randint
+from contextlib import ExitStack, AbstractContextManager
 
 import PyDAQmx
 from PyDAQmx import Task
@@ -9,7 +10,7 @@ import numpy as np
 
 from psth import PSTH as Psth
 
-class PsthTiltPlatform:
+class PsthTiltPlatform(AbstractContextManager):
     def __init__(self):
         begin = np.array([0,0,0,0,0,0,0,0], dtype=np.uint8)
         
@@ -48,9 +49,13 @@ class PsthTiltPlatform:
             psth.loadtemplate()
         self.psth = psth
     
+    def __exit__(self, *exc):
+        self.close()
+    
     def begin(self):
-        begin = np.array([0,0,0,0,0,0,0,0], dtype=np.uint8)
-        self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,begin,None,None)
+        pass
+        # begin = np.array([0,0,0,0,0,0,0,0], dtype=np.uint8)
+        # self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,begin,None,None)
     
     def close(self):
         self.task.StopTask()
