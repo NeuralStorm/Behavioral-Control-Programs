@@ -3,15 +3,19 @@ import time
 from random import randint
 from contextlib import ExitStack, AbstractContextManager
 
-import PyDAQmx
-from PyDAQmx import Task
-from pyplexclientts import PyPlexClientTSAPI, PL_SingleWFType, PL_ExtEventType
+# import PyDAQmx
+# from PyDAQmx import Task
+# from pyplexclientts import PyPlexClientTSAPI, PL_SingleWFType, PL_ExtEventType
 import numpy as np
 
 from psth import PSTH as Psth
 
 class PsthTiltPlatform(AbstractContextManager):
-    def __init__(self, *, baseline_recording: bool):
+    def __init__(self, *, baseline_recording: bool, mock: bool = False):
+        import PyDAQmx
+        from PyDAQmx import Task
+        from pyplexclientts import PyPlexClientTSAPI, PL_SingleWFType, PL_ExtEventType
+        
         begin = np.array([0,0,0,0,0,0,0,0], dtype=np.uint8)
         
         self.task = Task()
@@ -48,6 +52,8 @@ class PsthTiltPlatform(AbstractContextManager):
         if not baseline_recording:
             psth.loadtemplate()
         self.psth = psth
+        
+        self.no_spike_wait = False
     
     def __exit__(self, *exc):
         self.close()
@@ -57,14 +63,19 @@ class PsthTiltPlatform(AbstractContextManager):
         # begin = np.array([0,0,0,0,0,0,0,0], dtype=np.uint8)
         # self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,begin,None,None)
     
-    def close(self):
+    def close(self, *, save_template=True):
         self.task.StopTask()
         self.plex_client.close_client()
         
-        self.psth.psthtemplate()
-        self.psth.savetemplate()
+        if save_template:
+            self.psth.psthtemplate()
+            self.psth.savetemplate()
     
-    def tilt(self, tilt_type, water=False):
+    def tilt(self, tilt_type, water=False, *, sham_result=None):
+        import PyDAQmx
+        from PyDAQmx import Task
+        from pyplexclientts import PyPlexClientTSAPI, PL_SingleWFType, PL_ExtEventType
+        
         water_duration = 0.15
         # tilt_duration = 1.75
         
@@ -119,6 +130,12 @@ class PsthTiltPlatform(AbstractContextManager):
                             print('event')
                             self.psth.event(t.TimeStamp, t.Unit)
                             found_event = True
+            
+            if self.no_spike_wait:
+                # don't wait for a spike
+                if not found_event or not collected_ts:
+                    print("no spike events found")
+                break
         
         print('found event and collected ts')
         # ?if calc_psth == False and collected_ts == True:
@@ -128,7 +145,10 @@ class PsthTiltPlatform(AbstractContextManager):
         
         # ?if not self.baseline_recording and found_event and collected_ts:
         if not self.baseline_recording:
-            decoder_result = self.psth.decode()
+            if sham_result is not None:
+                decoder_result = sham_result
+            else:
+                decoder_result = self.psth.decode()
             print("decode")
             
             if decoder_result:
@@ -142,10 +162,19 @@ class PsthTiltPlatform(AbstractContextManager):
                 time.sleep(water_duration)
                 self.task_interrupt.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,begin,None,None)
                 time.sleep(2)
+        
+        delay = ((randint(1,50))/100)+ 1.5
+        
+        if sham_result is not None:
+            self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
+            print('delay (sham)')
+            time.sleep(delay)
+        if not self.baseline_recording and sham_result is True:
+            time.sleep(0.5)
+        
         self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
         print('delay')
         
-        delay = ((randint(1,50))/100)+ 1.5
         time.sleep(delay)
         
         if not self.baseline_recording:

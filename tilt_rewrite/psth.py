@@ -1,6 +1,5 @@
 #MAP System Online Decoder
 #from pyplexdo import PyPlexDO, DODigitalOutputInfo
-from pyplexclientts import PyPlexClientTSAPI, PL_SingleWFType, PL_ExtEventType
 import time
 import numpy
 from decimal import Decimal
@@ -270,6 +269,8 @@ class PSTH: ###Initiate PSTH with desired parameters, creates unit_dict which ha
 
 
 if __name__ =='__main__':
+    from pyplexclientts import PyPlexClientTSAPI, PL_SingleWFType, PL_ExtEventType
+    
     # Create instance of API class
     # New Format to compare Channel and Unit. 0 is unsorted. Channels are Dict Keys, Units are in each list.
     channel_dict = {1: [1,2], 2: [1,2], 3: [1,2,3], 4: [1,2,3],

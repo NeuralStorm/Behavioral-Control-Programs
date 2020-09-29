@@ -13,12 +13,19 @@ import functools
 import traceback
 import argparse
 
-import PyDAQmx
-from PyDAQmx import Task
+# import PyDAQmx
+# from PyDAQmx import Task
 import nidaqmx
 from nidaqmx.constants import LineGrouping, Edge, AcquisitionType, WAIT_INFINITELY
 import numpy as np
+
 from psth_tilt import PsthTiltPlatform
+from motor_control import MotorControl
+
+DEBUG_CONFIG = {
+    'motor_control': False,
+    'mock': False,
+}
 
 # start Dev4/port2/line1 True
 # stop  Dev4/port2/line2 False
@@ -62,22 +69,40 @@ class LineReader:
         return self.task.__exit__(*exc)
 
 class TiltPlatform(AbstractContextManager):
-    def __init__(self):
-        self.task = Task()
+    def __init__(self, mock: bool = False):
         
-        self.task.CreateDOChan("/Dev4/port0/line0:7","",PyDAQmx.DAQmx_Val_ChanForAllLines)
-        self.task.StartTask()
-        self.begin()
+        if DEBUG_CONFIG['motor_control']:
+            self.motor = MotorControl(mock = mock)
+        else:
+            import PyDAQmx
+            from PyDAQmx import Task
+            self.task = Task()
+            
+            self.task.CreateDOChan("/Dev4/port0/line0:7","",PyDAQmx.DAQmx_Val_ChanForAllLines)
+            self.task.StartTask()
+            self.begin()
     
     def __exit__(self, *exc):
         self.close()
     
     def begin(self):
+        assert not DEBUG_CONFIG['motor_control']
+        import PyDAQmx
         begin = np.array([0,0,0,0,0,0,0,0], dtype=np.uint8)
         self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,begin,None,None)
     
+    def stop(self):
+        if DEBUG_CONFIG['motor_control']:
+            self.motor.tilt('stop')
+        else:
+            self.begin()
+    
     def close(self):
-        self.task.StopTask()
+        if DEBUG_CONFIG['motor_control']:
+            self.motor.close()
+        else:
+            self.begin()
+            self.task.StopTask()
     
     def tilt(self, tilt_type, water=False):
         water_duration = 0.15
@@ -92,24 +117,40 @@ class TiltPlatform(AbstractContextManager):
         
         if tilt_type == 1:
             data = tilt1
+            tilt_name = 'a'
         elif tilt_type == 2:
             data = tilt3
+            tilt_name = 'b'
         elif tilt_type == 3:
             data = tilt4
+            tilt_name = 'c'
         elif tilt_type == 4:
             data = tilt6
+            tilt_name = 'd'
         else:
             raise ValueError("Invalid tilt type {}".format(tilt_type))
         
-        self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,data,None,None)
-        time.sleep(1) # should this be tilt duration?
-        self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,begin,None,None)
-        time.sleep(tilt_duration)
-        
-        if water:
-            self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,wateron,None,None)
-            time.sleep(water_duration)
+        if DEBUG_CONFIG['motor_control']:
+            self.motor.tilt(tilt_name)
+            time.sleep(1) # should this be tilt duration?
+            self.motor.tilt('stop')
+            time.sleep(tilt_duration) # ???
+            
+            if water:
+                self.motor.tilt('wateron')
+                time.sleep(water_duration)
+                self.motor.tilt('stop')
+        else:
+            import PyDAQmx
+            self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,data,None,None)
+            time.sleep(1) # should this be tilt duration?
             self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,begin,None,None)
+            time.sleep(tilt_duration) # ???
+            
+            if water:
+                self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,wateron,None,None)
+                time.sleep(water_duration)
+                self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,begin,None,None)
         
         delay = ((randint(1,100))/100)+1.5
         time.sleep(delay)
@@ -225,14 +266,32 @@ def run_non_psth_loop(platform: TiltPlatform, tilt_sequence):
                 
                 i += 1
         except KeyboardInterrupt:
-            platform.begin()
+            platform.stop()
             i += 1
-            input("\nPausing... (Hit ENTER to continue, ctrl-c again to quit.)")
+            try:
+                input("\nPausing... (Hit ENTER to continue, ctrl-c again to quit.)")
+            except KeyboardInterrupt:
+                break
             continue
         
         break
 
-def run_psth_loop(platform: PsthTiltPlatform, tilt_sequence):
+def run_psth_loop(platform: PsthTiltPlatform, tilt_sequence, *, sham):
+    psth = platform.psth
+    if sham:
+        event_num_mapping = {
+            1: 1, 2: 2, 3: 3, 4: 4,
+            9: 1, 11: 2, 12: 3, 14: 4,
+        }
+        tilt_sequence = [
+            event_num_mapping[x]
+            for x in psth.loaded_json_event_number_dict['ActualEvents']
+        ]
+        sham_decodes = [
+            event_num_mapping[x]
+            for x in psth.loaded_json_decode_number_dict['PredictedEvents']
+        ]
+    
     input_queue: 'Queue[str]' = Queue(1)
     def input_thread():
         cmd = input(">")
@@ -242,8 +301,13 @@ def run_psth_loop(platform: PsthTiltPlatform, tilt_sequence):
     
     spawn_thread(input_thread)
     
-    for tilt_type in tilt_sequence:
-        platform.tilt(tilt_type)
+    for i, tilt_type in enumerate(tilt_sequence):
+        if sham:
+            sham_result = tilt_type == sham_decodes[i]
+        else:
+            sham_result = None
+        
+        platform.tilt(tilt_type, sham_result=sham_result)
         
         try:
             _cmd: str = input_queue.get_nowait()
@@ -256,6 +320,7 @@ def run_psth_loop(platform: PsthTiltPlatform, tilt_sequence):
                 break
             input_queue.get()
     
+    platform.close(save_template=not sham)
     psthclass = platform.psth
     
     if not platform.baseline_recording:
@@ -282,6 +347,18 @@ def parse_args():
         help='do not wait for plexon start pulse')
     parser.add_argument('--not-baseline-recording', action='store_true',
         help='set psth to not be baseline recording')
+    parser.add_argument('--sham', action='store_true',
+        help='set psth to not be baseline recording')
+    parser.add_argument('--no-spike-wait', action='store_true',
+        help='set psth to not be baseline recording')
+    parser.add_argument('--no-record', action='store_true',
+        help='set psth to not be baseline recording')
+    
+    parser.add_argument('--mock', action='store_true',
+        help='set psth to not be baseline recording')
+    
+    parser.add_argument('--dbg-motor-control', action='store_true',
+        help='set psth to not be baseline recording')
     
     args = parser.parse_args()
     
@@ -289,6 +366,12 @@ def parse_args():
 
 def main():
     args = parse_args()
+    mock = args.mock
+    
+    if args.dbg_motor_control:
+        DEBUG_CONFIG['motor_control'] = True
+    if mock:
+        DEBUG_CONFIG['mock'] = True
     
     mode = 'normal' if args.non_psth else 'psth'
     
@@ -300,7 +383,8 @@ def main():
     tilt_sequence = generate_tilt_sequence()
     
     clock_source = '/Dev6/PFI6' if args.ext_clock else ''
-    spawn_process(_error_record_data, clock_source=clock_source)
+    if not args.no_record:
+        spawn_process(_error_record_data, clock_source=clock_source)
     
     if not args.no_start_pulse:
         print("waiting for plexon start pulse")
@@ -316,10 +400,12 @@ def main():
         print("running psth")
         baseline_recording = not args.not_baseline_recording
         with PsthTiltPlatform(baseline_recording=baseline_recording) as platform:
-            run_psth_loop(platform, tilt_sequence)
+            if args.no_spike_wait:
+                platform.no_spike_wait = True
+            run_psth_loop(platform, tilt_sequence, sham=args.sham)
     elif mode == 'normal':
         print("running non psth")
-        with TiltPlatform() as platform:
+        with TiltPlatform(mock=mock) as platform:
             run_non_psth_loop(platform, tilt_sequence)
     else:
         raise ValueError("Invalid mode")
