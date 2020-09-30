@@ -3,38 +3,35 @@ import time
 from random import randint
 from contextlib import ExitStack, AbstractContextManager
 
-# import PyDAQmx
-# from PyDAQmx import Task
-# from pyplexclientts import PyPlexClientTSAPI, PL_SingleWFType, PL_ExtEventType
 import numpy as np
 
 from psth import PSTH as Psth
+from motor_control import MotorControl
 
 class PsthTiltPlatform(AbstractContextManager):
-    def __init__(self, *, baseline_recording: bool, mock: bool = False):
-        import PyDAQmx
-        from PyDAQmx import Task
-        from pyplexclientts import PyPlexClientTSAPI, PL_SingleWFType, PL_ExtEventType
+    def __init__(self, *, baseline_recording: bool, save_template: bool = True, mock: bool = False):
         
-        begin = np.array([0,0,0,0,0,0,0,0], dtype=np.uint8)
+        self.mock = mock
+        self.save_template = save_template
         
-        self.task = Task()
+        self.motor = MotorControl(mock = mock)
+        self.motor.tilt('stop')
         
-        self.task.CreateDOChan("/Dev4/port0/line0:7","",PyDAQmx.DAQmx_Val_ChanForAllLines)
-        self.task.StartTask()
-        self.begin()
-        self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,begin,None,None)
+        self.motor_interrupt = MotorControl(port = 1, mock = mock)
+        self.motor_interrupt.tilt('stop')
         
-        task_interrupt = Task()
-        task_interrupt.CreateDOChan("/Dev4/port1/line0:7","",PyDAQmx.DAQmx_Val_ChanForAllLines)
-        task_interrupt.StartTask()
-        task_interrupt.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,begin,None,None)
-        self.task_interrupt = task_interrupt
-        
-        client = PyPlexClientTSAPI()
-        client.init_client()
-        self.plex_client = client
-        _nores = client.get_ts() # ?
+        if mock:
+            self.PL_SingleWFType = 0
+            self.PL_ExtEventType = 0
+            self.plex_client = None
+        else:
+            from pyplexclientts import PyPlexClientTSAPI, PL_SingleWFType, PL_ExtEventType
+            client = PyPlexClientTSAPI()
+            client.init_client()
+            self.PL_SingleWFType = PL_SingleWFType
+            self.PL_ExtEventType = PL_ExtEventType
+            self.plex_client = client
+        _nores = self._get_ts() # ?
         
         channel_dict = {
             1: [1], 2: [1,2], 3: [1,2], 4: [1,2],
@@ -46,65 +43,67 @@ class PsthTiltPlatform(AbstractContextManager):
         pre_time = 0.200
         post_time = 0.200
         bin_size = 0.020
-        # baseline_recording = True
         self.baseline_recording = baseline_recording
         psth = Psth(channel_dict, pre_time, post_time, bin_size)
         if not baseline_recording:
             psth.loadtemplate()
         self.psth = psth
         
+        if mock:
+            self.psth.event(10, 1)
+            # for v in channel_dict.values():
+            #     for c in v:
+            #         for i in range(0, 1000, 10):
+            #             self.psth.event(i, c)
+        
         self.no_spike_wait = False
     
     def __exit__(self, *exc):
         self.close()
     
-    def begin(self):
-        pass
-        # begin = np.array([0,0,0,0,0,0,0,0], dtype=np.uint8)
-        # self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,begin,None,None)
-    
-    def close(self, *, save_template=True):
-        self.task.StopTask()
-        self.plex_client.close_client()
+    def close(self, *, save_template=None):
+        if save_template is None:
+            save_template = self.save_template
+        self.motor.close()
+        self.motor_interrupt.close()
+        if not self.mock:
+            self.plex_client.close_client()
         
         if save_template:
             self.psth.psthtemplate()
             self.psth.savetemplate()
     
+    def _get_ts(self):
+        if self.mock:
+            return []
+        else:
+            res = self.plex_client.get_ts()
+            return res
+    
     def tilt(self, tilt_type, water=False, *, sham_result=None):
-        import PyDAQmx
-        from PyDAQmx import Task
-        from pyplexclientts import PyPlexClientTSAPI, PL_SingleWFType, PL_ExtEventType
-        
         water_duration = 0.15
         # tilt_duration = 1.75
         
-        tilt1 = np.array([1,0,0,1,0,0,0,0], dtype=np.uint8)
-        tilt3 = np.array([1,1,0,1,0,0,0,0], dtype=np.uint8)
-        tilt4 = np.array([0,0,1,1,0,0,0,0], dtype=np.uint8)
-        tilt6 = np.array([0,1,1,1,0,0,0,0], dtype=np.uint8)
-        begin = np.array([0,0,0,0,0,0,0,0], dtype=np.uint8)
-        wateron = np.array([0,0,0,0,1,0,0,0], dtype=np.uint8)
-        
-        punish  = np.array([0,0,1,0,0,0,0,0], dtype=np.uint8)
-        reward  = np.array([0,0,1,1,0,0,0,0], dtype=np.uint8)
-        
         if tilt_type == 1:
-            data = tilt1
+            # data = tilt1
+            tilt_name = 'a'
         elif tilt_type == 2:
-            data = tilt3
+            # data = tilt3
+            tilt_name = 'b'
         elif tilt_type == 3:
-            data = tilt4
+            # data = tilt4
+            tilt_name = 'c'
         elif tilt_type == 4:
-            data = tilt6
+            # data = tilt6
+            tilt_name = 'd'
         else:
             raise ValueError("Invalid tilt type {}".format(tilt_type))
         
         # ?Time dependent section. Will include the client and decode here.
         # ?if tiltbool == False:
-        res = self.plex_client.get_ts()
+        res = self._get_ts()
         time.sleep(self.psth.pre_time)
-        self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,data,None,None)
+        self.motor.tilt(tilt_name)
         time.sleep(self.psth.post_time)
         time.sleep(0.075)
         
@@ -112,10 +111,10 @@ class PsthTiltPlatform(AbstractContextManager):
         found_event = False
         collected_ts = False
         while found_event == False or collected_ts == False:
-            res = self.plex_client.get_ts()
+            res = self._get_ts()
             
             for t in res: # 50ms ?
-                if t.Type == PL_SingleWFType \
+                if t.Type == self.PL_SingleWFType \
                     and t.Channel in self.psth.total_channel_dict.keys() \
                     and t.Unit in self.psth.total_channel_dict[t.Channel]:
                     
@@ -124,7 +123,7 @@ class PsthTiltPlatform(AbstractContextManager):
                         if not collected_ts:
                             collected_ts = True
                             print("collected ts")
-                    if t.Type == PL_ExtEventType:
+                    if t.Type == self.PL_ExtEventType:
                         if t.Channel == 257 and not found_event:
                             print(('Event Ts: {}s Ch: {} Unit: {}').format(t.TimeStamp, t.Channel, t.Unit))
                             print('event')
@@ -152,27 +151,27 @@ class PsthTiltPlatform(AbstractContextManager):
             print("decode")
             
             if decoder_result:
-                self.task_interrupt.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,reward,None,None)
-                self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,wateron,None,None)
+                self.motor_interrupt.tilt('reward')
+                self.motor.tilt('wateron')
                 time.sleep(water_duration)
-                self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,begin,None,None)
-                self.task_interrupt.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,begin,None,None)
+                self.motor.tilt('stop')
+                self.motor_interrupt.tilt('stop')
             else:
-                self.task_interrupt.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,punish,None,None)
+                self.motor_interrupt.tilt('punish')
                 time.sleep(water_duration)
-                self.task_interrupt.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,begin,None,None)
+                self.motor_interrupt.tilt('stop')
                 time.sleep(2)
         
         delay = ((randint(1,50))/100)+ 1.5
         
         if sham_result is not None:
-            self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
+            self.motor.tilt('stop')
             print('delay (sham)')
             time.sleep(delay)
         if not self.baseline_recording and sham_result is True:
             time.sleep(0.5)
         
-        self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
+        self.motor.tilt('stop')
         print('delay')
         
         time.sleep(delay)

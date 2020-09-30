@@ -1,6 +1,6 @@
 
 class MotorControl:
-    def __init__(self, *, mock: bool = False):
+    def __init__(self, *, port: int = 0, mock: bool = False):
         self.mock: bool = mock
         
         if mock:
@@ -8,7 +8,7 @@ class MotorControl:
         else:
             import nidaqmx
             task = nidaqmx.Task()
-            task.do_channels.add_do_chan("/Dev4/port0/line0:7")
+            task.do_channels.add_do_chan(f"/Dev4/port{port}/line0:7")
             
             task.start()
             
@@ -25,6 +25,8 @@ class MotorControl:
             'c': [0,0,1,1,0,0,0,0],
             # tilt6 / 4 / 14
             'd': [0,1,1,1,0,0,0,0],
+            'reward': [0,0,1,1,0,0,0,0],
+            'punish': [0,0,1,0,0,0,0,0],
             'wateron': [0,0,0,0,1,0,0,0],
         }
         

@@ -1,3 +1,6 @@
+"""
+python main.py --mock --no-record --dbg-motor-control --no-start-pulse --no-spike-wait --no-save-template
+"""
 
 import time
 from random import randint
@@ -13,8 +16,6 @@ import functools
 import traceback
 import argparse
 
-# import PyDAQmx
-# from PyDAQmx import Task
 import nidaqmx
 from nidaqmx.constants import LineGrouping, Edge, AcquisitionType, WAIT_INFINITELY
 import numpy as np
@@ -320,7 +321,7 @@ def run_psth_loop(platform: PsthTiltPlatform, tilt_sequence, *, sham):
                 break
             input_queue.get()
     
-    platform.close(save_template=not sham)
+    platform.close()
     psthclass = platform.psth
     
     if not platform.baseline_recording:
@@ -348,17 +349,19 @@ def parse_args():
     parser.add_argument('--not-baseline-recording', action='store_true',
         help='set psth to not be baseline recording')
     parser.add_argument('--sham', action='store_true',
-        help='set psth to not be baseline recording')
+        help='')
     parser.add_argument('--no-spike-wait', action='store_true',
-        help='set psth to not be baseline recording')
+        help='')
     parser.add_argument('--no-record', action='store_true',
-        help='set psth to not be baseline recording')
+        help='')
+    parser.add_argument('--no-save-template', action='store_true',
+        help='')
     
     parser.add_argument('--mock', action='store_true',
-        help='set psth to not be baseline recording')
+        help="")
     
     parser.add_argument('--dbg-motor-control', action='store_true',
-        help='set psth to not be baseline recording')
+        help='use pydaqmx in non psth mode (psth mode always uses nidaqmx)')
     
     args = parser.parse_args()
     
@@ -368,7 +371,7 @@ def main():
     args = parse_args()
     mock = args.mock
     
-    if args.dbg_motor_control:
+    if not args.dbg_motor_control:
         DEBUG_CONFIG['motor_control'] = True
     if mock:
         DEBUG_CONFIG['mock'] = True
@@ -399,7 +402,11 @@ def main():
     if mode == 'psth':
         print("running psth")
         baseline_recording = not args.not_baseline_recording
-        with PsthTiltPlatform(baseline_recording=baseline_recording) as platform:
+        with PsthTiltPlatform(
+            baseline_recording = baseline_recording,
+            save_template = not args.no_save_template and not args.sham,
+            mock = mock,
+        ) as platform:
             if args.no_spike_wait:
                 platform.no_spike_wait = True
             run_psth_loop(platform, tilt_sequence, sham=args.sham)
