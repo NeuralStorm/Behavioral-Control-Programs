@@ -190,7 +190,7 @@ def record_data(*, clock_source: str=""):
         # clock_source = "/Dev6/PFI6"
         # clock_source = ""
         task.timing.cfg_samp_clk_timing(SAMPLE_RATE+1, source=clock_source, sample_mode=AcquisitionType.CONTINUOUS, samps_per_chan=SAMPLE_BATCH_SIZE)
-        task.triggers.start_trigger.cfg_dig_edge_start_trig("/Dev6/PFI8", trigger_edge=Edge.RISING)
+        # task.triggers.start_trigger.cfg_dig_edge_start_trig("/Dev6/PFI8", trigger_edge=Edge.RISING)
         
         csv_file = stack.enter_context(open(csv_path, 'w+', newline=''))
         writer = csv.writer(csv_file)
