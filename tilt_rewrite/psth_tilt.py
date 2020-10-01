@@ -38,7 +38,8 @@ class PsthTiltPlatform(AbstractContextManager):
             6: [1,2], 7: [1,2,3,4], 8: [1,2,3],
             9: [1,2,3], 13: [1,2,3,4], 14: [1,2],
             20: [1,2,3], 25: [1,2], 26: [1], 27: [1], 28: [1],
-            31: [1]
+            31: [1],
+            55: [1,2,3,4],
         }
         pre_time = 0.200
         post_time = 0.200
@@ -50,11 +51,20 @@ class PsthTiltPlatform(AbstractContextManager):
         self.psth = psth
         
         if mock:
-            self.psth.event(10, 1)
+            # self.psth.event(10, 1)
             # for v in channel_dict.values():
             #     for c in v:
             #         for i in range(0, 1000, 10):
             #             self.psth.event(i, c)
+            
+            for t in range(0, 1000, 10):
+                for chan, units in channel_dict.items():
+                    self.psth.event(t, units[0])
+                    self.psth.build_unit(chan, units[0], t+1)
+                    for unit in units:
+                        # self.psth.event(t, unit)
+                        # self.psth.build_unit(chan, unit, t)
+                        pass
         
         self.no_spike_wait = False
     
@@ -123,12 +133,12 @@ class PsthTiltPlatform(AbstractContextManager):
                         if not collected_ts:
                             collected_ts = True
                             print("collected ts")
-                    if t.Type == self.PL_ExtEventType:
-                        if t.Channel == 257 and not found_event:
-                            print(('Event Ts: {}s Ch: {} Unit: {}').format(t.TimeStamp, t.Channel, t.Unit))
-                            print('event')
-                            self.psth.event(t.TimeStamp, t.Unit)
-                            found_event = True
+                if t.Type == self.PL_ExtEventType:
+                    if t.Channel == 257 and not found_event:
+                        print(('Event Ts: {}s Ch: {} Unit: {}').format(t.TimeStamp, t.Channel, t.Unit))
+                        print('event')
+                        self.psth.event(t.TimeStamp, t.Unit)
+                        found_event = True
             
             if self.no_spike_wait:
                 # don't wait for a spike

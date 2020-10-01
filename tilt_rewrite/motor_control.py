@@ -35,7 +35,7 @@ class MotorControl:
     def close(self):
         self.tilt('stop')
         if not self.mock:
-            self.task.stop()
+            self.task.close()
     
     def _print_mock_debug(self, data):
         for k, v in self.tilt_types.items():
@@ -43,12 +43,20 @@ class MotorControl:
                 print(f"mock tilt {k}")
                 return
         
-        print(f"mock tilt {data}")
+        bin_str = "".join(reversed(f"{data[0]:0>8b}"))
+        assert len(data) == 1
+        print(f"mock tilt {bin_str}")
     
     def send_raw_tilt(self, data):
         assert len(data) == 8
         for x in data:
             assert x in [0, 1]
+        
+        num = 0
+        for bit in reversed(data):
+            num <<= 1
+            num += bit
+        data = [num]
         
         if not self.mock:
             self.task.write(data)
