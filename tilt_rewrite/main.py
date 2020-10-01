@@ -156,14 +156,17 @@ class TiltPlatform(AbstractContextManager):
         delay = ((randint(1,100))/100)+1.5
         time.sleep(delay)
 
-def generate_tilt_sequence():
+def generate_tilt_sequence(num_tilts):
     #No event 2 and 4 for early training
     #because they are the fast tilts and animals take longer to get used to them
     
-    a = [1]*100
-    a.extend([2]*100)
-    a.extend([3]*100)
-    a.extend([4]*100)
+    assert num_tilts % 4 == 0, "num tilts must be divisable by 4"
+    n = num_tilts // 4
+    
+    a = [1]*n
+    a.extend([2]*n)
+    a.extend([3]*n)
+    a.extend([4]*n)
     np.random.shuffle(a)
     return a
 
@@ -356,6 +359,8 @@ def parse_args():
         help='')
     parser.add_argument('--no-save-template', action='store_true',
         help='')
+    parser.add_argument('--num-tilts', type=int, default=400,
+        help='number of tilts to do, must be divisible by 4 (default 400)')
     
     parser.add_argument('--mock', action='store_true',
         help="")
@@ -383,7 +388,7 @@ def main():
     # line_wait("Dev4/port2/line2", False)
     # waiter = LineWait("Dev4/port2/line2")
     
-    tilt_sequence = generate_tilt_sequence()
+    tilt_sequence = generate_tilt_sequence(args.num_tilts)
     
     clock_source = '/Dev6/PFI6' if args.ext_clock else ''
     if not args.no_record:
