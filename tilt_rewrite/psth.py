@@ -55,6 +55,7 @@ class PSTH: ###Initiate PSTH with desired parameters, creates unit_dict which ha
 
     def event(self, event_ts, event_unit):
         #Need to check that it's not a duplicate event...
+        print(event_ts, self.current_ts)
         if (event_ts - self.current_ts) > 1:
             print('event def')
             self.event_count = self.event_count + 1                             #Total count of events (number of events that occurred)
@@ -166,7 +167,7 @@ class PSTH: ###Initiate PSTH with desired parameters, creates unit_dict which ha
             print('decoder incorrect')
             return False
 
-    def savetemplate(self):
+    def savetemplate(self, output_path):
         json_event_number_dict = {'ActualEvents':self.event_number_list}
         json_decode_number_dict = {'PredictedEvents':self.decoder_list}
         json_channel_dict = {'ChannelDict':self.channel_dict}
@@ -176,13 +177,15 @@ class PSTH: ###Initiate PSTH with desired parameters, creates unit_dict which ha
         jsondata.update(json_decode_number_dict) #Tilt list Predicted
         jsondata.update(json_channel_dict)
         #jsondata.update() #Something else?
-        name = input('What would you like to name the template file:')
-        with open(name +'.txt', 'w') as outfile:
+        # name = input('What would you like to name the template file:')
+        # with open(name +'.txt', 'w') as outfile:
+        with open(output_path, 'w') as outfile:
             json.dump(jsondata, outfile)
     
-    def loadtemplate(self):
-        name = input('What template file would you like to open: ')
-        with open(name + '.txt') as infile:
+    def loadtemplate(self, input_path):
+        # name = input('What template file would you like to open: ')
+        # with open(name + '.txt') as infile:
+        with open(input_path) as infile:
             data = json.load(infile)
         self.loaded_template = data
         self.loaded_psth_templates = {}

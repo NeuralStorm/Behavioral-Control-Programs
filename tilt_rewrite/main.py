@@ -359,6 +359,10 @@ def parse_args():
         help='')
     parser.add_argument('--no-save-template', action='store_true',
         help='')
+    parser.add_argument('--template-out',
+        help='output path for generated template')
+    parser.add_argument('--template-in',
+        help='input path for template')
     parser.add_argument('--num-tilts', type=int, default=400,
         help='number of tilts to do, must be divisible by 4 (default 400)')
     
@@ -410,6 +414,8 @@ def main():
         with PsthTiltPlatform(
             baseline_recording = baseline_recording,
             save_template = not args.no_save_template and not args.sham,
+            template_output_path = args.template_out,
+            template_in_path = args.template_in,
             mock = mock,
         ) as platform:
             if args.no_spike_wait:

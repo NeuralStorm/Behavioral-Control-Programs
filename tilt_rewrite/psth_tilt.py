@@ -9,10 +9,20 @@ from psth import PSTH as Psth
 from motor_control import MotorControl
 
 class PsthTiltPlatform(AbstractContextManager):
-    def __init__(self, *, baseline_recording: bool, save_template: bool = True, mock: bool = False):
+    def __init__(self, *, 
+            baseline_recording: bool,
+            save_template: bool = True,
+            template_output_path,
+            template_in_path,
+            mock: bool = False,
+            ):
         
         self.mock = mock
         self.save_template = save_template
+        self.template_output_path = template_output_path
+        self.template_in_path = template_in_path
+        if save_template:
+            assert self.template_output_path is not None
         
         self.motor = MotorControl(mock = mock)
         self.motor.tilt('stop')
@@ -47,7 +57,9 @@ class PsthTiltPlatform(AbstractContextManager):
         self.baseline_recording = baseline_recording
         psth = Psth(channel_dict, pre_time, post_time, bin_size)
         if not baseline_recording:
-            psth.loadtemplate()
+            assert template_in_path is not None
+        if template_in_path is not None:
+            psth.loadtemplate(template_in_path)
         self.psth = psth
         
         if mock:
@@ -57,21 +69,36 @@ class PsthTiltPlatform(AbstractContextManager):
             #         for i in range(0, 1000, 10):
             #             self.psth.event(i, c)
             
-            for t in range(0, 1000, 10):
-                for chan, units in channel_dict.items():
+            for t in range(10, 21, 10):
+                # for chan, units in channel_dict.items():
+                    # chan, units = next(iter(channel_dict.items()))
+                    chan = 55
+                    units = [1]
+                    # self.psth.build_unit(chan, units[0], t-2)
                     self.psth.event(t, units[0])
-                    self.psth.build_unit(chan, units[0], t+1)
+                    self.psth.build_unit(chan, units[0], t+2)
+                    
+                    self.psth.psth(True, self.baseline_recording)
+                    if not self.baseline_recording:
+                        self.psth.psth(False, self.baseline_recording)
+                        
+                        self.psth.decode()
                     for unit in units:
                         # self.psth.event(t, unit)
                         # self.psth.build_unit(chan, unit, t)
                         pass
         
         self.no_spike_wait = False
+        self.closed = False
     
     def __exit__(self, *exc):
         self.close()
     
     def close(self, *, save_template=None):
+        if self.closed == True:
+            return
+        self.closed = True
+        
         if save_template is None:
             save_template = self.save_template
         self.motor.close()
@@ -81,7 +108,7 @@ class PsthTiltPlatform(AbstractContextManager):
         
         if save_template:
             self.psth.psthtemplate()
-            self.psth.savetemplate()
+            self.psth.savetemplate(self.template_output_path)
     
     def _get_ts(self):
         if self.mock:
@@ -148,9 +175,10 @@ class PsthTiltPlatform(AbstractContextManager):
         
         print('found event and collected ts')
         # ?if calc_psth == False and collected_ts == True:
-        self.psth.psth(True, self.baseline_recording)
-        if not self.baseline_recording:
-            self.psth.psth(False, self.baseline_recording)
+        if not self.mock:
+            self.psth.psth(True, self.baseline_recording)
+            if not self.baseline_recording:
+                self.psth.psth(False, self.baseline_recording)
         
         # ?if not self.baseline_recording and found_event and collected_ts:
         if not self.baseline_recording:
