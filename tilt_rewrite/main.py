@@ -257,7 +257,7 @@ def spawn_process(func, *args, **kwargs) -> Process:
     atexit.register(lambda: proc.terminate())
     return proc
 
-def run_non_psth_loop(platform: TiltPlatform, tilt_sequence):
+def run_non_psth_loop(platform: TiltPlatform, tilt_sequence, *, num_tilts):
     i = 0
     while True:
         try:
@@ -424,7 +424,7 @@ def main():
     elif mode == 'normal':
         print("running non psth")
         with TiltPlatform(mock=mock) as platform:
-            run_non_psth_loop(platform, tilt_sequence)
+            run_non_psth_loop(platform, tilt_sequence, num_tilts=args.num_tilts)
     else:
         raise ValueError("Invalid mode")
     
