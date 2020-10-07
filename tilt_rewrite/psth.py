@@ -3,7 +3,7 @@
 import time
 import numpy
 from decimal import Decimal
-from collections import Counter
+from collections import Counter, defaultdict
 import json
 import copy
 #TODO: CSV for channels. Include post time window of event. Need to save population response (dict? key as event_count) from an event  so that they are all saved.
@@ -33,7 +33,8 @@ class PSTH: ###Initiate PSTH with desired parameters, creates unit_dict which ha
         self.json_template_unit_dict = {}
         self.json_template_total_units = 0
         self.event_count = 0
-        self.current_ts = 0
+        self.current_ts = -1000
+        self.current_ts_by_channel = defaultdict(lambda: 0)
         
         self.responses = 0 ### testing number of responses
         # print('channel_dict', self.channel_dict)
@@ -46,29 +47,47 @@ class PSTH: ###Initiate PSTH with desired parameters, creates unit_dict which ha
 
         self.unit_dict_template = copy.deepcopy(self.unit_dict)
         # print('unit_dict', self.unit_dict) 
+    
     ###### build_unit will be used to gather timestamps from plexon and add them to the unit_dict which will be used to compare psth formats, etc.
     def build_unit(self, tmp_channel, tmp_unit, tmp_timestamp):
+        if tmp_channel not in self.total_channel_dict or tmp_unit not in self.total_channel_dict[tmp_channel]:
+            return
+        
+        relevent = False
         if tmp_channel in self.channel_dict.keys() and tmp_unit in self.channel_dict[tmp_channel]:
             self.unit_dict[tmp_channel][tmp_unit].append(Decimal(tmp_timestamp).quantize(Decimal('1.0000')))
+            relevent = True
         if tmp_channel in self.json_template_channel_dict.keys() and tmp_unit in self.json_template_channel_dict[tmp_channel]:
             self.json_template_unit_dict[tmp_channel][tmp_unit].append(Decimal(tmp_timestamp).quantize(Decimal('1.0000')))
+            relevent = True
+        
+        return relevent
 
     def event(self, event_ts, event_unit):
         #Need to check that it's not a duplicate event...
-        print(event_ts, self.current_ts)
+        # print("event_ts", event_ts, self.current_ts)
+        # if (event_ts - self.current_ts) > 1:
         if (event_ts - self.current_ts) > 1:
-            print('event def')
+            # print('event def')
             self.event_count = self.event_count + 1                             #Total count of events (number of events that occurred)
             self.current_ts = event_ts                                          #Timestamp of the current event
+            # self.current_ts_by_channel[event_unit] = event_ts
             self.current_event = event_unit                                     #Event number of the current event
+            # event_number_list is set in psth since event is sometimes called when psth is not
+            # event_ts_list isn't effected since it doesn't appear to be used
             self.event_ts_list.append(event_ts)                                 #List of timestamps
-            self.event_number_list.append(event_unit)                           #List of event number
+            # self.event_number_list.append(event_unit)                           #List of event number
             return True
         else:
+            print("duplicate event ignored")
             return False
 
 
     def psth(self, json_template, baseline_recording):
+        assert self.current_event is not None
+        if json_template == True:
+            self.event_number_list.append(self.current_event)
+        
         ### Create relative response from population on given trial
         ### Relative response dimensions:
         ### unit:total bins #population: units * total bins
@@ -121,6 +140,8 @@ class PSTH: ###Initiate PSTH with desired parameters, creates unit_dict which ha
                         self.json_template_pop_current_response = json_pop_trial_response
 
             self.json_template_unit_dict = copy.deepcopy(self.json_template_unit_dict_template) #Reset unit_dict to save computational time later
+        
+        # self.current_event = None
 
     def psthtemplate(self): #Reshape into PSTH format Trials x (Neurons x Bins) Used at the end of all trials.
         #Counts the events
@@ -180,7 +201,7 @@ class PSTH: ###Initiate PSTH with desired parameters, creates unit_dict which ha
         # name = input('What would you like to name the template file:')
         # with open(name +'.txt', 'w') as outfile:
         with open(output_path, 'w') as outfile:
-            json.dump(jsondata, outfile)
+            json.dump(jsondata, outfile, indent=2)
     
     def loadtemplate(self, input_path):
         # name = input('What template file would you like to open: ')

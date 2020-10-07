@@ -51,7 +51,7 @@ class PsthTiltPlatform(AbstractContextManager):
             31: [1],
             55: [1,2,3,4],
         }
-        pre_time = 0.200
+        pre_time = 0.0
         post_time = 0.200
         bin_size = 0.020
         self.baseline_recording = baseline_recording
@@ -70,13 +70,16 @@ class PsthTiltPlatform(AbstractContextManager):
             #             self.psth.event(i, c)
             
             for t in range(10, 21, 10):
-                # for chan, units in channel_dict.items():
+                self.psth.event(t, 1)
+                for chan, units in channel_dict.items():
                     # chan, units = next(iter(channel_dict.items()))
-                    chan = 55
-                    units = [1]
+                    # chan = 55
+                    # units = [1]
                     # self.psth.build_unit(chan, units[0], t-2)
-                    self.psth.event(t, units[0])
+                    # self.psth.event(t, units[0])
+                    # self.psth.event(t+2, units[0])
                     self.psth.build_unit(chan, units[0], t+2)
+                    self.psth.build_unit(chan, units[0], t+6)
                     
                     self.psth.psth(True, self.baseline_recording)
                     if not self.baseline_recording:
@@ -119,6 +122,7 @@ class PsthTiltPlatform(AbstractContextManager):
     
     def tilt(self, tilt_type, water=False, *, sham_result=None):
         water_duration = 0.15
+        punish_duration = 2
         # tilt_duration = 1.75
         
         if tilt_type == 1:
@@ -142,7 +146,7 @@ class PsthTiltPlatform(AbstractContextManager):
         time.sleep(self.psth.pre_time)
         self.motor.tilt(tilt_name)
         time.sleep(self.psth.post_time)
-        time.sleep(0.075)
+        # time.sleep(0.075)
         
         
         found_event = False
@@ -151,15 +155,18 @@ class PsthTiltPlatform(AbstractContextManager):
             res = self._get_ts()
             
             for t in res: # 50ms ?
-                if t.Type == self.PL_SingleWFType \
-                    and t.Channel in self.psth.total_channel_dict.keys() \
-                    and t.Unit in self.psth.total_channel_dict[t.Channel]:
+                if t.Type == self.PL_SingleWFType: #\
+                    # and t.Channel in self.psth.total_channel_dict.keys() \
+                    # and t.Unit in self.psth.total_channel_dict[t.Channel]:
                     
-                    self.psth.build_unit(t.Channel, t.Unit, t.TimeStamp)
-                    if found_event and t.TimeStamp >= (self.psth.current_ts + self.psth.post_time):
-                        if not collected_ts:
-                            collected_ts = True
-                            print("collected ts")
+                    is_relevent_channel = self.psth.build_unit(t.Channel, t.Unit, t.TimeStamp)
+                    if is_relevent_channel:
+                        collected_ts = True
+                        print("collected ts")
+                        # if found_event and t.TimeStamp >= (self.psth.current_ts + self.psth.post_time):
+                        #     if not collected_ts:
+                        #         collected_ts = True
+                        #         print("collected ts")
                 if t.Type == self.PL_ExtEventType:
                     if t.Channel == 257 and not found_event:
                         print(('Event Ts: {}s Ch: {} Unit: {}').format(t.TimeStamp, t.Channel, t.Unit))
@@ -170,12 +177,12 @@ class PsthTiltPlatform(AbstractContextManager):
             if self.no_spike_wait:
                 # don't wait for a spike
                 if not found_event or not collected_ts:
-                    print("no spike events found")
+                    print("WARNING: no spike events found for trial. THIS SHOULD NOT HAPPEN. TELL DR MOXON")
                 break
         
         print('found event and collected ts')
         # ?if calc_psth == False and collected_ts == True:
-        if not self.mock:
+        if collected_ts == True:
             self.psth.psth(True, self.baseline_recording)
             if not self.baseline_recording:
                 self.psth.psth(False, self.baseline_recording)
@@ -196,24 +203,24 @@ class PsthTiltPlatform(AbstractContextManager):
                 self.motor_interrupt.tilt('stop')
             else:
                 self.motor_interrupt.tilt('punish')
-                time.sleep(water_duration)
+                time.sleep(punish_duration)
                 self.motor_interrupt.tilt('stop')
-                time.sleep(2)
+                # time.sleep(2)
         
         delay = ((randint(1,50))/100)+ 1.5
         
-        if sham_result is not None:
-            self.motor.tilt('stop')
-            print('delay (sham)')
-            time.sleep(delay)
-        if not self.baseline_recording and sham_result is True:
-            time.sleep(0.5)
+        # if sham_result is not None:
+        #     self.motor.tilt('stop')
+        #     print('delay (sham)')
+        #     time.sleep(delay)
+        # if not self.baseline_recording and sham_result is True:
+        #     time.sleep(0.5)
         
         self.motor.tilt('stop')
         print('delay')
         
         time.sleep(delay)
         
-        if not self.baseline_recording:
-            if decoder_result:
-                time.sleep(0.5)
+        # if not self.baseline_recording:
+        #     if decoder_result:
+        #         time.sleep(0.5)

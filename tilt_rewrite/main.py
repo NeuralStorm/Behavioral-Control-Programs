@@ -1,5 +1,6 @@
 """
 python main.py --mock --no-record --dbg-motor-control --no-start-pulse --no-spike-wait --no-save-template
+python main.py --mock --no-record --no-start-pulse --no-spike-wait --num-tilts 4 --template-out x.json
 """
 
 import time
