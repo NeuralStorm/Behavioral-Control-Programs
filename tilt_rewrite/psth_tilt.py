@@ -1,6 +1,7 @@
 
 import time
 from random import randint
+import random
 from contextlib import ExitStack, AbstractContextManager
 
 import numpy as np
@@ -55,11 +56,15 @@ class PsthTiltPlatform(AbstractContextManager):
         post_time = 0.200
         bin_size = 0.020
         self.baseline_recording = baseline_recording
+        event_num_mapping = {
+            1: 1, 2: 2, 3: 3, 4: 4,
+            9: 1, 11: 2, 12: 3, 14: 4,
+        }
         psth = Psth(channel_dict, pre_time, post_time, bin_size)
         if not baseline_recording:
             assert template_in_path is not None
         if template_in_path is not None:
-            psth.loadtemplate(template_in_path)
+            psth.loadtemplate(template_in_path, event_num_mapping=event_num_mapping)
         self.psth = psth
         
         if mock:
@@ -120,7 +125,35 @@ class PsthTiltPlatform(AbstractContextManager):
             res = self.plex_client.get_ts()
             return res
     
-    def tilt(self, tilt_type, water=False, *, sham_result=None):
+    def tilt(self, tilt_type, water=False, *, sham_result=None, delay=None):
+        tilt_record = {
+            'system_time': time.perf_counter(),
+            'tilt_type': tilt_type,
+            'events': [],
+            'warnings': [],
+            'got_response': None,
+            'delay': None,
+            'decoder_result': None,
+            'decoder_result_source': None,
+        }
+        def add_event_to_record(event, *, ignored=None, relevent=None):
+            rec = {
+                'type': None,
+                'ignored': ignored,
+                'relevent': relevent,
+                'time': t.Timestamp,
+                'channel': t.Channel,
+                'unit': t.Unit,
+            }
+            if event.Type == self.PL_SingleWFType:
+                rec['type'] = 'spike'
+            elif event.Type == self.PL_ExtEventType:
+                rec['type'] = 'tilt'
+            else:
+                rec['type'] = event.Type
+            
+            tilt_record['events'].append(rec)
+        
         water_duration = 0.15
         punish_duration = 2
         # tilt_duration = 1.75
@@ -143,6 +176,8 @@ class PsthTiltPlatform(AbstractContextManager):
         # ?Time dependent section. Will include the client and decode here.
         # ?if tiltbool == False:
         res = self._get_ts()
+        for event in res:
+            add_event_to_record(event, ignored=True)
         time.sleep(self.psth.pre_time)
         self.motor.tilt(tilt_name)
         time.sleep(self.psth.post_time)
@@ -155,34 +190,51 @@ class PsthTiltPlatform(AbstractContextManager):
             res = self._get_ts()
             
             for t in res: # 50ms ?
+                is_relevent = None
                 if t.Type == self.PL_SingleWFType: #\
                     # and t.Channel in self.psth.total_channel_dict.keys() \
                     # and t.Unit in self.psth.total_channel_dict[t.Channel]:
                     
-                    is_relevent_channel = self.psth.build_unit(t.Channel, t.Unit, t.TimeStamp)
-                    if is_relevent_channel:
+                    is_relevent = self.psth.build_unit(t.Channel, t.Unit, t.TimeStamp)
+                    
+                    if is_relevent:
                         collected_ts = True
                         print("collected ts")
                         # if found_event and t.TimeStamp >= (self.psth.current_ts + self.psth.post_time):
                         #     if not collected_ts:
                         #         collected_ts = True
                         #         print("collected ts")
-                if t.Type == self.PL_ExtEventType:
+                elif t.Type == self.PL_ExtEventType:
+                    if t.Channel == 257 and found_event:
+                        warn_str = "WARNING: recieved a second tilt event"
+                        print(warn_str)
+                        tilt_record['warnings'].append(warn_str)
+                        is_relevent = False
+                    
                     if t.Channel == 257 and not found_event:
                         print(('Event Ts: {}s Ch: {} Unit: {}').format(t.TimeStamp, t.Channel, t.Unit))
                         print('event')
                         self.psth.event(t.TimeStamp, t.Unit)
                         found_event = True
+                        is_relevent = True
+                
+                add_event_to_record(t, relevent=is_relevent)
             
             if self.no_spike_wait:
                 # don't wait for a spike
                 if not found_event or not collected_ts:
-                    print("WARNING: no spike events found for trial. THIS SHOULD NOT HAPPEN. TELL DR MOXON")
+                    warn_str = "WARNING: no spike events found for trial. THIS SHOULD NOT HAPPEN. TELL DR MOXON"
+                    print(warn_str)
+                    tilt_record['warnings'].append(warn_str)
                 break
         
         print('found event and collected ts')
+        
+        got_response = found_event and collected_ts
+        tilt_record['got_response'] = got_response
+        
         # ?if calc_psth == False and collected_ts == True:
-        if collected_ts == True:
+        if got_response:
             self.psth.psth(True, self.baseline_recording)
             if not self.baseline_recording:
                 self.psth.psth(False, self.baseline_recording)
@@ -191,9 +243,19 @@ class PsthTiltPlatform(AbstractContextManager):
         if not self.baseline_recording:
             if sham_result is not None:
                 decoder_result = sham_result
-            else:
+                d_source = 'sham'
+            elif got_response:
                 decoder_result = self.psth.decode()
-            print("decode")
+                d_source = 'psth'
+            else:
+                print("skipping decode due to no spikes")
+                decoder_result = True
+                d_source = 'no_spikes'
+            
+            tilt_record['decoder_result_source'] = d_source
+            tilt_record['decoder_result'] = decoder_result
+            
+            print(f"decode {decoder_result}")
             
             if decoder_result:
                 self.motor_interrupt.tilt('reward')
@@ -207,7 +269,10 @@ class PsthTiltPlatform(AbstractContextManager):
                 self.motor_interrupt.tilt('stop')
                 # time.sleep(2)
         
-        delay = ((randint(1,50))/100)+ 1.5
+        # delay = ((randint(1,50))/100)+ 1.5
+        if delay is None:
+            delay = random.uniform(1.5, 2.0)
+        tilt_record['delay'] = delay
         
         # if sham_result is not None:
         #     self.motor.tilt('stop')
@@ -217,10 +282,11 @@ class PsthTiltPlatform(AbstractContextManager):
         #     time.sleep(0.5)
         
         self.motor.tilt('stop')
-        print('delay')
+        print(f'delay {delay:.2f}')
         
         time.sleep(delay)
         
         # if not self.baseline_recording:
         #     if decoder_result:
         #         time.sleep(0.5)
+        return tilt_record

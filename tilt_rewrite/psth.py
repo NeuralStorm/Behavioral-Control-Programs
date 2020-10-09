@@ -47,6 +47,8 @@ class PSTH: ###Initiate PSTH with desired parameters, creates unit_dict which ha
 
         self.unit_dict_template = copy.deepcopy(self.unit_dict)
         # print('unit_dict', self.unit_dict) 
+        
+        self.output_extra = {}
     
     ###### build_unit will be used to gather timestamps from plexon and add them to the unit_dict which will be used to compare psth formats, etc.
     def build_unit(self, tmp_channel, tmp_unit, tmp_timestamp):
@@ -127,7 +129,7 @@ class PSTH: ###Initiate PSTH with desired parameters, creates unit_dict which ha
                     trial_ts = self.current_ts
                     offset_ts = unit_ts - trial_ts
                     offset_ts = [Decimal(x).quantize(Decimal('1.0000')) for x in offset_ts]
-                    self.json_template_binned_response = numpy.histogram(numpy.asarray(offset_ts, dtype='float'), self.total_bins, range = (0, self.post_time))[0]
+                    self.json_template_binned_response = numpy.histogram(numpy.asarray(offset_ts, dtype='float'), self.total_bins, range = (-self.pre_time, self.post_time))[0]
                     self.json_population_response.extend(self.json_template_binned_response)
                     #self.json_population_response[(self.total_bins*self.json_index):(self.total_bins*(self.json_index+1))] = self.json_template_binned_response   #### These values will give the total bins (currently: 5) for each neuron (unit)
                     json_pop_trial_response = [x for x in self.json_population_response]
@@ -197,13 +199,22 @@ class PSTH: ###Initiate PSTH with desired parameters, creates unit_dict which ha
         jsondata.update(json_event_number_dict) #Tilt list Actual
         jsondata.update(json_decode_number_dict) #Tilt list Predicted
         jsondata.update(json_channel_dict)
+        
+        jsondata.update(self.output_extra)
+        
         #jsondata.update() #Something else?
         # name = input('What would you like to name the template file:')
         # with open(name +'.txt', 'w') as outfile:
         with open(output_path, 'w') as outfile:
             json.dump(jsondata, outfile, indent=2)
     
-    def loadtemplate(self, input_path):
+    def loadtemplate(self, input_path, *, event_num_mapping=None):
+        
+        def map_events(data):
+            if event_num_mapping is not None:
+                data = [event_num_mapping[x] for x in  data]
+            return data
+        
         # name = input('What template file would you like to open: ')
         # with open(name + '.txt') as infile:
         with open(input_path) as infile:
@@ -217,14 +228,18 @@ class PSTH: ###Initiate PSTH with desired parameters, creates unit_dict which ha
         self.loaded_json_chan_dict = {}
         for i in data.keys():
             if i.isnumeric():
-                temp_psth_template = {i:data[i]}
-                self.loaded_psth_templates.update(temp_psth_template)
+                if event_num_mapping is not None:
+                    out_key = str(event_num_mapping[int(i)])
+                
+                self.loaded_psth_templates[out_key] = data[i]
+                # temp_psth_template = {i:data[i]}
+                # self.loaded_psth_templates.update(temp_psth_template)
 
             else:
                 if i == 'ActualEvents':
-                    self.loaded_json_event_number_dict = {i:data[i]}
+                    self.loaded_json_event_number_dict = {i:map_events(data[i])}
                 elif i == 'PredictedEvents':
-                    self.loaded_json_decode_number_dict = {i:data[i]}
+                    self.loaded_json_decode_number_dict = {i:map_events(data[i])}
                 elif i == 'ChannelDict':
                     loaded_json_chan_dict = {i:data[i]}
                     for j in loaded_json_chan_dict.keys():
@@ -266,10 +281,12 @@ class PSTH: ###Initiate PSTH with desired parameters, creates unit_dict which ha
         # Prepare Euclidean dist matrix
         for i in data.keys():
             if i.isnumeric():
+                if event_num_mapping is not None:
+                    out_key = str(event_num_mapping[int(i)])
                 zero = numpy.zeros((self.json_template_total_units*self.total_bins,), dtype = int)
                 zero_matrix = [x for x in zero]
-                self.euclidean_dists[i] = zero_matrix
-                self.sum_euclidean_dists[i] = []
+                self.euclidean_dists[out_key] = zero_matrix
+                self.sum_euclidean_dists[out_key] = []
         self.json_template_unit_dict_template = copy.deepcopy(self.json_template_unit_dict)
         # print('json_template_unit_dict_template', self.json_template_unit_dict_template)
 

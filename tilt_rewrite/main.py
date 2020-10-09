@@ -1,6 +1,8 @@
 """
 python main.py --mock --no-record --dbg-motor-control --no-start-pulse --no-spike-wait --no-save-template
 python main.py --mock --no-record --no-start-pulse --no-spike-wait --num-tilts 4 --template-out x.json
+python main.py --mock --no-record --no-start-pulse --no-spike-wait --num-tilts 4 --template-o x.json --not-baseline-recording --template-in CSM037_ClosedLoopR_09182020.json
+python main.py --mock --no-record --no-start-pulse --no-spike-wait --num-tilts 4 --template-o x.json --not-baseline-recording --template-in CSM037_ClosedLoopR_09182020.json --retry
 """
 
 import time
@@ -16,6 +18,8 @@ import atexit
 import functools
 import traceback
 import argparse
+from pprint import pprint
+from copy import deepcopy
 
 import nidaqmx
 from nidaqmx.constants import LineGrouping, Edge, AcquisitionType, WAIT_INFINITELY
@@ -171,7 +175,7 @@ def generate_tilt_sequence(num_tilts):
     np.random.shuffle(a)
     return a
 
-def record_data(*, clock_source: str=""):
+def record_data(*, clock_source: str="", csv_path):
     # samples per second
     SAMPLE_RATE = 1250
     SAMPLE_BATCH_SIZE = SAMPLE_RATE
@@ -182,7 +186,7 @@ def record_data(*, clock_source: str=""):
         "Dev6/ai48", "Dev6/ai49", "Dev6/ai50","Dev6/ai51",
         "Strobe", "Start", "Inclinometer", 'Timestamp',
     ]
-    csv_path = './loadcell_tilt.csv'
+    # csv_path = './loadcell_tilt.csv'
     # clock sourcs Dev6/PFI6
     with ExitStack() as stack:
         task = stack.enter_context(nidaqmx.Task())
@@ -281,19 +285,18 @@ def run_non_psth_loop(platform: TiltPlatform, tilt_sequence, *, num_tilts):
         
         break
 
-def run_psth_loop(platform: PsthTiltPlatform, tilt_sequence, *, sham):
+def run_psth_loop(platform: PsthTiltPlatform, tilt_sequence, *,
+        sham: bool, retry_failed: bool):
+    
     psth = platform.psth
     if sham:
-        event_num_mapping = {
-            1: 1, 2: 2, 3: 3, 4: 4,
-            9: 1, 11: 2, 12: 3, 14: 4,
-        }
         tilt_sequence = [
             event_num_mapping[x]
             for x in psth.loaded_json_event_number_dict['ActualEvents']
         ]
         sham_decodes = [
-            event_num_mapping[x]
+            # event_num_mapping[x]
+            x
             for x in psth.loaded_json_decode_number_dict['PredictedEvents']
         ]
     
@@ -306,14 +309,9 @@ def run_psth_loop(platform: PsthTiltPlatform, tilt_sequence, *, sham):
     
     spawn_thread(input_thread)
     
-    for i, tilt_type in enumerate(tilt_sequence):
-        if sham:
-            sham_result = tilt_type == sham_decodes[i]
-        else:
-            sham_result = None
-        
-        platform.tilt(tilt_type, sham_result=sham_result)
-        
+    tilt_records = []
+    
+    def get_cmd():
         try:
             _cmd: str = input_queue.get_nowait()
         except QEmpty:
@@ -321,9 +319,69 @@ def run_psth_loop(platform: PsthTiltPlatform, tilt_sequence, *, sham):
         else:
             print("Press enter to resume; q, enter to stop")
             cmd = input("paused>")
-            if cmd == 'q':
-                break
+            # if cmd == 'q':
+            #     break
             input_queue.get()
+            return cmd
+    
+    def do_tilt(tilt_type, i, sham_i, retry=None):
+        if sham:
+            sham_result = tilt_type == sham_decodes[sham_i]
+        else:
+            sham_result = None
+        
+        if retry is not None:
+            delay = retry['delay']
+        else:
+            delay = None
+        
+        tilt_rec = platform.tilt(tilt_type, sham_result=sham_result, delay=delay)
+        tilt_rec['i'] = i
+        tilt_rec['retry'] = retry
+        pprint(tilt_rec, sort_dicts=False)
+        tilt_records.append(tilt_rec)
+        # put data into psth class often so data will get saved in the case of a crash
+        platform.psth.output_extra['tilts'] = tilt_records
+        return tilt_rec
+    
+    def run_tilts():
+        for i, tilt_type in enumerate(tilt_sequence):
+            do_tilt(tilt_type, i, i)
+            
+            if get_cmd() == 'q':
+                return
+        
+        out_i = i
+        
+        if retry_failed:
+            failed_tilts = [
+                deepcopy(x)
+                for x in tilt_records
+                if x['decoder_result_source'] == 'no_spikes'
+            ]
+        else:
+            failed_tilts = None
+        
+        while failed_tilts:
+            for tilt in failed_tilts:
+                out_i += 1
+                
+                i = tilt['i']
+                tilt_type = tilt['tilt_type']
+                
+                retry_tilt = do_tilt(tilt_type, out_i, i, retry=tilt)
+                
+                if retry_tilt['decoder_result_source'] != 'no_spikes':
+                    tilt['retry_success'] = True
+                
+                if get_cmd() == 'q':
+                    return
+            
+            failed_tilts = [x for x in failed_tilts if not x.get('retry_success')]
+    
+    run_tilts()
+    
+    platform.psth.output_extra['tilts'] = tilt_records
     
     platform.close()
     psthclass = platform.psth
@@ -341,22 +399,34 @@ def run_psth_loop(platform: PsthTiltPlatform, tilt_sequence, *, sham):
         decoder_accuracy = correct_trials / len(psthclass.event_number_list)
         print(('Accuracy = {} / {} = {}').format(correct_trials, len(psthclass.event_number_list), decoder_accuracy))
         print('Stop Plexon Recording.')
+    
+    for tilt in tilt_records:
+        for warning in tilt['warnings']:
+            print(warning)
+    print()
+    if any(x['decoder_result_source'] == 'no_spikes' for x in tilt_records):
+        num_failures = len([x['decoder_result_source'] == 'no_spikes' for x in tilt_records])
+        print(f"{num_failures} tilts failed due to no spikes occuring, THIS SHOULD NOT HAPPEN. TELL DR MOXON")
 
 def parse_args():
     parser = argparse.ArgumentParser(description='')
     parser.add_argument('--non-psth', action='store_true',
         help='run the non psth loop')
+    
     parser.add_argument('--ext-clock', action='store_true',
-        help='use external clock for nidaq')
+        help='use external clock for nidaq when collecting loadcell data')
+    parser.add_argument('--loadcell-out', default='./loadcell_tilt.csv',
+        help='file to write loadcell csv data to (default ./loadcell_tilt.csv)')
+    parser.add_argument('--no-record', action='store_true',
+        help='skip recording loadcell data')
+    
     parser.add_argument('--no-start-pulse', action='store_true',
-        help='do not wait for plexon start pulse')
+        help='do not wait for plexon start pulse or enter press, skips initial 3 second wait')
     parser.add_argument('--not-baseline-recording', action='store_true',
         help='set psth to not be baseline recording')
     parser.add_argument('--sham', action='store_true',
         help='')
     parser.add_argument('--no-spike-wait', action='store_true',
-        help='')
-    parser.add_argument('--no-record', action='store_true',
         help='')
     parser.add_argument('--no-save-template', action='store_true',
         help='')
@@ -366,6 +436,8 @@ def parse_args():
         help='input path for template')
     parser.add_argument('--num-tilts', type=int, default=400,
         help='number of tilts to do, must be divisible by 4 (default 400)')
+    parser.add_argument('--retry', action='store_true',
+        help='retry tilts if there are no spikes')
     
     parser.add_argument('--mock', action='store_true',
         help="")
@@ -397,15 +469,15 @@ def main():
     
     clock_source = '/Dev6/PFI6' if args.ext_clock else ''
     if not args.no_record:
-        spawn_process(_error_record_data, clock_source=clock_source)
+        spawn_process(_error_record_data, clock_source=clock_source, csv_path=args.loadcell_out)
     
     if not args.no_start_pulse:
         print("waiting for plexon start pulse")
         line_wait("Dev4/port2/line1", True)
-    
-    input("Press enter to start")
-    print("Waiting 3 seconds ?")
-    time.sleep(3) # ?
+        
+        input("Press enter to start")
+        print("Waiting 3 seconds ?")
+        time.sleep(3) # ?
     
     
     
@@ -421,7 +493,10 @@ def main():
         ) as platform:
             if args.no_spike_wait:
                 platform.no_spike_wait = True
-            run_psth_loop(platform, tilt_sequence, sham=args.sham)
+            run_psth_loop(
+                platform, tilt_sequence,
+                sham=args.sham, retry_failed=args.retry,
+            )
     elif mode == 'normal':
         print("running non psth")
         with TiltPlatform(mock=mock) as platform:
