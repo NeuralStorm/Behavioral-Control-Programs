@@ -205,6 +205,7 @@ class MonkeyImages(tk.Frame,):
                 else:
                     csvreaderdict[data[row][0]].append(data[row][entry])
         
+        config_dict = csvreaderdict
         # PARAMETERS META DATA
         self.StudyID = csvreaderdict['Study ID']                            # 3 letter study code
         self.SessionID = csvreaderdict['Session ID']                        # Type of Session
@@ -216,6 +217,34 @@ class MonkeyImages(tk.Frame,):
         self.source = Path(csvreaderdict['Path To Graphics Dir'][0])              # required in-code edits to change task versions. R.E. 7-29-2020
         for images in os.listdir(self.source):                              # Copied from above (~line 181) 7-29-2020 R.E.
             self.list_images.append(images)
+        
+        if 'images' in config_dict:
+            self.list_images = [
+                'aBlank.png',
+                *(f'{x}.png' for x in config_dict['images']),
+                *(f"{x.replace('b', 'c').replace('d', 'e')}.png" for x in config_dict['images']),
+                'xBlack.png',
+                'yPrepare.png',
+                'zMonkey2.png',
+            ]
+            self.num_task_images = len(config_dict['images'])
+        else:
+            self.num_task_images = config_dict.get('num_task_images', 3)
+        
+        if 'reward_thresholds' in config_dict:
+            # threshold, low_reward, high_reward = config_dict['reward_threshold']
+            # self.reward_thresholds = (threshold, low_reward, high_reward)
+            rw_thr = config_dict['reward_thresholds']
+            self.reward_thresholds = []
+            for i in range(0,len(rw_thr)-2, 3):
+                self.reward_thresholds.append({
+                    'water_duration': float(rw_thr[i]),
+                    'low_threshold': float(rw_thr[i+1]),
+                    'high_threshold': float(rw_thr[i+2]),
+                })
+        else:
+            self.reward_thresholds = None
+        
         # PARAMETERS
         # self.filename = 'test'
         #self.savepath = os.path.join('D:', os.sep, 'IntervalTimingTaskData')            # Path to outside target directory for saving csv file
@@ -492,7 +521,8 @@ class MonkeyImages(tk.Frame,):
                     print('RelCueTime: ', self.RelCueTime)
                     print('Go Cue')
                     self.ReadyForPull = True
-                    self.counter = self.counter + self.NumEvents
+                    # self.counter = self.counter + self.NumEvents
+                    self.counter = self.counter + self.num_task_images
                     # EV26, EV28, EV30 EV32
                     if self.current_counter == 1: # EV026
                         self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event4,None,None)
@@ -784,6 +814,13 @@ class MonkeyImages(tk.Frame,):
             #TODO: Need to add event to the choose reward inputs. This will come from the event cue that is shown ( Can Use self.current_counter )
 ############################################################################################################################################
     def ChooseReward(self,Duration): #New (8/23/2019): Ranges = {X: [low, center, high],..., X:[low, center, high]}
+        if self.reward_thresholds is not None:
+            for threshold in self.reward_thresholds:
+                if Duration > threshold['low_threshold'] and Duration < threshold['high_threshold']:
+                    return threshold['water_duration']
+            
+            return 0
+        
         #currently counter can be 1,2,3 for the 3 images. 8/23/2019
         counter = self.current_counter
         RewardDuration = 0
