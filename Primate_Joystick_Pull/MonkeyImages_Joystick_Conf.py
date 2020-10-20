@@ -238,7 +238,7 @@ class MonkeyImages(tk.Frame,):
             self.reward_thresholds = []
             for i in range(0,len(rw_thr)-2, 3):
                 self.reward_thresholds.append({
-                    'water_duration': float(rw_thr[i]),
+                    'reward_duration': float(rw_thr[i]),
                     'low_threshold': float(rw_thr[i+1]),
                     'high_threshold': float(rw_thr[i+2]),
                 })
@@ -816,8 +816,8 @@ class MonkeyImages(tk.Frame,):
     def ChooseReward(self,Duration): #New (8/23/2019): Ranges = {X: [low, center, high],..., X:[low, center, high]}
         if self.reward_thresholds is not None:
             for threshold in self.reward_thresholds:
-                if Duration > threshold['low_threshold'] and Duration < threshold['high_threshold']:
-                    return threshold['water_duration']
+                if Duration >= threshold['low_threshold'] and Duration <= threshold['high_threshold']:
+                    return threshold['reward_duration']
             
             return 0
         

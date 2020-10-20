@@ -6,11 +6,11 @@
 
 - optional
 
-`water duration, low threshold, high threshold, ...`
+`reward duration, low threshold, high threshold, ...`
 
 example: `0.15,0.3,0.4,0.15,1,1.25`
 
-the first water duration where `low < pull duration < high` is used
+the first reward duration where `low < pull duration < high` is used
 
 ### images
 
@@ -28,6 +28,6 @@ each image's boxed variant is expecetd to have the same name with `b` replace wi
 
 ##### if not set
 
-influenced by the `Number of Events` (`n`) and `num_task_images` (default 3) (`nt`) config values, indexes are 0 indexed, ranges are inclusive
+influenced by the `Number of Events` (`n`) and `num_task_images` (`nt`) (default 3) config values, indexes are 0 indexed, ranges are inclusive
 
 images without boxes will be image `1` through `n` and boxed images will be image `nt+1` through `nt+n`
