@@ -97,6 +97,7 @@ class PsthTiltPlatform(AbstractContextManager):
                         pass
         
         self.no_spike_wait = False
+        self.fixed_spike_wait = False
         self.closed = False
     
     def __exit__(self, *exc):
@@ -141,9 +142,9 @@ class PsthTiltPlatform(AbstractContextManager):
                 'type': None,
                 'ignored': ignored,
                 'relevent': relevent,
-                'time': t.Timestamp,
-                'channel': t.Channel,
-                'unit': t.Unit,
+                'time': event.TimeStamp,
+                'channel': event.Channel,
+                'unit': event.Unit,
             }
             if event.Type == self.PL_SingleWFType:
                 rec['type'] = 'spike'
@@ -178,16 +179,20 @@ class PsthTiltPlatform(AbstractContextManager):
         res = self._get_ts()
         for event in res:
             add_event_to_record(event, ignored=True)
-        time.sleep(self.psth.pre_time)
+        # time.sleep(self.psth.pre_time)
         self.motor.tilt(tilt_name)
-        time.sleep(self.psth.post_time)
+        # time.sleep(self.psth.post_time)
         # time.sleep(0.075)
         
         
-        found_event = False
+        found_event = False # track if a tilt has started yet
         collected_ts = False
+        packets_since_tilt = 0
+        tilt_time = None
         while found_event == False or collected_ts == False:
             res = self._get_ts()
+            if found_event:
+                packets_since_tilt += 1
             
             for t in res: # 50ms ?
                 is_relevent = None
@@ -211,16 +216,19 @@ class PsthTiltPlatform(AbstractContextManager):
                         tilt_record['warnings'].append(warn_str)
                         is_relevent = False
                     
+                    # tilt started
                     if t.Channel == 257 and not found_event:
                         print(('Event Ts: {}s Ch: {} Unit: {}').format(t.TimeStamp, t.Channel, t.Unit))
                         print('event')
                         self.psth.event(t.TimeStamp, t.Unit)
                         found_event = True
                         is_relevent = True
+                        tilt_time = time.time()
                 
                 add_event_to_record(t, relevent=is_relevent)
             
-            if self.no_spike_wait:
+            assert not self.fixed_spike_wait or packets_since_tilt <= 4
+            if self.no_spike_wait or (self.fixed_spike_wait and packets_since_tilt == 4):
                 # don't wait for a spike
                 if not found_event or not collected_ts:
                     warn_str = "WARNING: no spike events found for trial. THIS SHOULD NOT HAPPEN. TELL DR MOXON"
@@ -229,6 +237,11 @@ class PsthTiltPlatform(AbstractContextManager):
                 break
         
         print('found event and collected ts')
+        if tilt_time is not None:
+            post_tilt_wait_time = time.time() - tilt_time
+        else:
+            post_tilt_wait_time = None
+        print('post tilt wait time', post_tilt_wait_time)
         
         got_response = found_event and collected_ts
         tilt_record['got_response'] = got_response

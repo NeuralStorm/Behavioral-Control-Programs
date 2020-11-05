@@ -291,7 +291,8 @@ def run_psth_loop(platform: PsthTiltPlatform, tilt_sequence, *,
     psth = platform.psth
     if sham:
         tilt_sequence = [
-            event_num_mapping[x]
+            # event_num_mapping[x]
+            x
             for x in psth.loaded_json_event_number_dict['ActualEvents']
         ]
         sham_decodes = [
@@ -338,7 +339,8 @@ def run_psth_loop(platform: PsthTiltPlatform, tilt_sequence, *,
         tilt_rec = platform.tilt(tilt_type, sham_result=sham_result, delay=delay)
         tilt_rec['i'] = i
         tilt_rec['retry'] = retry
-        pprint(tilt_rec, sort_dicts=False)
+        # pprint(tilt_rec, sort_dicts=False)
+        pprint(tilt_rec)
         tilt_records.append(tilt_rec)
         # put data into psth class often so data will get saved in the case of a crash
         platform.psth.output_extra['tilts'] = tilt_records
@@ -427,7 +429,9 @@ def parse_args():
     parser.add_argument('--sham', action='store_true',
         help='')
     parser.add_argument('--no-spike-wait', action='store_true',
-        help='')
+        help='immediatly continue after sending a signal to the motor controller, only useful for testing without hardware')
+    parser.add_argument('--fixed-spike-wait', action='store_true',
+        help='waits for a fixed amout of time after the tilt event is recieved from plexon')
     parser.add_argument('--no-save-template', action='store_true',
         help='')
     parser.add_argument('--template-out',
@@ -492,7 +496,11 @@ def main():
             mock = mock,
         ) as platform:
             if args.no_spike_wait:
+                assert not args.fixed_spike_wait
                 platform.no_spike_wait = True
+            if args.fixed_spike_wait:
+                assert not args.no_spike_wait
+                platform.fixed_spike_wait = True
             run_psth_loop(
                 platform, tilt_sequence,
                 sham=args.sham, retry_failed=args.retry,
