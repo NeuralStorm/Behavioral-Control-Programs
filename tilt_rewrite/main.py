@@ -20,6 +20,7 @@ import traceback
 import argparse
 from pprint import pprint
 from copy import deepcopy
+import json
 
 import nidaqmx
 from nidaqmx.constants import LineGrouping, Edge, AcquisitionType, WAIT_INFINITELY
@@ -288,18 +289,31 @@ def run_non_psth_loop(platform: TiltPlatform, tilt_sequence, *, num_tilts):
 def run_psth_loop(platform: PsthTiltPlatform, tilt_sequence, *,
         sham: bool, retry_failed: bool):
     
-    psth = platform.psth
+    # psth = platform.psth
     if sham:
-        tilt_sequence = [
-            # event_num_mapping[x]
-            x
-            for x in psth.loaded_json_event_number_dict['ActualEvents']
-        ]
-        sham_decodes = [
-            # event_num_mapping[x]
-            x
-            for x in psth.loaded_json_decode_number_dict['PredictedEvents']
-        ]
+        with open(platform.template_in_path) as f:
+            template_in = json.load(f)
+        # tilt_sequence = [
+        #     # event_num_mapping[x]
+        #     x
+        #     for x in psth.loaded_json_event_number_dict['ActualEvents']
+        # ]
+        # sham_decodes = [
+        #     # event_num_mapping[x]
+        #     x
+        #     for x in psth.loaded_json_decode_number_dict['PredictedEvents']
+        # ]
+        tilt_sequence = []
+        sham_decodes = []
+        sham_delays = []
+        
+        for tilt in template_in['tilts']:
+            tilt_sequence.append(tilt['tilt_type'])
+            p_tilt_type = tilt['predicted_tilt_type']
+            if p_tilt_type is None:
+                p_tilt_type = tilt['tilt_type']
+            sham_decodes.append(p_tilt_type)
+            sham_delays.append(tilt['delay'])
     
     input_queue: 'Queue[str]' = Queue(1)
     def input_thread():
@@ -333,6 +347,8 @@ def run_psth_loop(platform: PsthTiltPlatform, tilt_sequence, *,
         
         if retry is not None:
             delay = retry['delay']
+        elif sham:
+            delay = sham_delays[sham_i]
         else:
             delay = None
         

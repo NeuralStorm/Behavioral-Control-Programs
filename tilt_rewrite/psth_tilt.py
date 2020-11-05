@@ -136,6 +136,7 @@ class PsthTiltPlatform(AbstractContextManager):
             'delay': None,
             'decoder_result': None,
             'decoder_result_source': None,
+            'predicted_tilt_type': None,
         }
         def add_event_to_record(event, *, ignored=None, relevent=None):
             rec = {
@@ -257,16 +258,20 @@ class PsthTiltPlatform(AbstractContextManager):
             if sham_result is not None:
                 decoder_result = sham_result
                 d_source = 'sham'
+                predicted_tilt_type = None
             elif got_response:
                 decoder_result = self.psth.decode()
                 d_source = 'psth'
+                predicted_tilt_type = self.psth.decoder_list[-1]
             else:
                 print("skipping decode due to no spikes")
                 decoder_result = True
                 d_source = 'no_spikes'
+                predicted_tilt_type = None
             
             tilt_record['decoder_result_source'] = d_source
             tilt_record['decoder_result'] = decoder_result
+            tilt_record['predicted_tilt_type'] = predicted_tilt_type
             
             print(f"decode {decoder_result}")
             
