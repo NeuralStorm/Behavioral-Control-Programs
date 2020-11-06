@@ -26,7 +26,7 @@ import nidaqmx
 from nidaqmx.constants import LineGrouping, Edge, AcquisitionType, WAIT_INFINITELY
 import numpy as np
 
-from psth_tilt import PsthTiltPlatform
+from psth_tilt import PsthTiltPlatform, SpikeWaitTimeout
 from motor_control import MotorControl
 
 DEBUG_CONFIG = {
@@ -325,6 +325,7 @@ def run_psth_loop(platform: PsthTiltPlatform, tilt_sequence, *,
     spawn_thread(input_thread)
     
     tilt_records = []
+    platform.psth.output_extra['tilts'] = tilt_records
     
     def get_cmd():
         try:
@@ -352,11 +353,17 @@ def run_psth_loop(platform: PsthTiltPlatform, tilt_sequence, *,
         else:
             delay = None
         
-        tilt_rec = platform.tilt(tilt_type, sham_result=sham_result, delay=delay)
+        try:
+            tilt_rec = platform.tilt(tilt_type, sham_result=sham_result, delay=delay)
+        except SpikeWaitTimeout as e:
+            tilt_rec = e.tilt_rec
+            tilt_rec['spike_wait_timeout'] = True
+            tilt_records.append(tilt_rec)
+            raise
         tilt_rec['i'] = i
         tilt_rec['retry'] = retry
         # pprint(tilt_rec, sort_dicts=False)
-        pprint(tilt_rec)
+        # pprint(tilt_rec)
         tilt_records.append(tilt_rec)
         # put data into psth class often so data will get saved in the case of a crash
         platform.psth.output_extra['tilts'] = tilt_records
@@ -399,12 +406,10 @@ def run_psth_loop(platform: PsthTiltPlatform, tilt_sequence, *,
     
     run_tilts()
     
-    platform.psth.output_extra['tilts'] = tilt_records
-    
     platform.close()
     psthclass = platform.psth
     
-    if not platform.baseline_recording:
+    if not platform.baseline_recording and not sham:
         # pylint: disable=import-error
         from sklearn.metrics import confusion_matrix
         
