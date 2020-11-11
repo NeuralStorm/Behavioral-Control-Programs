@@ -2,3 +2,4 @@ nidaqmx==0.5.7
 # PyDAQmx==1.4.3
 numpy==1.19.4
 scikit-learn==0.23.2
+hjson==3.0.2

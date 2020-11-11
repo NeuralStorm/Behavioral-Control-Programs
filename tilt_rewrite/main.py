@@ -22,6 +22,7 @@ import argparse
 from pprint import pprint
 from copy import deepcopy
 import json
+import hjson
 
 import nidaqmx
 from nidaqmx.constants import LineGrouping, Edge, AcquisitionType, WAIT_INFINITELY
@@ -443,7 +444,7 @@ class Config:
 
 def load_config(path):
     with open(path) as f:
-        data = json.load(f)
+        data = hjson.load(f)
     
     config = Config()
     
