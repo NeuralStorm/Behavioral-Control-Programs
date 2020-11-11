@@ -5,6 +5,7 @@ python main.py --mock --no-record --no-start-pulse --no-spike-wait --num-tilts 4
 python main.py --mock --no-record --no-start-pulse --no-spike-wait --num-tilts 4 --template-o x.json --not-baseline-recording --template-in CSM037_ClosedLoopR_09182020.json --retry
 """
 
+from typing import List, Dict, get_type_hints
 import time
 from random import randint
 from contextlib import ExitStack, AbstractContextManager
@@ -317,10 +318,11 @@ def run_psth_loop(platform: PsthTiltPlatform, tilt_sequence, *,
     
     input_queue: 'Queue[str]' = Queue(1)
     def input_thread():
-        cmd = input(">")
-        input_queue.put(cmd)
-        input_queue.put("")
-        input_queue.join()
+        while True:
+            cmd = input(">")
+            input_queue.put(cmd)
+            input_queue.put("")
+            input_queue.join()
     
     spawn_thread(input_thread)
     
@@ -333,11 +335,13 @@ def run_psth_loop(platform: PsthTiltPlatform, tilt_sequence, *,
         except QEmpty:
             pass
         else:
+            input_queue.task_done()
             print("Press enter to resume; q, enter to stop")
             cmd = input("paused>")
             # if cmd == 'q':
             #     break
             input_queue.get()
+            input_queue.task_done()
             return cmd
     
     def do_tilt(tilt_type, i, sham_i, retry=None):
@@ -371,6 +375,7 @@ def run_psth_loop(platform: PsthTiltPlatform, tilt_sequence, *,
     
     def run_tilts():
         for i, tilt_type in enumerate(tilt_sequence):
+            print('tilt', i)
             do_tilt(tilt_type, i, i)
             
             if get_cmd() == 'q':
@@ -431,8 +436,32 @@ def run_psth_loop(platform: PsthTiltPlatform, tilt_sequence, *,
         num_failures = len([x['decoder_result_source'] == 'no_spikes' for x in tilt_records])
         print(f"{num_failures} tilts failed due to no spikes occuring, THIS SHOULD NOT HAPPEN. TELL DR MOXON")
 
+class Config:
+    channels: 'Dict[int, List[int]]'
+    def __init__(self):
+        self.channels = None
+
+def load_config(path):
+    with open(path) as f:
+        data = json.load(f)
+    
+    config = Config()
+    
+    channels = {
+        int(k): v
+        for k, v in data['channels'].items()
+    }
+    # assert isinstance(channels, get_type_hints(Config)['channels'])
+    config.channels = channels
+    
+    return config
+
 def parse_args():
     parser = argparse.ArgumentParser(description='')
+    
+    parser.add_argument('--config', required=False,
+        help='config file, currently used for channel dict')
+    
     parser.add_argument('--non-psth', action='store_true',
         help='run the non psth loop')
     
@@ -461,6 +490,10 @@ def parse_args():
         help='input path for template')
     parser.add_argument('--num-tilts', type=int, default=400,
         help='number of tilts to do, must be divisible by 4 (default 400)')
+    parser.add_argument('--delay-range',
+        type=lambda s: tuple(float(x) for x in s.split('-')),
+        default=(2, 3),
+        help='time range to wait between tilts default: 2-3')
     parser.add_argument('--retry', action='store_true',
         help='retry tilts if there are no spikes')
     
@@ -509,11 +542,16 @@ def main():
     if mode == 'psth':
         print("running psth")
         baseline_recording = not args.not_baseline_recording
+        
+        assert args.config is not None, "--config required for psth"
+        config = load_config(args.config)
+        
         with PsthTiltPlatform(
             baseline_recording = baseline_recording,
             save_template = not args.no_save_template and not args.sham,
             template_output_path = args.template_out,
             template_in_path = args.template_in,
+            channel_dict = config.channels,
             mock = mock,
         ) as platform:
             if args.no_spike_wait:
@@ -522,6 +560,7 @@ def main():
             if args.fixed_spike_wait:
                 assert not args.no_spike_wait
                 platform.fixed_spike_wait = True
+            platform.delay_range = args.delay_range
             run_psth_loop(
                 platform, tilt_sequence,
                 sham=args.sham, retry_failed=args.retry,

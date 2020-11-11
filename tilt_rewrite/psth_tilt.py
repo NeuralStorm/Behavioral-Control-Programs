@@ -24,6 +24,7 @@ class PsthTiltPlatform(AbstractContextManager):
             save_template: bool = True,
             template_output_path,
             template_in_path,
+            channel_dict,
             mock: bool = False,
             ):
         
@@ -53,14 +54,14 @@ class PsthTiltPlatform(AbstractContextManager):
             self.plex_client = client
         _nores = self._get_ts() # ?
         
-        channel_dict = {
-            1: [1], 2: [1,2], 3: [1,2], 4: [1,2],
-            6: [1,2], 7: [1,2,3,4], 8: [1,2,3],
-            9: [1,2,3], 13: [1,2,3,4], 14: [1,2],
-            20: [1,2,3], 25: [1,2], 26: [1], 27: [1], 28: [1],
-            31: [1],
-            55: [1,2,3,4],
-        }
+        # channel_dict = {
+        #     1: [1], 2: [1,2], 3: [1,2], 4: [1,2],
+        #     6: [1,2], 7: [1,2,3,4], 8: [1,2,3],
+        #     9: [1,2,3], 13: [1,2,3,4], 14: [1,2],
+        #     20: [1,2,3], 25: [1,2], 26: [1], 27: [1], 28: [1],
+        #     31: [1],
+        #     55: [1,2,3,4],
+        # }
         pre_time = 0.0
         post_time = 0.200
         bin_size = 0.020
@@ -110,6 +111,7 @@ class PsthTiltPlatform(AbstractContextManager):
         self.fixed_spike_wait_time = 0.2
         self.fixed_spike_wait_timeout = 1.5
         self.closed = False
+        self.delay_range = (1.5, 2)
     
     def __exit__(self, *exc):
         self.close()
@@ -218,7 +220,7 @@ class PsthTiltPlatform(AbstractContextManager):
                     
                     if is_relevent:
                         collected_ts = True
-                        print("collected ts")
+                        # print("collected ts")
                         # if found_event and t.TimeStamp >= (self.psth.current_ts + self.psth.post_time):
                         #     if not collected_ts:
                         #         collected_ts = True
@@ -233,7 +235,7 @@ class PsthTiltPlatform(AbstractContextManager):
                     # tilt started
                     if t.Channel == 257 and not found_event:
                         print(('Event Ts: {}s Ch: {} Unit: {}').format(t.TimeStamp, t.Channel, t.Unit))
-                        print('event')
+                        # print('event')
                         self.psth.event(t.TimeStamp, t.Unit)
                         found_event = True
                         is_relevent = True
@@ -263,8 +265,8 @@ class PsthTiltPlatform(AbstractContextManager):
             post_tilt_wait_time = time.time() - tilt_time
         else:
             post_tilt_wait_time = None
-        print('post tilt wait time', post_tilt_wait_time)
-        print('post send tilt time', time.time() - send_tilt_time)
+        print('post tilt wait time', post_tilt_wait_time, 'send', time.time() - send_tilt_time)
+        # print('post send tilt time', time.time() - send_tilt_time)
         
         got_response = found_event and collected_ts
         tilt_record['got_response'] = got_response
@@ -311,7 +313,7 @@ class PsthTiltPlatform(AbstractContextManager):
         
         # delay = ((randint(1,50))/100)+ 1.5
         if delay is None:
-            delay = random.uniform(1.5, 2.0)
+            delay = random.uniform(*self.delay_range)
         tilt_record['delay'] = delay
         
         # if sham_result is not None:

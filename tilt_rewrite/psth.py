@@ -179,15 +179,15 @@ class PSTH: ###Initiate PSTH with desired parameters, creates unit_dict which ha
         self.decoder_list.append(decoder_key)
         toc = time.time() - tic
         self.decoder_times.append(toc)
-        print(self.sum_euclidean_dists)
-        print(decoder_key)
+        # print(self.sum_euclidean_dists)
+        # print(decoder_key)
         #print('decoder key:', decoder_key)
         #print('min dist:', self.sum_euclidean_dists[decoder_key])
         if decoder_key == self.current_event:
-            print('decoder correct')
+            # print('decoder correct')
             return True
         else:
-            print('decoder incorrect')
+            # print('decoder incorrect')
             return False
 
     def savetemplate(self, output_path):
@@ -306,122 +306,3 @@ class PSTH: ###Initiate PSTH with desired parameters, creates unit_dict which ha
         # print('population total response:', self.pop_total_response)
         # print('psth templates', self.psth_templates)
         return self.psth_templates, self.pop_total_response
-
-
-
-if __name__ =='__main__':
-    from pyplexclientts import PyPlexClientTSAPI, PL_SingleWFType, PL_ExtEventType
-    
-    # Create instance of API class
-    # New Format to compare Channel and Unit. 0 is unsorted. Channels are Dict Keys, Units are in each list.
-    channel_dict = {1: [1,2], 2: [1,2], 3: [1,2,3], 4: [1,2,3],
-                6: [1,2], 7: [1,2,3,4], 8: [1,2,3,4],
-                9: [1,2,3], 10: [1,2],
-                13: [1,2,3], 14: [1,2,3,4], 15: [1,2,3], 16: [1,2,3],
-                18: [1], 19: [1,2], 20: [1,2,3,4],
-                25: [1,2,3], 26: [1], 27: [1], 28: [1],
-                29: [1], 31: [1], 32: [1]}
-    pre_time = 0.200 #seconds (This value is negative or whatever you put, ex: put 0.200 for -200 ms)
-    post_time = 0.200 #seconds
-    bin_size = 0.020 #seconds
-    # pre_total_bins = 200 #bins
-    # post_total_bins = 200 #bins
-    wait_for_timestamps = False
-    calculate_PSTH = False
-    calc_psth = False
-    foundevent = False
-    collected_ts = False
-    baseline_recording = True # True for Creating a baseline recording.
-                               # False to Load a template
-    psthclass = PSTH(channel_dict, pre_time, post_time, bin_size)
-    
-    if baseline_recording == False:
-        psthclass.loadtemplate()
-    
-    ##Setup for Plexon DO
-    # compatible_devices = ['PXI-6224', 'PXI-6259']
-    # plexdo = PyPlexDO()
-    # doinfo = plexdo.get_digital_output_info()
-    # device_number = None
-    # for i in range(doinfo.num_devices):
-    #     if plexdo.get_device_string(doinfo.device_numbers[i]) in compatible_devices:
-    #         device_number = doinfo.device_numbers[i]
-    # if device_number == None:
-    #     print("No compatible devices found. Exiting.")
-    #     sys.exit(1)
-    # else:
-    #     print("{} found as device {}".format(plexdo.get_device_string(device_number), device_number))
-    # res = plexdo.init_device(device_number)
-    # if res != 0:
-    #     print("Couldn't initialize device. Exiting.")
-    #     sys.exit(1)
-    # plexdo.clear_all_bits(device_number)
-    ##End Setup for Plexon DO
-    
-    client = PyPlexClientTSAPI()
-
-    # Connect to OmniPlex Server
-    client.init_client()
-
-    running = True
-    print('running')
-    running = True
-    #timer_list = []
-    try:
-        while running:
-            # Wait half a second for data to accumulate
-            # if wait_for_timestamps:
-            #     time.sleep(post_time)
-            #     calculate_PSTH = True
-
-            # else:
-            #     time.sleep(.1)
-            time.sleep(0.1)
-            # Get accumulated timestamps
-            res = client.get_ts()
-
-            # Print information on the data returned
-            
-            for t in res:
-                # Print information on spike channel 1
-                if t.Type == PL_SingleWFType and t.Channel in psthclass.total_channel_dict.keys() and t.Unit in psthclass.total_channel_dict[t.Channel]:
-                    psthclass.build_unit(t.Channel,t.Unit,t.TimeStamp)
-                    if foundevent == True and t.TimeStamp >= (psthclass.current_ts + psthclass.post_time):
-                        collected_ts = True
-
-
-                # Print information on events
-                if t.Type == PL_ExtEventType and foundevent == False:
-                    print(('Event Ts: {}s Ch: {} Type: {}').format(t.TimeStamp, t.Channel, t.Type))
-                    if t.Channel == 257: #Channel for Strobed Events.
-                        psthclass.event(t.TimeStamp,t.Unit)
-                        foundevent = True
-
-            if calc_psth == False and collected_ts == True:
-                psthclass.psth(True, baseline_recording)
-                calc_psth = True
-                if baseline_recording == False:
-                    psthclass.psth(False, baseline_recording)
-
-                if baseline_recording == False:
-                    psthclass.decode()
-                wait_for_timestamps = False
-                calculate_PSTH = False
-                foundevent = False
-                calc_psth = False
-                collected_ts = False
-##            toc = time.time() - tic
-##            print('toc: ',toc)
-##            timer_list.append(toc)
-
-                       
-
-    except KeyboardInterrupt:
-        running = False
-        
-    print('close')
-    psthclass.psthtemplate()
-    client.close_client()
-    psthclass.savetemplate()
-    x , y = psthclass.Test(baseline_recording)
-    # print("timer_list: ", timer_list)
