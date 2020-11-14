@@ -8,7 +8,7 @@ import json
 import copy
 #TODO: CSV for channels. Include post time window of event. Need to save population response (dict? key as event_count) from an event  so that they are all saved.
 class PSTH: ###Initiate PSTH with desired parameters, creates unit_dict which has wanted units and will catch timestamps from plexon.
-    def __init__(self, channel_dict, pre_time, post_time, bin_size):
+    def __init__(self, channel_dict, pre_time, post_time, bin_size, *, event_num_mapping=None):
         self.pre_time = pre_time
         self.post_time = post_time
         self.bin_size = bin_size
@@ -35,6 +35,8 @@ class PSTH: ###Initiate PSTH with desired parameters, creates unit_dict which ha
         self.event_count = 0
         self.current_ts = -1000
         self.current_ts_by_channel = defaultdict(lambda: 0)
+        
+        self.event_num_mapping = event_num_mapping
         
         self.responses = 0 ### testing number of responses
         # print('channel_dict', self.channel_dict)
@@ -69,6 +71,9 @@ class PSTH: ###Initiate PSTH with desired parameters, creates unit_dict which ha
         #Need to check that it's not a duplicate event...
         # print("event_ts", event_ts, self.current_ts)
         # if (event_ts - self.current_ts) > 1:
+        if self.event_num_mapping is not None:
+            event_unit = self.event_num_mapping[event_unit]
+        
         if (event_ts - self.current_ts) > 1:
             # print('event def')
             self.event_count = self.event_count + 1                             #Total count of events (number of events that occurred)
@@ -209,6 +214,8 @@ class PSTH: ###Initiate PSTH with desired parameters, creates unit_dict which ha
             json.dump(jsondata, outfile, indent=2)
     
     def loadtemplate(self, input_path, *, event_num_mapping=None):
+        if event_num_mapping is None:
+            event_num_mapping = self.event_num_mapping
         
         def map_events(data):
             if event_num_mapping is not None:

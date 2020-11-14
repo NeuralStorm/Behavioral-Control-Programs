@@ -70,11 +70,11 @@ class PsthTiltPlatform(AbstractContextManager):
             1: 1, 2: 2, 3: 3, 4: 4,
             9: 1, 11: 2, 12: 3, 14: 4,
         }
-        psth = Psth(channel_dict, pre_time, post_time, bin_size)
+        psth = Psth(channel_dict, pre_time, post_time, bin_size, event_num_mapping=event_num_mapping)
         if not baseline_recording:
             assert template_in_path is not None
         if template_in_path is not None:
-            psth.loadtemplate(template_in_path, event_num_mapping=event_num_mapping)
+            psth.loadtemplate(template_in_path)
         self.psth = psth
         
         if mock:
