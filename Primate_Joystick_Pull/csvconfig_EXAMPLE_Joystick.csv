@@ -16,6 +16,7 @@ Maximum Reward Time,0.18
 Enable Time Out,FALSE
 Time Out,1.0
 Ranges,3,0.5,0.175,0.75,0.35,1.125,0.58125
+reward_thresholds,3,0,5
 Inter Trial Time,1
 Adaptive Value,0.05
 Adaptive Algorithm,1
