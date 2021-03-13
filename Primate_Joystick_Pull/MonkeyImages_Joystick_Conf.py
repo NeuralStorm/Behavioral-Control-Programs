@@ -90,6 +90,9 @@ class MonkeyImages(tk.Frame,):
         self.joystick_pull_remote_ts = None
         self.joystick_release_remote_ts = None
         
+        # used in gathering_data_omni_new to track changes in joystick position
+        self.joystick_last_state = None
+        
         if self.readyforplexon == True:
             ## Setup Plexon Server
             # Initialize the API class
@@ -517,7 +520,8 @@ class MonkeyImages(tk.Frame,):
         self.after(self.cb_delay_ms, self.progress_new_loop)
     
     def new_loop_upkeep(self):
-        self.gathering_data_omni()
+        # self.gathering_data_omni()
+        self.gathering_data_omni_new()
     
     def new_loop_gen(self):
         while True:
@@ -822,7 +826,7 @@ class MonkeyImages(tk.Frame,):
                 self.joystick_release_remote_ts = time.monotonic()
                 self.joystick_pulled = False
             
-            print('press', self.CurrentPress, event)
+            print('press', self.joystick_pulled, event)
 
     def ConfusionMatrix(self): # This will only be called once at the beginning
         self.confmat = tk.Toplevel(self)
@@ -893,6 +897,47 @@ class MonkeyImages(tk.Frame,):
             self.cv1.delete("all")
             self.cv1.create_image(0, 0, anchor = 'nw', image = self.photo)
     ############################################################################################################################################
+    def gathering_data_omni_new(self):
+        self.client.opx_wait(1000)
+        new_data = self.client.get_new_data()
+        
+        JOYSTICK_CHANNEL = 3
+        # joystick threshold
+        js_thresh = self.PullThreshold
+        
+        for i in range(new_data.num_data_blocks):
+            num_or_type = new_data.source_num_or_type[i]
+            block_type = source_numbers_types[new_data.source_num_or_type[i]]
+            chan = new_data.channel[i]
+            ts = new_data.timestamp[i]
+            
+            if block_type == CONTINUOUS_TYPE:
+                # Convert the samples from AD units to voltage using the voltage scaler, use tmp_samples[0] because it could be a list.
+                voltage_scaler = source_numbers_voltage_scalers[num_or_type]
+                samples = new_data.waveform[i][:max_samples_output]
+                samples = [s * voltage_scaler for s in samples]
+                val = samples[0]
+                
+                if chan == JOYSTICK_CHANNEL:
+                    if self.joystick_last_state is None:
+                        self.joystick_last_state = val
+                    
+                    # joystick has transitioned from not pulled to pulled
+                    if self.joystick_last_state < js_thresh and val >= js_thresh:
+                        self.joystick_pulled = True
+                        self.joystick_pull_remote_ts = ts
+                    # joystick has transitioned from pulled to not pulled
+                    elif self.joystick_last_state >= js_thresh and val < js_thresh:
+                        self.joystick_pulled = False
+                        self.joystick_release_remote_ts = ts
+                    
+                    self.joystick_last_state = val
+            elif num_or_type == self.event_source:
+                if chan == 9:
+                    self.Area1_right_pres = True
+                elif chan == 14:
+                    self.Area1_right_pres = False
+    
     def gathering_data_omni(self):
         self.client.opx_wait(1000)
         new_data = self.client.get_new_data()
