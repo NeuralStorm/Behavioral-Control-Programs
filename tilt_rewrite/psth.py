@@ -50,7 +50,9 @@ class PSTH: ###Initiate PSTH with desired parameters, creates unit_dict which ha
         self.unit_dict_template = copy.deepcopy(self.unit_dict)
         # print('unit_dict', self.unit_dict) 
         
-        self.output_extra = {}
+        self.output_extra = {
+            'event_num_mapping': event_num_mapping,
+        }
     
     ###### build_unit will be used to gather timestamps from plexon and add them to the unit_dict which will be used to compare psth formats, etc.
     def build_unit(self, tmp_channel, tmp_unit, tmp_timestamp):

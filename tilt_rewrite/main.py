@@ -1,18 +1,14 @@
 """
-python main.py --mock --no-record --dbg-motor-control --no-start-pulse --no-spike-wait --no-save-template
-python main.py --mock --no-record --no-start-pulse --no-spike-wait --num-tilts 4 --template-out x.json
-python main.py --mock --no-record --no-start-pulse --no-spike-wait --num-tilts 4 --template-o x.json --not-baseline-recording --template-in CSM037_ClosedLoopR_09182020.json
-python main.py --mock --no-record --no-start-pulse --no-spike-wait --num-tilts 4 --template-o x.json --not-baseline-recording --template-in CSM037_ClosedLoopR_09182020.json --retry
 """
 
-from typing import List, Dict, get_type_hints
+from typing import List, Dict, get_type_hints, Any, Literal, Tuple, Optional, Callable
 import time
 from random import randint
-from contextlib import ExitStack, AbstractContextManager
+from contextlib import ExitStack, AbstractContextManager, contextmanager
 import csv
 from itertools import count
 from threading import Thread
-from multiprocessing import Process
+from multiprocessing import Process, Event as PEvent
 from queue import Queue, Empty as QEmpty
 import sys
 import atexit
@@ -22,14 +18,15 @@ import argparse
 from pprint import pprint
 from copy import deepcopy
 import json
+from pathlib import Path
+
 import hjson
 
-import nidaqmx
-from nidaqmx.constants import LineGrouping, Edge, AcquisitionType, WAIT_INFINITELY
 import numpy as np
 
 from psth_tilt import PsthTiltPlatform, SpikeWaitTimeout
 from motor_control import MotorControl
+from util import hash_file
 
 DEBUG_CONFIG = {
     'motor_control': False,
@@ -45,6 +42,9 @@ def line_wait(line: str, value):
 
 class LineWait:
     def __init__(self, line: str):
+        import nidaqmx # pylint: disable=import-error
+        from nidaqmx.constants import LineGrouping # pylint: disable=import-error
+        
         self.task = nidaqmx.Task()
         self.task.di_channels.add_di_chan(line, line_grouping = LineGrouping.CHAN_PER_LINE)
         self.task.start()
@@ -61,6 +61,9 @@ class LineWait:
 # record stop line "Dev4/port2/line6"
 class LineReader:
     def __init__(self, line: str):
+        import nidaqmx # pylint: disable=import-error
+        from nidaqmx.constants import LineGrouping # pylint: disable=import-error
+        
         task = nidaqmx.Task()
         task.di_channels.add_di_chan(line, line_grouping=LineGrouping.CHAN_PER_LINE)
         task.start()
@@ -83,8 +86,8 @@ class TiltPlatform(AbstractContextManager):
         if DEBUG_CONFIG['motor_control']:
             self.motor = MotorControl(mock = mock)
         else:
-            import PyDAQmx
-            from PyDAQmx import Task
+            import PyDAQmx # pylint: disable=import-error
+            from PyDAQmx import Task # pylint: disable=import-error
             self.task = Task()
             
             self.task.CreateDOChan("/Dev4/port0/line0:7","",PyDAQmx.DAQmx_Val_ChanForAllLines)
@@ -96,7 +99,7 @@ class TiltPlatform(AbstractContextManager):
     
     def begin(self):
         assert not DEBUG_CONFIG['motor_control']
-        import PyDAQmx
+        import PyDAQmx # pylint: disable=import-error
         begin = np.array([0,0,0,0,0,0,0,0], dtype=np.uint8)
         self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,begin,None,None)
     
@@ -150,7 +153,7 @@ class TiltPlatform(AbstractContextManager):
                 time.sleep(water_duration)
                 self.motor.tilt('stop')
         else:
-            import PyDAQmx
+            import PyDAQmx # pylint: disable=import-error
             self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,data,None,None)
             time.sleep(1) # should this be tilt duration?
             self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,begin,None,None)
@@ -178,9 +181,24 @@ def generate_tilt_sequence(num_tilts):
     np.random.shuffle(a)
     return a
 
-def record_data(*, clock_source: str="", csv_path):
+class RecordEventContext(AbstractContextManager):
+    def __init__(self, stop_event: Any):
+        self.stop_event = stop_event
+    
+    def __exit__(self, *exc):
+        # print('debug wait for stop')
+        # time.sleep(5)
+        self.stop_event['stopped'].set()
+
+def record_data(*, clock_source: str="", clock_rate: int, csv_path, stop_event: Any, mock: bool):
+    if not mock:
+        import nidaqmx # pylint: disable=import-error
+        # pylint: disable=import-error
+        from nidaqmx.constants import LineGrouping, Edge, AcquisitionType, WAIT_INFINITELY
+    
     # samples per second
-    SAMPLE_RATE = 1250
+    # SAMPLE_RATE = 1250
+    SAMPLE_RATE = clock_rate
     SAMPLE_BATCH_SIZE = SAMPLE_RATE
     
     csv_headers = [
@@ -192,25 +210,39 @@ def record_data(*, clock_source: str="", csv_path):
     # csv_path = './loadcell_tilt.csv'
     # clock sourcs Dev6/PFI6
     with ExitStack() as stack:
-        task = stack.enter_context(nidaqmx.Task())
+        # add the record event context first so it will set the stopped
+        # event after all other context __exit__methods are called
+        stack.enter_context(RecordEventContext(stop_event))
         
-        task.ai_channels.add_ai_voltage_chan("Dev6/ai18:23,Dev6/ai32:39,Dev6/ai48:51")
-        task.ai_channels.add_ai_voltage_chan("Dev6/ai8:10")
-        # task.timing.cfg_samp_clk_timing(1000, source = "", sample_mode= AcquisitionType.CONTINUOUS, samps_per_chan = 1000)
-        # set sample rate slightly higher than actual sample rate, not sure if that's needed
-        # clock_source = "/Dev6/PFI6"
-        # clock_source = ""
-        task.timing.cfg_samp_clk_timing(SAMPLE_RATE+1, source=clock_source, sample_mode=AcquisitionType.CONTINUOUS, samps_per_chan=SAMPLE_BATCH_SIZE)
-        # task.triggers.start_trigger.cfg_dig_edge_start_trig("/Dev6/PFI8", trigger_edge=Edge.RISING)
+        if not mock:
+            task: Any = stack.enter_context(nidaqmx.Task())
+            
+            task.ai_channels.add_ai_voltage_chan("Dev6/ai18:23,Dev6/ai32:39,Dev6/ai48:51")
+            task.ai_channels.add_ai_voltage_chan("Dev6/ai8:10")
+            # task.timing.cfg_samp_clk_timing(1000, source = "", sample_mode= AcquisitionType.CONTINUOUS, samps_per_chan = 1000)
+            # set sample rate slightly higher than actual sample rate, not sure if that's needed
+            # clock_source = "/Dev6/PFI6"
+            # clock_source = ""
+            task.timing.cfg_samp_clk_timing(SAMPLE_RATE, source=clock_source, sample_mode=AcquisitionType.CONTINUOUS, samps_per_chan=SAMPLE_BATCH_SIZE)
+            # task.triggers.start_trigger.cfg_dig_edge_start_trig("/Dev6/PFI8", trigger_edge=Edge.RISING)
+        else:
+            WAIT_INFINITELY = None
+            class MockTask:
+                def read(self, samples_per_channel, _timeout):
+                    time.sleep(1)
+                    row = [
+                        [1 for _ in range(SAMPLE_BATCH_SIZE)]
+                        for _ in range(len(csv_headers) - 1)
+                    ]
+                    return row
+            task = MockTask()
         
         csv_file = stack.enter_context(open(csv_path, 'w+', newline=''))
         writer = csv.writer(csv_file)
         writer.writerow(csv_headers)
         
-        stop_reader = LineReader("Dev4/port2/line6")
-        stack.enter_context(stop_reader)
-        
-        task.start()
+        if not mock:
+            task.start()
         
         for row_i in count(0):
             if row_i == 0:
@@ -231,7 +263,7 @@ def record_data(*, clock_source: str="", csv_path):
                 
                 row_i += 1
             
-            if stop_reader.read_bool() == False:
+            if stop_event['stopping'].is_set():
                 break
 
 def spawn_thread(func, *args, **kwargs) -> Thread:
@@ -289,22 +321,23 @@ def run_non_psth_loop(platform: TiltPlatform, tilt_sequence, *, num_tilts):
         break
 
 def run_psth_loop(platform: PsthTiltPlatform, tilt_sequence, *,
-        sham: bool, retry_failed: bool):
+    sham: bool, retry_failed: bool,
+    output_extra: Dict[str, Any],
+    before_platform_close: Callable[[PsthTiltPlatform], None],
+):
+    
+    input_file_list = []
+    if platform.template_in_path is not None:
+        input_file_list.append(Path(platform.template_in_path))
+    
+    input_files = {}
+    for fpath in input_file_list:
+        input_files[fpath.name] = hash_file(fpath)
     
     # psth = platform.psth
     if sham:
         with open(platform.template_in_path) as f:
             template_in = json.load(f)
-        # tilt_sequence = [
-        #     # event_num_mapping[x]
-        #     x
-        #     for x in psth.loaded_json_event_number_dict['ActualEvents']
-        # ]
-        # sham_decodes = [
-        #     # event_num_mapping[x]
-        #     x
-        #     for x in psth.loaded_json_decode_number_dict['PredictedEvents']
-        # ]
         tilt_sequence = []
         sham_decodes = []
         sham_delays = []
@@ -327,8 +360,13 @@ def run_psth_loop(platform: PsthTiltPlatform, tilt_sequence, *,
     
     spawn_thread(input_thread)
     
-    tilt_records = []
+    tilt_records: List[Dict[str, Any]] = []
+    # tilts will be added to below before being written to json
     platform.psth.output_extra['tilts'] = tilt_records
+    platform.psth.output_extra['baseline'] = platform.baseline_recording
+    platform.psth.output_extra['input_files'] = input_files
+    platform.psth.output_extra['output_files'] = {}
+    platform.psth.output_extra.update(output_extra)
     
     def get_cmd():
         try:
@@ -412,6 +450,8 @@ def run_psth_loop(platform: PsthTiltPlatform, tilt_sequence, *,
     
     run_tilts()
     
+    before_platform_close(platform)
+    
     platform.close()
     psthclass = platform.psth
     
@@ -439,77 +479,128 @@ def run_psth_loop(platform: PsthTiltPlatform, tilt_sequence, *,
 
 class Config:
     channels: 'Dict[int, List[int]]'
-    def __init__(self):
-        self.channels = None
+    # "open_loop" or "closed_loop"
+    mode: Literal['open_loop', 'closed_loop']
+    
+    # clock source and rate for grf data collection
+    # external = downsampled plexon clock, PFI6
+    # internal = internal nidaq clock
+    clock_source: Literal['external', 'internal']
+    clock_rate: int
+    
+    num_tilts: int
+    # time range to wait between tilts
+    delay_range: Tuple[float, float]
+    
+    # None if mode == open_loop
+    baseline: Optional[bool]
+    sham: Optional[bool]
+    reward: Optional[bool]
+    
+    # full deserialized json from the config file
+    raw: Any
 
-def load_config(path):
+def load_config(path: Path, labels_path: Optional[Path]):
     with open(path) as f:
         data = hjson.load(f)
     
     config = Config()
+    config.raw = data
     
+    if labels_path is not None:
+        with open(labels_path) as f:
+            labels_data = hjson.load(f)
+    else:
+        labels_data = data
     channels = {
         int(k): v
-        for k, v in data['channels'].items()
+        for k, v in labels_data['channels'].items()
     }
     # assert isinstance(channels, get_type_hints(Config)['channels'])
     config.channels = channels
     
+    mode = data['mode']
+    assert mode in ['open_loop', 'closed_loop']
+    config.mode = mode
+    
+    config.clock_source = data['clock_source']
+    assert config.clock_source in ['external', 'internal']
+    config.clock_rate = data['clock_rate']
+    assert type(config.clock_rate) == int
+    
+    assert len(data['delay_range']) == 2
+    config.delay_range = (data['delay_range'][0], data['delay_range'][1])
+    assert len(config.delay_range) == 2
+    
+    config.num_tilts = data['num_tilts']
+    assert type(config.num_tilts) == int
+    
+    if mode == 'open_loop':
+        pass
+    elif mode == 'closed_loop':
+        config.baseline = data['baseline']
+        config.sham = data['sham']
+        config.reward = data['reward']
+        assert type(config.baseline) == bool
+        assert type(config.sham) == bool
+        assert type(config.reward) == bool
+    else:
+        assert False
+    
     return config
 
-def parse_args():
+def parse_args_config():
     parser = argparse.ArgumentParser(description='')
     
-    parser.add_argument('--config', required=False,
-        help='config file, currently used for channel dict')
+    parser.add_argument('config',
+        help='config file')
+    parser.add_argument('--labels', required=False,
+        help='labels file')
     
-    parser.add_argument('--non-psth', action='store_true',
-        help='run the non psth loop')
-    
-    parser.add_argument('--ext-clock', action='store_true',
-        help='use external clock for nidaq when collecting loadcell data')
+    parser.add_argument('--no-start-pulse', action='store_true',
+        help='do not wait for plexon start pulse or enter press, skips initial 3 second wait')
     parser.add_argument('--loadcell-out', default='./loadcell_tilt.csv',
         help='file to write loadcell csv data to (default ./loadcell_tilt.csv)')
     parser.add_argument('--no-record', action='store_true',
         help='skip recording loadcell data')
     
-    parser.add_argument('--no-start-pulse', action='store_true',
-        help='do not wait for plexon start pulse or enter press, skips initial 3 second wait')
-    parser.add_argument('--not-baseline-recording', action='store_true',
-        help='set psth to not be baseline recording')
-    parser.add_argument('--sham', action='store_true',
-        help='')
-    parser.add_argument('--no-spike-wait', action='store_true',
-        help='immediatly continue after sending a signal to the motor controller, only useful for testing without hardware')
-    parser.add_argument('--fixed-spike-wait', action='store_true',
-        help='waits for a fixed amout of time after the tilt event is recieved from plexon')
-    parser.add_argument('--no-save-template', action='store_true',
-        help='')
     parser.add_argument('--template-out',
         help='output path for generated template')
     parser.add_argument('--template-in',
         help='input path for template')
-    parser.add_argument('--num-tilts', type=int, default=400,
-        help='number of tilts to do, must be divisible by 4 (default 400)')
-    parser.add_argument('--delay-range',
-        type=lambda s: tuple(float(x) for x in s.split('-')),
-        default=(2, 3),
-        help='time range to wait between tilts default: 2-3')
+    
+    parser.add_argument('--no-spike-wait', action='store_true',
+        help=argparse.SUPPRESS)
+    parser.add_argument('--fixed-spike-wait', action='store_true',
+        help=argparse.SUPPRESS)
     parser.add_argument('--retry', action='store_true',
-        help='retry tilts if there are no spikes')
-    
+        help=argparse.SUPPRESS)
     parser.add_argument('--mock', action='store_true',
-        help="")
-    
+        help=argparse.SUPPRESS)
     parser.add_argument('--dbg-motor-control', action='store_true',
-        help='use pydaqmx in non psth mode (psth mode always uses nidaqmx)')
+        help=argparse.SUPPRESS)
     
     args = parser.parse_args()
     
     return args
 
 def main():
-    args = parse_args()
+    args = parse_args_config()
+    config = load_config(args.config, args.labels)
+    print(config.channels)
+    
+    args_record = dict(vars(args))
+    dev_flags = [
+        'dbg_motor_control',
+        'mock',
+        'no_spike_wait',
+        'fixed_spike_wait',
+        'retry',
+    ]
+    for flag in dev_flags:
+        if not args_record[flag]:
+            del args_record[flag]
+    
     mock = args.mock
     
     if not args.dbg_motor_control:
@@ -517,20 +608,38 @@ def main():
     if mock:
         DEBUG_CONFIG['mock'] = True
     
-    mode = 'normal' if args.non_psth else 'psth'
+    # mode = 'normal' if args.non_psth else 'psth'
+    if config.mode == 'open_loop':
+        mode = 'normal'
+    elif config.mode == 'closed_loop':
+        mode = 'psth'
+    else:
+        raise ValueError(f"invalid mode {config.mode}")
     
     assert mode in ['psth', 'normal']
     
-    # line_wait("Dev4/port2/line2", False)
-    # waiter = LineWait("Dev4/port2/line2")
+    tilt_sequence = generate_tilt_sequence(config.num_tilts)
     
-    tilt_sequence = generate_tilt_sequence(args.num_tilts)
-    
-    clock_source = '/Dev6/PFI6' if args.ext_clock else ''
+    if config.clock_source == 'internal':
+        clock_source = ''
+    elif config.clock_source == 'external':
+        clock_source = '/Dev6/PFI6'
+    else:
+        assert False
     if not args.no_record:
-        spawn_process(_error_record_data, clock_source=clock_source, csv_path=args.loadcell_out)
+        record_stop_event = {
+            'stopping': PEvent(),
+            'stopped': PEvent(),
+        }
+        spawn_process(
+            _error_record_data, clock_source=clock_source,
+            clock_rate=config.clock_rate, csv_path=args.loadcell_out,
+            stop_event=record_stop_event, mock=args.mock,
+        )
+    else:
+        record_stop_event = None
     
-    if not args.no_start_pulse:
+    if not args.no_start_pulse and not args.mock:
         print("waiting for plexon start pulse")
         line_wait("Dev4/port2/line1", True)
         
@@ -538,34 +647,61 @@ def main():
         print("Waiting 3 seconds ?")
         time.sleep(3) # ?
     
-    
-    
     if mode == 'psth':
         print("running psth")
-        baseline_recording = not args.not_baseline_recording
+        baseline_recording = config.baseline
         
-        assert args.config is not None, "--config required for psth"
-        config = load_config(args.config)
+        output_extra = {
+            'config': config.raw,
+            'args': args_record,
+        }
+        
+        def before_platform_close(platform):
+            if platform.closed:
+                return
+            if record_stop_event is not None:
+                record_stop_event['stopping'].set()
+                print("waiting for recording to stop (platform)")
+                record_stop_event['stopped'].wait(timeout=15)
+                
+                fpath = Path(args.loadcell_out)
+                grf_file_hash = hash_file(fpath)
+                
+                platform.psth.output_extra['output_files'][fpath.name] = grf_file_hash
+        
+        # also create a context manager so before_platform_close will still be run
+        # if an error occures
+        @contextmanager
+        def platform_close_context(platform):
+            try:
+                yield
+            finally:
+                before_platform_close(platform)
         
         with PsthTiltPlatform(
             baseline_recording = baseline_recording,
-            save_template = not args.no_save_template and not args.sham,
+            save_template = bool(args.template_out),
             template_output_path = args.template_out,
             template_in_path = args.template_in,
             channel_dict = config.channels,
             mock = mock,
+            reward_enabled = config.reward,
         ) as platform:
             if args.no_spike_wait:
                 assert not args.fixed_spike_wait
-                platform.no_spike_wait = True
+                platform.fixed_spike_wait_time = 0.2
+                platform.fixed_spike_wait_timeout = 1.5
             if args.fixed_spike_wait:
                 assert not args.no_spike_wait
                 platform.fixed_spike_wait = True
-            platform.delay_range = args.delay_range
-            run_psth_loop(
-                platform, tilt_sequence,
-                sham=args.sham, retry_failed=args.retry,
-            )
+            platform.delay_range = config.delay_range
+            with platform_close_context(platform):
+                run_psth_loop(
+                    platform, tilt_sequence,
+                    sham=config.sham, retry_failed=args.retry,
+                    output_extra=output_extra,
+                    before_platform_close = before_platform_close,
+                )
     elif mode == 'normal':
         print("running non psth")
         with TiltPlatform(mock=mock) as platform:
@@ -573,9 +709,10 @@ def main():
     else:
         raise ValueError("Invalid mode")
     
-    # waiter = LineWait("Dev4/port2/line2")
-    # waiter.wait(False)
-    # waiter.end()
+    if record_stop_event is not None:
+        record_stop_event['stopping'].set()
+        print("waiting for recording to stop")
+        record_stop_event['stopped'].wait(timeout=15)
 
 if __name__ == '__main__':
     main()

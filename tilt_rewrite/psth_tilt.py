@@ -26,12 +26,14 @@ class PsthTiltPlatform(AbstractContextManager):
             template_in_path,
             channel_dict,
             mock: bool = False,
+            reward_enabled: bool,
             ):
         
         self.mock = mock
         self.save_template = save_template
         self.template_output_path = template_output_path
         self.template_in_path = template_in_path
+        self.reward_enabled = reward_enabled
         if save_template:
             assert self.template_output_path is not None
         
@@ -43,7 +45,7 @@ class PsthTiltPlatform(AbstractContextManager):
         
         if mock:
             self.PL_SingleWFType = 0
-            self.PL_ExtEventType = 0
+            self.PL_ExtEventType = 1
             self.plex_client = None
         else:
             from pyplexclientts import PyPlexClientTSAPI, PL_SingleWFType, PL_ExtEventType
@@ -52,7 +54,6 @@ class PsthTiltPlatform(AbstractContextManager):
             self.PL_SingleWFType = PL_SingleWFType
             self.PL_ExtEventType = PL_ExtEventType
             self.plex_client = client
-        _nores = self._get_ts() # ?
         
         # channel_dict = {
         #     1: [1], 2: [1,2], 3: [1,2], 4: [1,2],
@@ -77,39 +78,18 @@ class PsthTiltPlatform(AbstractContextManager):
             psth.loadtemplate(template_in_path)
         self.psth = psth
         
-        if mock:
-            # self.psth.event(10, 1)
-            # for v in channel_dict.values():
-            #     for c in v:
-            #         for i in range(0, 1000, 10):
-            #             self.psth.event(i, c)
-            
-            for t in range(10, 21, 10):
-                self.psth.event(t, 1)
-                for chan, units in channel_dict.items():
-                    # chan, units = next(iter(channel_dict.items()))
-                    # chan = 55
-                    # units = [1]
-                    # self.psth.build_unit(chan, units[0], t-2)
-                    # self.psth.event(t, units[0])
-                    # self.psth.event(t+2, units[0])
-                    self.psth.build_unit(chan, units[0], t+2)
-                    self.psth.build_unit(chan, units[0], t+6)
-                    
-                    self.psth.psth(True, self.baseline_recording)
-                    if not self.baseline_recording:
-                        self.psth.psth(False, self.baseline_recording)
-                        
-                        self.psth.decode()
-                    for unit in units:
-                        # self.psth.event(t, unit)
-                        # self.psth.build_unit(chan, unit, t)
-                        pass
+        self._mock_state = {
+            '_get_ts': {
+                's': 'pending',
+                't': time.perf_counter(),
+            }
+        }
         
         self.no_spike_wait = False
-        self.fixed_spike_wait = False
-        self.fixed_spike_wait_time = 0.2
-        self.fixed_spike_wait_timeout = 1.5
+        # time to wait after tilt event is recieved from plexon
+        self.fixed_spike_wait_time = None
+        # program fails after this amount of time if tilt isn't recieved from plexon
+        self.fixed_spike_wait_timeout = None
         self.closed = False
         self.delay_range = (1.5, 2)
     
@@ -134,7 +114,37 @@ class PsthTiltPlatform(AbstractContextManager):
     
     def _get_ts(self):
         if self.mock:
-            return []
+            for k, v in self.psth.channel_dict.items():
+                if v:
+                    channel = k
+                    unit = v[0]
+                    break
+            
+            class MockEvent:
+                Channel: int
+                Type: int
+                TimeStamp: float
+            
+            time.sleep(0.050) # wait 50ms to maybe mimick plexon
+            s = self._mock_state['_get_ts']
+            if s['s'] == 'pending':
+                e = MockEvent()
+                e.Type = self.PL_ExtEventType
+                e.Channel = 257
+                e.Unit = unit
+                e.TimeStamp = time.perf_counter()
+                s['s'] = 'tilting'
+                return [e]
+            elif s['s'] == 'tilting':
+                e = MockEvent()
+                e.Type = self.PL_SingleWFType
+                e.Channel = channel
+                e.Unit = unit
+                e.TimeStamp = time.perf_counter()
+                s['s'] = 'pending'
+                return [e]
+            else:
+                assert False
         else:
             res = self.plex_client.get_ts()
             return res
@@ -172,7 +182,6 @@ class PsthTiltPlatform(AbstractContextManager):
         
         water_duration = 0.15
         punish_duration = 2
-        # tilt_duration = 1.75
         
         if tilt_type == 1:
             # data = tilt1
@@ -189,42 +198,30 @@ class PsthTiltPlatform(AbstractContextManager):
         else:
             raise ValueError("Invalid tilt type {}".format(tilt_type))
         
-        # ?Time dependent section. Will include the client and decode here.
-        # ?if tiltbool == False:
         res = self._get_ts()
         for event in res:
             add_event_to_record(event, ignored=True)
-        # time.sleep(self.psth.pre_time)
+        
         self.motor.tilt(tilt_name)
         send_tilt_time = time.time()
-        # time.sleep(self.psth.post_time)
-        # time.sleep(0.075)
         
         
         found_event = False # track if a tilt has started yet
         collected_ts = False
         packets_since_tilt = 0
         tilt_time = None
-        while (found_event == False or collected_ts == False) or self.fixed_spike_wait:
+        while (found_event == False or collected_ts == False) or self.fixed_spike_wait_time is not None:
             res = self._get_ts()
             if found_event:
                 packets_since_tilt += 1
             
             for t in res: # 50ms ?
                 is_relevent = None
-                if t.Type == self.PL_SingleWFType: #\
-                    # and t.Channel in self.psth.total_channel_dict.keys() \
-                    # and t.Unit in self.psth.total_channel_dict[t.Channel]:
-                    
+                if t.Type == self.PL_SingleWFType:
                     is_relevent = self.psth.build_unit(t.Channel, t.Unit, t.TimeStamp)
                     
                     if is_relevent:
                         collected_ts = True
-                        # print("collected ts")
-                        # if found_event and t.TimeStamp >= (self.psth.current_ts + self.psth.post_time):
-                        #     if not collected_ts:
-                        #         collected_ts = True
-                        #         print("collected ts")
                 elif t.Type == self.PL_ExtEventType:
                     if t.Channel == 257 and found_event:
                         warn_str = "WARNING: recieved a second tilt event"
@@ -245,7 +242,7 @@ class PsthTiltPlatform(AbstractContextManager):
             
             if self.no_spike_wait or \
                     (
-                        self.fixed_spike_wait and
+                        self.fixed_spike_wait_time is not None and
                         tilt_time is not None and
                         time.time() - tilt_time > self.fixed_spike_wait_time
                     ):
@@ -271,7 +268,6 @@ class PsthTiltPlatform(AbstractContextManager):
         got_response = found_event and collected_ts
         tilt_record['got_response'] = got_response
         
-        # ?if calc_psth == False and collected_ts == True:
         if got_response:
             self.psth.psth(True, self.baseline_recording)
             if not self.baseline_recording:
@@ -300,35 +296,25 @@ class PsthTiltPlatform(AbstractContextManager):
             print(f"decode {decoder_result}")
             
             if decoder_result:
-                self.motor_interrupt.tilt('reward')
-                self.motor.tilt('wateron')
-                time.sleep(water_duration)
-                self.motor.tilt('stop')
-                self.motor_interrupt.tilt('stop')
+                if self.reward_enabled:
+                    self.motor_interrupt.tilt('reward')
+                    self.motor.tilt('wateron')
+                    time.sleep(water_duration)
+                    self.motor.tilt('stop')
+                    self.motor_interrupt.tilt('stop')
             else:
                 self.motor_interrupt.tilt('punish')
                 time.sleep(punish_duration)
                 self.motor_interrupt.tilt('stop')
                 # time.sleep(2)
         
-        # delay = ((randint(1,50))/100)+ 1.5
         if delay is None:
             delay = random.uniform(*self.delay_range)
         tilt_record['delay'] = delay
-        
-        # if sham_result is not None:
-        #     self.motor.tilt('stop')
-        #     print('delay (sham)')
-        #     time.sleep(delay)
-        # if not self.baseline_recording and sham_result is True:
-        #     time.sleep(0.5)
         
         self.motor.tilt('stop')
         print(f'delay {delay:.2f}')
         
         time.sleep(delay)
         
-        # if not self.baseline_recording:
-        #     if decoder_result:
-        #         time.sleep(0.5)
         return tilt_record
