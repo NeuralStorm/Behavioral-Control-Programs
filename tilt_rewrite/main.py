@@ -29,7 +29,7 @@ from motor_control import MotorControl
 from util import hash_file
 
 DEBUG_CONFIG = {
-    'motor_control': False,
+    # 'motor_control': False,
     'mock': False,
 }
 
@@ -81,7 +81,9 @@ class LineReader:
         return self.task.__exit__(*exc)
 
 class TiltPlatform(AbstractContextManager):
-    def __init__(self, mock: bool = False):
+    def __init__(self, *, mock: bool = False, delay_range: Tuple[float, float]):
+        
+        self.delay_range = delay_range
         
         if DEBUG_CONFIG['motor_control']:
             self.motor = MotorControl(mock = mock)
@@ -120,51 +122,24 @@ class TiltPlatform(AbstractContextManager):
         water_duration = 0.15
         tilt_duration = 1.75
         
-        tilt1 = np.array([1,0,0,1,0,0,0,0], dtype=np.uint8)
-        tilt3 = np.array([1,1,0,1,0,0,0,0], dtype=np.uint8)
-        tilt4 = np.array([0,0,1,1,0,0,0,0], dtype=np.uint8)
-        tilt6 = np.array([0,1,1,1,0,0,0,0], dtype=np.uint8)
-        begin = np.array([0,0,0,0,0,0,0,0], dtype=np.uint8)
-        wateron = np.array([0,0,0,0,1,0,0,0], dtype=np.uint8)
-        
-        if tilt_type == 1:
-            data = tilt1
-            tilt_name = 'a'
-        elif tilt_type == 2:
-            data = tilt3
-            tilt_name = 'b'
-        elif tilt_type == 3:
-            data = tilt4
-            tilt_name = 'c'
-        elif tilt_type == 4:
-            data = tilt6
-            tilt_name = 'd'
-        else:
+        try:
+            tilt_name = {1: 'a', 2: 'b', 3: 'c', 4: 'd'}[tilt_type]
+        except KeyError:
             raise ValueError("Invalid tilt type {}".format(tilt_type))
         
-        if DEBUG_CONFIG['motor_control']:
-            self.motor.tilt(tilt_name)
-            time.sleep(1) # should this be tilt duration?
-            self.motor.tilt('stop')
-            time.sleep(tilt_duration) # ???
-            
-            if water:
-                self.motor.tilt('wateron')
-                time.sleep(water_duration)
-                self.motor.tilt('stop')
-        else:
-            import PyDAQmx # pylint: disable=import-error
-            self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,data,None,None)
-            time.sleep(1) # should this be tilt duration?
-            self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,begin,None,None)
-            time.sleep(tilt_duration) # ???
-            
-            if water:
-                self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,wateron,None,None)
-                time.sleep(water_duration)
-                self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,begin,None,None)
+        self.motor.tilt(tilt_name)
+        time.sleep(1) # should this be tilt duration?
+        self.motor.tilt('stop')
+        time.sleep(tilt_duration) # ???
         
-        delay = ((randint(1,100))/100)+1.5
+        if water:
+            self.motor.tilt('wateron')
+            time.sleep(water_duration)
+            self.motor.tilt('stop')
+        
+        # delay = ((randint(1,100))/100)+1.5
+        import random
+        delay = random.uniform(*self.delay_range)
         time.sleep(delay)
 
 def generate_tilt_sequence(num_tilts):
@@ -298,12 +273,13 @@ def spawn_process(func, *args, **kwargs) -> Process:
     return proc
 
 def run_non_psth_loop(platform: TiltPlatform, tilt_sequence, *, num_tilts):
+    assert num_tilts == len(tilt_sequence)
     i = 0
     while True:
         try:
             while True:
                 # check at start of loop in case of keyboard interrupt
-                if i >= 400:
+                if i >= num_tilts:
                     break
                 
                 platform.tilt(tilt_sequence[i])
@@ -647,7 +623,7 @@ def main():
         print("Waiting 3 seconds ?")
         time.sleep(3) # ?
     
-    if mode == 'psth':
+    if mode == 'psth': # closed loop
         print("running psth")
         baseline_recording = config.baseline
         
@@ -702,10 +678,10 @@ def main():
                     output_extra=output_extra,
                     before_platform_close = before_platform_close,
                 )
-    elif mode == 'normal':
+    elif mode == 'normal': # open loop
         print("running non psth")
-        with TiltPlatform(mock=mock) as platform:
-            run_non_psth_loop(platform, tilt_sequence, num_tilts=args.num_tilts)
+        with TiltPlatform(mock=mock, delay_range=config.delay_range) as platform:
+            run_non_psth_loop(platform, tilt_sequence, num_tilts=config.num_tilts)
     else:
         raise ValueError("Invalid mode")
     

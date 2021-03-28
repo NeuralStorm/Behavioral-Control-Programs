@@ -65,6 +65,7 @@ class PsthTiltPlatform(AbstractContextManager):
         # }
         pre_time = 0.0
         post_time = 0.200
+        self._post_time = post_time
         bin_size = 0.020
         self.baseline_recording = baseline_recording
         event_num_mapping = {
@@ -210,6 +211,7 @@ class PsthTiltPlatform(AbstractContextManager):
         collected_ts = False
         packets_since_tilt = 0
         tilt_time = None
+        tilt_plexon_time = None
         while (found_event == False or collected_ts == False) or self.fixed_spike_wait_time is not None:
             res = self._get_ts()
             if found_event:
@@ -221,7 +223,11 @@ class PsthTiltPlatform(AbstractContextManager):
                     is_relevent = self.psth.build_unit(t.Channel, t.Unit, t.TimeStamp)
                     
                     if is_relevent:
-                        collected_ts = True
+                        if self.fixed_spike_wait_time or self.no_spike_wait:
+                            collected_ts = True
+                        elif tilt_plexon_time is not None and \
+                                t.TimeStamp >= tilt_plexon_time + self._post_time:
+                            collected_ts = True
                 elif t.Type == self.PL_ExtEventType:
                     if t.Channel == 257 and found_event:
                         warn_str = "WARNING: recieved a second tilt event"
@@ -237,6 +243,7 @@ class PsthTiltPlatform(AbstractContextManager):
                         found_event = True
                         is_relevent = True
                         tilt_time = time.time()
+                        tilt_plexon_time = t.TimeStamp
                 
                 add_event_to_record(t, relevent=is_relevent)
             
