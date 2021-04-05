@@ -32,6 +32,7 @@ DEBUG_CONFIG = {
     # 'motor_control': False,
     'mock': False,
 }
+RECORD_PROCESS_STOP_TIMEOUT = 30
 
 # start Dev4/port2/line1 True
 # stop  Dev4/port2/line2 False
@@ -85,38 +86,16 @@ class TiltPlatform(AbstractContextManager):
         
         self.delay_range = delay_range
         
-        if DEBUG_CONFIG['motor_control']:
-            self.motor = MotorControl(mock = mock)
-        else:
-            import PyDAQmx # pylint: disable=import-error
-            from PyDAQmx import Task # pylint: disable=import-error
-            self.task = Task()
-            
-            self.task.CreateDOChan("/Dev4/port0/line0:7","",PyDAQmx.DAQmx_Val_ChanForAllLines)
-            self.task.StartTask()
-            self.begin()
+        self.motor = MotorControl(mock = mock)
     
     def __exit__(self, *exc):
         self.close()
     
-    def begin(self):
-        assert not DEBUG_CONFIG['motor_control']
-        import PyDAQmx # pylint: disable=import-error
-        begin = np.array([0,0,0,0,0,0,0,0], dtype=np.uint8)
-        self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,begin,None,None)
-    
     def stop(self):
-        if DEBUG_CONFIG['motor_control']:
-            self.motor.tilt('stop')
-        else:
-            self.begin()
+        self.motor.tilt('stop')
     
     def close(self):
-        if DEBUG_CONFIG['motor_control']:
-            self.motor.close()
-        else:
-            self.begin()
-            self.task.StopTask()
+        self.motor.close()
     
     def tilt(self, tilt_type, water=False):
         water_duration = 0.15
@@ -128,9 +107,8 @@ class TiltPlatform(AbstractContextManager):
             raise ValueError("Invalid tilt type {}".format(tilt_type))
         
         self.motor.tilt(tilt_name)
-        time.sleep(1) # should this be tilt duration?
+        time.sleep(tilt_duration)
         self.motor.tilt('stop')
-        time.sleep(tilt_duration) # ???
         
         if water:
             self.motor.tilt('wateron')
@@ -156,20 +134,29 @@ def generate_tilt_sequence(num_tilts):
     np.random.shuffle(a)
     return a
 
+class RecordFailure(Exception):
+    pass
+
+_recording_check_event = {'_': None}
+def check_recording():
+    """raises an exception if recording has failed"""
+    e = _recording_check_event['_']
+    assert e is not None
+    if e.is_set():
+        raise RecordFailure()
+
 class RecordEventContext(AbstractContextManager):
     def __init__(self, stop_event: Any):
         self.stop_event = stop_event
     
     def __exit__(self, *exc):
+        if exc != (None, None, None):
+            self.stop_event['failed'].set()
         # print('debug wait for stop')
         # time.sleep(5)
         self.stop_event['stopped'].set()
 
 def record_data(*, clock_source: str="", clock_rate: int, csv_path, stop_event: Any, mock: bool):
-    if not mock:
-        import nidaqmx # pylint: disable=import-error
-        # pylint: disable=import-error
-        from nidaqmx.constants import LineGrouping, Edge, AcquisitionType, WAIT_INFINITELY
     
     # samples per second
     # SAMPLE_RATE = 1250
@@ -186,10 +173,17 @@ def record_data(*, clock_source: str="", clock_rate: int, csv_path, stop_event: 
     # clock sourcs Dev6/PFI6
     with ExitStack() as stack:
         # add the record event context first so it will set the stopped
-        # event after all other context __exit__methods are called
+        # event after all other context __exit__ methods are called
+        # 
+        # this should happen before any failable operation so the failed event will
+        # be set in the case of a failure
         stack.enter_context(RecordEventContext(stop_event))
         
         if not mock:
+            import nidaqmx # pylint: disable=import-error
+            # pylint: disable=import-error
+            from nidaqmx.constants import LineGrouping, Edge, AcquisitionType, WAIT_INFINITELY
+            
             task: Any = stack.enter_context(nidaqmx.Task())
             
             task.ai_channels.add_ai_voltage_chan("Dev6/ai18:23,Dev6/ai32:39,Dev6/ai48:51")
@@ -222,7 +216,9 @@ def record_data(*, clock_source: str="", clock_rate: int, csv_path, stop_event: 
         for row_i in count(0):
             if row_i == 0:
                 # no timeout on first read to wait for start trigger
-                read_timeout = WAIT_INFINITELY
+                # read_timeout = WAIT_INFINITELY
+                # actually a timeout since start trigger isn't being used
+                read_timeout = 20
             else:
                 read_timeout = 10 # default in nidaq
             
@@ -278,10 +274,13 @@ def run_non_psth_loop(platform: TiltPlatform, tilt_sequence, *, num_tilts):
     while True:
         try:
             while True:
+                check_recording()
+                
                 # check at start of loop in case of keyboard interrupt
                 if i >= num_tilts:
                     break
                 
+                print(f"tilt {i+1}/{num_tilts}")
                 platform.tilt(tilt_sequence[i])
                 
                 i += 1
@@ -360,6 +359,7 @@ def run_psth_loop(platform: PsthTiltPlatform, tilt_sequence, *,
             return cmd
     
     def do_tilt(tilt_type, i, sham_i, retry=None):
+        check_recording()
         if sham:
             sham_result = tilt_type == sham_decodes[sham_i]
         else:
@@ -454,7 +454,7 @@ def run_psth_loop(platform: PsthTiltPlatform, tilt_sequence, *,
         print(f"{num_failures} tilts failed due to no spikes occuring, THIS SHOULD NOT HAPPEN. TELL DR MOXON")
 
 class Config:
-    channels: 'Dict[int, List[int]]'
+    channels: Optional[Dict[int, List[int]]]
     # "open_loop" or "closed_loop"
     mode: Literal['open_loop', 'closed_loop']
     
@@ -483,18 +483,6 @@ def load_config(path: Path, labels_path: Optional[Path]):
     config = Config()
     config.raw = data
     
-    if labels_path is not None:
-        with open(labels_path) as f:
-            labels_data = hjson.load(f)
-    else:
-        labels_data = data
-    channels = {
-        int(k): v
-        for k, v in labels_data['channels'].items()
-    }
-    # assert isinstance(channels, get_type_hints(Config)['channels'])
-    config.channels = channels
-    
     mode = data['mode']
     assert mode in ['open_loop', 'closed_loop']
     config.mode = mode
@@ -512,7 +500,10 @@ def load_config(path: Path, labels_path: Optional[Path]):
     assert type(config.num_tilts) == int
     
     if mode == 'open_loop':
-        pass
+        config.baseline = None
+        config.sham = None
+        config.reward = None
+        config.channels = None
     elif mode == 'closed_loop':
         config.baseline = data['baseline']
         config.sham = data['sham']
@@ -520,6 +511,18 @@ def load_config(path: Path, labels_path: Optional[Path]):
         assert type(config.baseline) == bool
         assert type(config.sham) == bool
         assert type(config.reward) == bool
+        
+        if labels_path is not None:
+            with open(labels_path) as f:
+                labels_data = hjson.load(f)
+        else:
+            labels_data = data
+        channels = {
+            int(k): v
+            for k, v in labels_data['channels'].items()
+        }
+        # assert isinstance(channels, get_type_hints(Config)['channels'])
+        config.channels = channels
     else:
         assert False
     
@@ -604,9 +607,14 @@ def main():
         assert False
     if not args.no_record:
         record_stop_event = {
+            # set to request the record process to stop 
             'stopping': PEvent(),
+            # set when the record process completes
             'stopped': PEvent(),
+            # set if recording process fails
+            'failed': PEvent(),
         }
+        _recording_check_event['_'] = record_stop_event['failed']
         spawn_process(
             _error_record_data, clock_source=clock_source,
             clock_rate=config.clock_rate, csv_path=args.loadcell_out,
@@ -636,9 +644,10 @@ def main():
             if platform.closed:
                 return
             if record_stop_event is not None:
+                # stop the recording process so we can calculate the hash of the recorded file
                 record_stop_event['stopping'].set()
                 print("waiting for recording to stop (platform)")
-                record_stop_event['stopped'].wait(timeout=15)
+                record_stop_event['stopped'].wait(timeout=RECORD_PROCESS_STOP_TIMEOUT)
                 
                 fpath = Path(args.loadcell_out)
                 grf_file_hash = hash_file(fpath)
@@ -688,7 +697,9 @@ def main():
     if record_stop_event is not None:
         record_stop_event['stopping'].set()
         print("waiting for recording to stop")
-        record_stop_event['stopped'].wait(timeout=15)
+        record_stop_event['stopped'].wait(timeout=RECORD_PROCESS_STOP_TIMEOUT)
+    
+    check_recording()
 
 if __name__ == '__main__':
     main()

@@ -8,6 +8,46 @@ python main.py example_config.hjson --template-out x_2.json --template-in x.json
 
 # Usage
 
+## Usage example
+
+### Open loop
+
+Make a copy of example_config.hjson, ensure `mode` is set to open_loop. Set `num_tilts` and `delay_range` to the desired values. `baseline`, `sham`, `reward` and `channels` can be ignored or removed from the config file.
+
+Run the script (how python in envoked will vary depending on system configuration)
+```
+python main.py your_config.hjson --loadcell-out grf_data.csv
+```
+This will read setting from `your_config.hjson` and write recorded grf data to `grf_data.csv`. Note that if `grf_data.csv` already exists it will be overwritten.
+
+The program will run through the specified number of tilts then exit.
+
+### Closed loop, initial run
+
+Make a copy of example_config.hjson, set `mode` to closed_loop, `baseline` to true and `sham` to false. Set `num_tilts`, `delay_range`, and `channels` to the desired values. `reward` is not used.
+
+Run the script (how python in envoked will vary depending on system configuration)
+```
+python main.py your_config.hjson --template-out template_a.json --loadcell-out grf_data.csv
+```
+This will read settings from `your_config.hjson` and write recorded grf data to `grf_data.csv`. Note that if `grf_data.csv` already exists it will be overwritten. PSTH template data and a record of the run will be written to `template_a.json`.
+
+Make sure to use enter and not ctrl-c if you need to pause the program.
+
+The program will perform tilts and record the psth templates.
+
+### Closed loop, after initial run
+
+Make a copy of the config used for the initial run and change `baseline` to false.
+
+Run the script (how python in envoked will vary depending on system configuration)
+```
+python main.py your_other_config.hjson --template-in template_a.json --template-out template_b.json --loadcell-out grf_data.csv
+```
+This will read settings from `your_other_config.hjson` and write recorded grf data to `grf_data.csv`. Note that if `grf_data.csv` already exists it will be overwritten. PSTH templates are loaded from `template_a.json`. PSTH template data and a record of the run will be written to `template_b.json`.
+
+The program will perform tilts and attempt to classify the tilt type based on templates from `template_a.json` and perform punish/reward actions based on if the classification was correct. It will also record a new set of templates.
+
 ## Pausing
 
 ### open loop
@@ -101,6 +141,7 @@ path to hjson config file, see config keys section
 
 ```
 create a list of tilt types
+wait for start pulse
 for i in 0..num_tilts:
     perform tilt i
     if reward enabled:
@@ -112,6 +153,7 @@ for i in 0..num_tilts:
 
 ```
 create a list of tilt types
+wait for start pulse
 for i in 0..num_tilts:
     clear pending plexon events
     start tilt i

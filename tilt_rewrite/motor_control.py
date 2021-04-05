@@ -18,12 +18,16 @@ class MotorControl:
         self.tilt_types = {
             'stop': [0,0,0,0,0,0,0,0],
             # tilt1 / 1 / 9
+            # Slow Counter Clockwise
             'a': [1,0,0,1,0,0,0,0],
             # tilt3 / 2 / 11
+            # Fast Counter Clockwise
             'b': [1,1,0,1,0,0,0,0],
             # tilt4 / 3 / 12
+            # Slow Clockwise
             'c': [0,0,1,1,0,0,0,0],
             # tilt6 / 4 / 14
+            # Fast Clockwise
             'd': [0,1,1,1,0,0,0,0],
             'reward': [0,0,1,1,0,0,0,0],
             'punish': [0,0,1,0,0,0,0,0],
