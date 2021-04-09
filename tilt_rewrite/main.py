@@ -137,11 +137,14 @@ def generate_tilt_sequence(num_tilts):
 class RecordFailure(Exception):
     pass
 
+# None if  unitialized, False if not recording
 _recording_check_event = {'_': None}
 def check_recording():
     """raises an exception if recording has failed"""
     e = _recording_check_event['_']
     assert e is not None
+    if e is False:
+        return
     if e.is_set():
         raise RecordFailure()
 
@@ -621,6 +624,7 @@ def main():
             stop_event=record_stop_event, mock=args.mock,
         )
     else:
+        _recording_check_event['_'] = False
         record_stop_event = None
     
     if not args.no_start_pulse and not args.mock:
