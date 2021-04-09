@@ -3,6 +3,7 @@ import time
 from random import randint
 import random
 from contextlib import ExitStack, AbstractContextManager
+from pathlib import Path
 
 import numpy as np
 
@@ -49,7 +50,8 @@ class PsthTiltPlatform(AbstractContextManager):
             self.plex_client = None
         else:
             from pyplexclientts import PyPlexClientTSAPI, PL_SingleWFType, PL_ExtEventType
-            client = PyPlexClientTSAPI()
+            dll_path = Path(__file__).parent / 'bin'
+            client = PyPlexClientTSAPI(plexclient_dll_path=dll_path)
             client.init_client()
             self.PL_SingleWFType = PL_SingleWFType
             self.PL_ExtEventType = PL_ExtEventType
