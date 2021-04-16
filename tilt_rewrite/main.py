@@ -216,6 +216,7 @@ def record_data(*, clock_source: str="", clock_rate: int, csv_path, stop_event: 
         if not mock:
             task.start()
         
+        sample_i = 0
         for row_i in count(0):
             if row_i == 0:
                 # no timeout on first read to wait for start trigger
@@ -231,11 +232,11 @@ def record_data(*, clock_source: str="", clock_rate: int, csv_path, stop_event: 
                 def gen_row():
                     for chan in data:
                         yield chan[i]
-                    yield row_i / SAMPLE_RATE
+                    yield sample_i / SAMPLE_RATE
                 
                 writer.writerow(gen_row())
                 
-                row_i += 1
+                sample_i += 1
             
             if stop_event['stopping'].is_set():
                 break
