@@ -34,6 +34,11 @@ DEBUG_CONFIG = {
 }
 RECORD_PROCESS_STOP_TIMEOUT = 30
 
+NIDAQ_CLOCK_PINS: Dict[str, str] = {
+    'internal': '',
+    'external': '/Dev6/PFI6',
+}
+
 # start Dev4/port2/line1 True
 # stop  Dev4/port2/line2 False
 def line_wait(line: str, value):
@@ -159,7 +164,13 @@ class RecordEventContext(AbstractContextManager):
         # time.sleep(5)
         self.stop_event['stopped'].set()
 
-def record_data(*, clock_source: str="", clock_rate: int, csv_path, stop_event: Any, mock: bool):
+def record_data(*,
+        clock_source: str="", clock_rate: int,
+        csv_path,
+        stop_event: Any,
+        mock: bool,
+        num_samples: Optional[int] = None
+    ):
     
     # samples per second
     # SAMPLE_RATE = 1250
@@ -238,6 +249,8 @@ def record_data(*, clock_source: str="", clock_rate: int, csv_path, stop_event: 
                 
                 sample_i += 1
             
+            if num_samples is not None and sample_i >= num_samples:
+                break
             if stop_event['stopping'].is_set():
                 break
 
@@ -394,7 +407,7 @@ def run_psth_loop(platform: PsthTiltPlatform, tilt_sequence, *,
     
     def run_tilts():
         for i, tilt_type in enumerate(tilt_sequence):
-            print('tilt', i)
+            print(f'tilt {i}/{len(tilt_sequence)}')
             do_tilt(tilt_type, i, i)
             
             if get_cmd() == 'q':
@@ -460,7 +473,7 @@ def run_psth_loop(platform: PsthTiltPlatform, tilt_sequence, *,
 class Config:
     channels: Optional[Dict[int, List[int]]]
     # "open_loop" or "closed_loop"
-    mode: Literal['open_loop', 'closed_loop']
+    mode: Literal['open_loop', 'closed_loop', 'bias']
     
     # clock source and rate for grf data collection
     # external = downsampled plexon clock, PFI6
@@ -480,7 +493,7 @@ class Config:
     # full deserialized json from the config file
     raw: Any
 
-def load_config(path: Path, labels_path: Optional[Path]):
+def load_config(path: Path, labels_path: Optional[Path]) -> Config:
     with open(path) as f:
         data = hjson.load(f)
     
@@ -488,7 +501,7 @@ def load_config(path: Path, labels_path: Optional[Path]):
     config.raw = data
     
     mode = data['mode']
-    assert mode in ['open_loop', 'closed_loop']
+    assert mode in ['open_loop', 'closed_loop', 'bias']
     config.mode = mode
     
     config.clock_source = data['clock_source']
@@ -540,6 +553,10 @@ def parse_args_config():
     parser.add_argument('--labels', required=False,
         help='labels file')
     
+    parser.add_argument('--bias',
+        help='overrides the mode in the config file with `bias` and the --loadcell-out'\
+            'params with the provided value')
+    
     parser.add_argument('--no-start-pulse', action='store_true',
         help='do not wait for plexon start pulse or enter press, skips initial 3 second wait')
     parser.add_argument('--loadcell-out', default='./loadcell_tilt.csv',
@@ -567,6 +584,23 @@ def parse_args_config():
     
     return args
 
+def bias_main(config: Config, loadcell_out: str, mock: bool):
+    record_stop_event = {
+        'stopping': PEvent(),
+        'stopped': PEvent(),
+        'failed': PEvent(),
+    }
+    clock_source = NIDAQ_CLOCK_PINS[config.clock_source]
+    
+    record_data(
+        clock_source = clock_source,
+        clock_rate = config.clock_rate,
+        csv_path = loadcell_out,
+        stop_event = record_stop_event,
+        mock = mock,
+        num_samples = 5000,
+    )
+
 def main():
     args = parse_args_config()
     config = load_config(args.config, args.labels)
@@ -586,10 +620,17 @@ def main():
     
     mock = args.mock
     
+    if args.bias is not None:
+        config.mode = 'bias'
+        args.loadcell_out = args.bias
+    
     if not args.dbg_motor_control:
         DEBUG_CONFIG['motor_control'] = True
     if mock:
         DEBUG_CONFIG['mock'] = True
+    
+    if config.mode == 'bias':
+        return bias_main(config, args.loadcell_out, args.mock)
     
     # mode = 'normal' if args.non_psth else 'psth'
     if config.mode == 'open_loop':
@@ -603,12 +644,14 @@ def main():
     
     tilt_sequence = generate_tilt_sequence(config.num_tilts)
     
-    if config.clock_source == 'internal':
-        clock_source = ''
-    elif config.clock_source == 'external':
-        clock_source = '/Dev6/PFI6'
-    else:
-        assert False
+    # if config.clock_source == 'internal':
+    #     clock_source = ''
+    # elif config.clock_source == 'external':
+    #     clock_source = '/Dev6/PFI6'
+    # else:
+    #     assert False
+    clock_source = NIDAQ_CLOCK_PINS[config.clock_source]
+    
     if not args.no_record:
         record_stop_event = {
             # set to request the record process to stop 
