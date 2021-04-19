@@ -28,11 +28,13 @@ from psth_tilt import PsthTiltPlatform, SpikeWaitTimeout
 from motor_control import MotorControl
 from util import hash_file
 
+from grf_data import record_data, RecordState
+
 DEBUG_CONFIG = {
     # 'motor_control': False,
     'mock': False,
 }
-RECORD_PROCESS_STOP_TIMEOUT = 30
+# RECORD_PROCESS_STOP_TIMEOUT = 30
 
 NIDAQ_CLOCK_PINS: Dict[str, str] = {
     'internal': '',
@@ -152,107 +154,6 @@ def check_recording():
         return
     if e.is_set():
         raise RecordFailure()
-
-class RecordEventContext(AbstractContextManager):
-    def __init__(self, stop_event: Any):
-        self.stop_event = stop_event
-    
-    def __exit__(self, *exc):
-        if exc != (None, None, None):
-            self.stop_event['failed'].set()
-        # print('debug wait for stop')
-        # time.sleep(5)
-        self.stop_event['stopped'].set()
-
-def record_data(*,
-        clock_source: str="", clock_rate: int,
-        csv_path,
-        stop_event: Any,
-        mock: bool,
-        num_samples: Optional[int] = None
-    ):
-    
-    # samples per second
-    # SAMPLE_RATE = 1250
-    SAMPLE_RATE = clock_rate
-    SAMPLE_BATCH_SIZE = SAMPLE_RATE
-    
-    csv_headers = [
-        "Dev6/ai18", "Dev6/ai19", "Dev6/ai20", "Dev6/ai21", "Dev6/ai22","Dev6/ai23",
-        "Dev6/ai32", "Dev6/ai33", "Dev6/ai34", "Dev6/ai35", "Dev6/ai36","Dev6/ai37","Dev6/ai38", "Dev6/ai39",
-        "Dev6/ai48", "Dev6/ai49", "Dev6/ai50","Dev6/ai51",
-        "Strobe", "Start", "Inclinometer", 'Timestamp',
-    ]
-    # csv_path = './loadcell_tilt.csv'
-    # clock sourcs Dev6/PFI6
-    with ExitStack() as stack:
-        # add the record event context first so it will set the stopped
-        # event after all other context __exit__ methods are called
-        # 
-        # this should happen before any failable operation so the failed event will
-        # be set in the case of a failure
-        stack.enter_context(RecordEventContext(stop_event))
-        
-        if not mock:
-            import nidaqmx # pylint: disable=import-error
-            # pylint: disable=import-error
-            from nidaqmx.constants import LineGrouping, Edge, AcquisitionType, WAIT_INFINITELY
-            
-            task: Any = stack.enter_context(nidaqmx.Task())
-            
-            task.ai_channels.add_ai_voltage_chan("Dev6/ai18:23,Dev6/ai32:39,Dev6/ai48:51")
-            task.ai_channels.add_ai_voltage_chan("Dev6/ai8:10")
-            # task.timing.cfg_samp_clk_timing(1000, source = "", sample_mode= AcquisitionType.CONTINUOUS, samps_per_chan = 1000)
-            # set sample rate slightly higher than actual sample rate, not sure if that's needed
-            # clock_source = "/Dev6/PFI6"
-            # clock_source = ""
-            task.timing.cfg_samp_clk_timing(SAMPLE_RATE, source=clock_source, sample_mode=AcquisitionType.CONTINUOUS, samps_per_chan=SAMPLE_BATCH_SIZE)
-            # task.triggers.start_trigger.cfg_dig_edge_start_trig("/Dev6/PFI8", trigger_edge=Edge.RISING)
-        else:
-            WAIT_INFINITELY = None
-            class MockTask:
-                def read(self, samples_per_channel, _timeout):
-                    time.sleep(1)
-                    row = [
-                        [1 for _ in range(SAMPLE_BATCH_SIZE)]
-                        for _ in range(len(csv_headers) - 1)
-                    ]
-                    return row
-            task = MockTask()
-        
-        csv_file = stack.enter_context(open(csv_path, 'w+', newline=''))
-        writer = csv.writer(csv_file)
-        writer.writerow(csv_headers)
-        
-        if not mock:
-            task.start()
-        
-        sample_i = 0
-        for row_i in count(0):
-            if row_i == 0:
-                # no timeout on first read to wait for start trigger
-                # read_timeout = WAIT_INFINITELY
-                # actually a timeout since start trigger isn't being used
-                read_timeout = 20
-            else:
-                read_timeout = 10 # default in nidaq
-            
-            data = task.read(SAMPLE_BATCH_SIZE, read_timeout)
-            
-            for i in range(SAMPLE_BATCH_SIZE):
-                def gen_row():
-                    for chan in data:
-                        yield chan[i]
-                    yield sample_i / SAMPLE_RATE
-                
-                writer.writerow(gen_row())
-                
-                sample_i += 1
-            
-            if num_samples is not None and sample_i >= num_samples:
-                break
-            if stop_event['stopping'].is_set():
-                break
 
 def spawn_thread(func, *args, **kwargs) -> Thread:
     thread = Thread(target=func, args=args, kwargs=kwargs)
@@ -563,6 +464,8 @@ def parse_args_config():
         help='file to write loadcell csv data to (default ./loadcell_tilt.csv)')
     parser.add_argument('--no-record', action='store_true',
         help='skip recording loadcell data')
+    parser.add_argument('--live', action='store_true',
+        help='show real time data')
     
     parser.add_argument('--template-out',
         help='output path for generated template')
@@ -585,21 +488,19 @@ def parse_args_config():
     return args
 
 def bias_main(config: Config, loadcell_out: str, mock: bool):
-    record_stop_event = {
-        'stopping': PEvent(),
-        'stopped': PEvent(),
-        'failed': PEvent(),
-    }
+    record_events = RecordState()
     clock_source = NIDAQ_CLOCK_PINS[config.clock_source]
     
     record_data(
         clock_source = clock_source,
         clock_rate = config.clock_rate,
         csv_path = loadcell_out,
-        stop_event = record_stop_event,
+        state = record_events,
         mock = mock,
         num_samples = 5000,
     )
+    
+    record_events.stop_recording()
 
 def main():
     args = parse_args_config()
@@ -644,28 +545,17 @@ def main():
     
     tilt_sequence = generate_tilt_sequence(config.num_tilts)
     
-    # if config.clock_source == 'internal':
-    #     clock_source = ''
-    # elif config.clock_source == 'external':
-    #     clock_source = '/Dev6/PFI6'
-    # else:
-    #     assert False
     clock_source = NIDAQ_CLOCK_PINS[config.clock_source]
     
     if not args.no_record:
-        record_stop_event = {
-            # set to request the record process to stop 
-            'stopping': PEvent(),
-            # set when the record process completes
-            'stopped': PEvent(),
-            # set if recording process fails
-            'failed': PEvent(),
-        }
-        _recording_check_event['_'] = record_stop_event['failed']
+        record_stop_event = RecordState()
+        if args.live:
+            record_stop_event.live.enabled = True
+        _recording_check_event['_'] = record_stop_event.failed
         spawn_process(
             _error_record_data, clock_source=clock_source,
             clock_rate=config.clock_rate, csv_path=args.loadcell_out,
-            stop_event=record_stop_event, mock=args.mock,
+            state=record_stop_event, mock=args.mock,
         )
     else:
         _recording_check_event['_'] = False
@@ -689,13 +579,14 @@ def main():
         }
         
         def before_platform_close(platform):
+            # if the platform is already closed the psth will have written
+            # its output and it's too late to add the file hash
             if platform.closed:
                 return
             if record_stop_event is not None:
                 # stop the recording process so we can calculate the hash of the recorded file
-                record_stop_event['stopping'].set()
                 print("waiting for recording to stop (platform)")
-                record_stop_event['stopped'].wait(timeout=RECORD_PROCESS_STOP_TIMEOUT)
+                record_stop_event.stop_recording()
                 
                 fpath = Path(args.loadcell_out)
                 grf_file_hash = hash_file(fpath)
@@ -743,9 +634,8 @@ def main():
         raise ValueError("Invalid mode")
     
     if record_stop_event is not None:
-        record_stop_event['stopping'].set()
         print("waiting for recording to stop")
-        record_stop_event['stopped'].wait(timeout=RECORD_PROCESS_STOP_TIMEOUT)
+        record_stop_event.stop_recording()
     
     check_recording()
 
