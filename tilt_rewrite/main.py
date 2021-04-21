@@ -457,6 +457,8 @@ def parse_args_config():
     parser.add_argument('--bias',
         help='overrides the mode in the config file with `bias` and the --loadcell-out'\
             'params with the provided value')
+    parser.add_argument('--monitor', action='store_true',
+        help="overrides the mode in the config file with `monitor`")
     
     parser.add_argument('--no-start-pulse', action='store_true',
         help='do not wait for plexon start pulse or enter press, skips initial 3 second wait')
@@ -466,6 +468,8 @@ def parse_args_config():
         help='skip recording loadcell data')
     parser.add_argument('--live', action='store_true',
         help='show real time data')
+    parser.add_argument('--live-secs', type=int, default=5,
+        help='number of seconds to keep data for in live view (5)')
     
     parser.add_argument('--template-out',
         help='output path for generated template')
@@ -524,6 +528,8 @@ def main():
     if args.bias is not None:
         config.mode = 'bias'
         args.loadcell_out = args.bias
+    if args.monitor:
+        config.mode = 'monitor'
     
     if not args.dbg_motor_control:
         DEBUG_CONFIG['motor_control'] = True
@@ -538,10 +544,12 @@ def main():
         mode = 'normal'
     elif config.mode == 'closed_loop':
         mode = 'psth'
+    elif config.mode == 'monitor':
+        mode = 'monitor'
     else:
         raise ValueError(f"invalid mode {config.mode}")
     
-    assert mode in ['psth', 'normal']
+    assert mode in ['psth', 'normal', 'monitor']
     
     tilt_sequence = generate_tilt_sequence(config.num_tilts)
     
@@ -556,10 +564,18 @@ def main():
             _error_record_data, clock_source=clock_source,
             clock_rate=config.clock_rate, csv_path=args.loadcell_out,
             state=record_stop_event, mock=args.mock,
+            live_view_seconds=args.live_secs,
         )
     else:
         _recording_check_event['_'] = False
         record_stop_event = None
+    
+    if mode == 'monitor':
+        input('press enter to exit')
+        record_stop_event.stop_recording()
+        return
+    
+    assert mode in ['psth', 'normal']
     
     if not args.no_start_pulse and not args.mock:
         print("waiting for plexon start pulse")
