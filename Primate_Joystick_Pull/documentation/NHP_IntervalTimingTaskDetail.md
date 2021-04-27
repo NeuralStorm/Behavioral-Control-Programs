@@ -8,9 +8,10 @@ Above: the series of animal-initiated events (green vertical markers), task-gene
 
 Relevant parameters in `MonkeyImages_Joystick_Conf.py` as well as their corresponding key name and value(s) to load from configuration file, to setup "Homezone Exit" version of task:
 
-- Version of task to run `TaskType`-> `Task Type`: `HomezoneExit`
+- Version of task to run `TaskType`-> `Task Type`: `HomezoneExit` (ignored by program)
+- Version of task to run `NumEvents`-> `Number of Events`: 0 (sets program to run homezone exit task)
 - Graphics files directory path for task-specific visual stimuli: `source` -> `Path To Graphics Dir`: `"./TaskImages_HomezoneExit/"` (loads single triangle discriminative stimulus).
-- Number of unique intervals and relevant disciminative stimuli to setup in task: `NumEvents` -> `Number of Events`: `1`.
+- ~~Number of unique intervals and relevant disciminative stimuli to setup in task: `NumEvents` -> `Number of Events`: `1`.~~
 - `RewardClass(*Ranges)` -> `Ranges`: `1, 0.0, 3.0` (Function call to generate the single linear peak function for the sole discriminative stimulus (a triangle).  Description of each value in `Ranges` can be found in [Reward](#Reward) section below.)
 
 ## Joystick Pull Task correct trial sequence
@@ -21,10 +22,12 @@ Above: the series of animal-initiated events (green vertical markers), task-gene
 
 Relevant parameters in `MonkeyImages_Joystick_Conf.py` as well as their corresponding key name and value(s) to load from configuration file, to setup "Joystick" version of task:
 
-- Version of task to run `TaskType`-> `Task Type`: `Joystick`
+- Version of task to run `TaskType`-> `Task Type`: `Joystick` (ignored by program)
 - Graphics files directory path for task-specific visual stimuli: `source` -> `Path To Graphics Dir`: `"./TaskImages_Joystick/"` (loads three discriminative stimuli: oval, rectangle and star--one for each rewarded interval of the Joystick task.  More on this here [Visual Stimuli](#visual-stimuli)).
-- Number of unique intervals and relevant disciminative stimuli to setup in task: `NumEvents` -> `Number of Events`: `3`.
-- `RewardClass(*Ranges)` -> `Ranges`: `3, 0.5, 0.25, 0.75, 0.5, 1.0, 0.75` (Function call to generate the three separate linear peak functions for the three discriminative stimuli in the joystick task.  Description of each value in `Ranges` can be found in [Reward configuration](#reward-configuration) section below.)
+- Number of unique intervals and relevant disciminative stimuli to setup in task: `NumEvents` -> `Number of Events`: `3`. (sets the program to perform the joystick pull task)
+- ~~`RewardClass(*Ranges)` -> `Ranges`: `3, 0.5, 0.25, 0.75, 0.5, 1.0, 0.75` (Function call to generate the three separate linear peak functions for the three discriminative stimuli in the joystick task.  Description of each value in `Ranges` can be found in [Reward configuration](#reward-configuration) section below.)~~
+- `images` - see [the readme](../readme.md).
+- `reward_thresholds` - see [the readme](../readme.md).
 
 ## Task Definitions (both versions)
 
@@ -92,7 +95,9 @@ Relevant parameters in `MonkeyImages_Joystick_Conf.py` as well as their correspo
 - `EnableTimeOut` -> `Enable Time Out`: `FALSE`
 - `TimeOut` -> `Time Out`: `1.0` (seconds)
   
-## Reward configuration
+## Reward configuration (outdated)
+
+see `reward_thresholds` in [the readme](../readme.md) for updated information
 
 ![Reward volume as a function of $\Delta t_{pull}$](RewardVolumeAsAFunctionOfPullDuration.png)
 
@@ -130,7 +135,7 @@ Parameters to define auditory stimuli and cues given during task sequences for b
   
 NOTE: The above parameter definitions are NOT included in the configuration file.  Alterations to sound file path parameters must be made to the code itself.
 
-## Joystick channel selection
+## Joystick channel selection (currently not implemented)
 
 - `ActiveJoystickChans` -> `Active Joystick Channels`: `3`  Comma-separated list of channels to include for control of the Joystick Pull version of the task.  Value `3` corresponds to the "pull" direction of joystick (toward animal).  Channel `1` is the "push" direction (away from animal) and channels `2` and `4` are in directions of animal's left and right respectively.
 
@@ -210,23 +215,6 @@ Timestamp of appearance or corresponding duration for each trial of interval/DS 
 - `Incorrect Start Press #`
 - `Incorrect End Press #`
 - `Incorrect Duration #`
-
-## Code Structure Overview
-
-The following lists line locations in `MonkeyImages_Joystick_Conf.py` for corresponding broad-scale functionality.  
-
-- Load dependencies: (lines 17 - 36)
-- Switch if Plexon hardware is present: `self.readyforplexon = True`  (line 43)
-- Initialization of hardware and object attributes: (lines 46 - 176)
-- Read config file line-by-line into dict: (lines 189 - 199)
-- Initialize parameter attribues from config file dict and other: (lines 209 - 268)
-- Task menu GUI setup: (lines 358 - 399)
-- Task start setup and output to terminal (lines 401 - 415)
-- Main run-time loop (lines 419 - 741)
-- Plexon data aquisition method definition `gathering_data_omni()`: (lines 1252 - 1545)
-- Assemble and format task data dictionary for output csv file (lines 795 - 950, 1451 - 1539)
-- Task subroutine definitions (object methods): (lines 786 - 1250)
-- Run code from terminal enable:  `if '__name__' == 'main':` and tKinter object initialization (lines 1572 - 1577)
 
 ## Task startup sequence
 

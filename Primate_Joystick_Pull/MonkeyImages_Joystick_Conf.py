@@ -74,15 +74,21 @@ max_samples_output = 1
 ##############################################################################################
 ###M onkey Images Class set up for Tkinter GUI
 class MonkeyImages(tk.Frame,):
-    def __init__(self, parent, *args, **kwargs):
-        self.readyforplexon = False  ### Nathan's Switch for testing while not connected to plexon omni. I will change to true / get rid of it when not needed.
+    def __init__(self, parent):
+        test_config = 'test' in sys.argv
+        use_hardware = 'test' not in sys.argv and 'nohw' not in sys.argv
+        
+        self.readyforplexon = use_hardware  ### Nathan's Switch for testing while not connected to plexon omni. I will change to true / get rid of it when not needed.
                                     ### Also changed the server set up so that it won't error out and exit if the server is not on, but it will say Client isn't connected.
         self.nidaq = self.readyforplexon
+        self.plexon = self.readyforplexon
         
         if self.readyforplexon:
             assert not plexon_import_failed
         
-        self.new_loop = 'l' in sys.argv
+        # self.new_loop = 'l' in sys.argv
+        self.new_loop = True
+        
         # delay for how often state is updated, only used for new loop
         self.cb_delay_ms: int = 1
         
@@ -236,7 +242,11 @@ class MonkeyImages(tk.Frame,):
         ###########
             
         root = Tk()
-        self.ConfigFilename =  filedialog.askopenfilename(initialdir = "/",title = "Select file",filetypes = (("all files","*.*"), ("jpeg files","*.jpg")))
+        if test_config:
+            self.ConfigFilename = 'csvconfig_EXAMPLE_Joystick.csv'
+        else:
+            self.ConfigFilename =  filedialog.askopenfilename(initialdir = "/",title = "Select file",filetypes = (("all files","*.*"), ("csv files","*.csv")))
+        
         root.withdraw()
         print (self.ConfigFilename)
         csvreaderdict = {}
@@ -313,6 +323,13 @@ class MonkeyImages(tk.Frame,):
         self.MaxTimeAfterSound = int(csvreaderdict['Maximum Time After Sound'][0])                          # (seconds) Maximum time Monkey has to pull. However, it is currently set so that it will not reset if the Pedal is being Pulled
         self.NumEvents = int(csvreaderdict['Number of Events'][0])                                          # Number of different (desired) interval durations for the animal to produce,
                                                                                                             # corresponds to the number of unique discriminative stimuli.
+        
+        if self.NumEvents == 0:
+            self.NumEvents = 1
+            self.task_type = 'homezone_exit'
+        else:
+            self.task_type = 'joystick_pull'
+        
         self.InterTrialTime = float(csvreaderdict['Inter Trial Time'][0])                                   # (seconds) Time between Trials / Reward Time
         self.AdaptiveValue = float(csvreaderdict['Adaptive Value'][0])                                      # Probably going to use this in the form of a value
         # self.AdaptiveAlgorithm = int(csvreaderdict['Adaptive Algorithm'][0])                                # 1: Percentage based change 2: mean, std, calculated shift of distribution (Don't move center?) 3: TBD Move center as well?
@@ -432,7 +449,7 @@ class MonkeyImages(tk.Frame,):
 
 
         print("ready for plexon:" , self.readyforplexon)
-        tk.Frame.__init__(self, parent, *args, **kwargs)
+        tk.Frame.__init__(self, parent)
         self.root = parent
         self.root.wm_title("MonkeyImages")
 
@@ -515,13 +532,15 @@ class MonkeyImages(tk.Frame,):
         if not self.paused:
             self.normalized_time += elapsed_time
         
+        self.new_loop_upkeep()
         next(self.new_loop_iter)
         
         self.after(self.cb_delay_ms, self.progress_new_loop)
     
     def new_loop_upkeep(self):
         # self.gathering_data_omni()
-        self.gathering_data_omni_new()
+        if self.plexon:
+            self.gathering_data_omni_new()
     
     def new_loop_gen(self):
         while True:
@@ -550,6 +569,7 @@ class MonkeyImages(tk.Frame,):
             # icon period = 1 / freq
             # change period = 0.5 * period
             icon_change_period = 0.5 / icon_flash_freq
+            # wait for hand to be in the home zone
             # wait at least inter-trial time before starting
             while True:
                 # print(trial_t())
@@ -605,12 +625,14 @@ class MonkeyImages(tk.Frame,):
             # display image with red box
             self.counter = image_i + self.num_task_images
             self.next_image()
+            cue_time = trial_t()
             
             def get_pull_info():
                 if self.joystick_pulled: # joystick pulled before prompt
                     return None, 0, 0
                 
-                cue_time = trial_t()
+                # cue_time = trial_t()
+                # wait up to MaxTimeAfterSound for the joystick to be pulled
                 while not self.joystick_pulled:
                     if trial_t() - cue_time > self.MaxTimeAfterSound:
                         return None, 0, 0
@@ -632,7 +654,31 @@ class MonkeyImages(tk.Frame,):
                 
                 return reward_duration, remote_pull_duration, pull_duration
             
-            reward_duration, remote_pull_duration, pull_duration = yield from get_pull_info()
+            def get_homezone_exit_info():
+                # hand removed from home zone before cue
+                if not in_zone():
+                    return None, 0, 0
+                
+                # wait up to MaxTimeAfterSound for the hand to exit the homezone
+                while in_zone():
+                    if trial_t() - cue_time > self.MaxTimeAfterSound:
+                        return None, 0, 0
+                    yield
+                
+                exit_time = trial_t()
+                exit_delay = exit_time - cue_time
+                
+                reward_duration = self.ChooseReward(exit_delay, default=None)
+                
+                return reward_duration, 0, exit_delay
+            
+            task_type = self.task_type
+            if task_type == 'joystick_pull':
+                reward_duration, remote_pull_duration, pull_duration = yield from get_pull_info()
+            elif task_type == 'homezone_exit':
+                reward_duration, remote_pull_duration, pull_duration = yield from get_homezone_exit_info()
+            else:
+                assert False, f"invalid task_type {task_type}"
             
             print('Press Duration: {:.4f} ({:.4f})'.format(remote_pull_duration, pull_duration))
             print('Reward Duration: {}'.format(reward_duration))
@@ -816,8 +862,9 @@ class MonkeyImages(tk.Frame,):
         elif key == '`':
             sys.exit()
         elif key == '1':
-            self.Area1_right_pres = True
+            self.Area1_right_pres = not self.Area1_right_pres
             # self.Area1_left_pres = True
+            print('in zone toggled', self.Area1_right_pres)
         elif key == '2':
             if not self.joystick_pulled:
                 self.joystick_pull_remote_ts = time.monotonic()
