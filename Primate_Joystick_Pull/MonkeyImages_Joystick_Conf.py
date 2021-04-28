@@ -48,6 +48,7 @@ import math
 import queue
 import statistics
 import sys, traceback
+from pprint import pprint
 import numpy
 
 # readyforplexon = False
@@ -85,9 +86,6 @@ class MonkeyImages(tk.Frame,):
         
         if self.readyforplexon:
             assert not plexon_import_failed
-        
-        # self.new_loop = 'l' in sys.argv
-        self.new_loop = True
         
         # delay for how often state is updated, only used for new loop
         self.cb_delay_ms: int = 1
@@ -275,38 +273,74 @@ class MonkeyImages(tk.Frame,):
         #self.TaskType = 'HomezoneExit'                                     # Added for Homezone exit version.  String should be 'HomezoneExit'  Leave blank for original Joystick version.
         self.TaskType = csvreaderdict['Task Type'][0]                       # Added additional rows into the config file to reduce
         self.source = Path(csvreaderdict['Path To Graphics Dir'][0])              # required in-code edits to change task versions. R.E. 7-29-2020
-        for images in os.listdir(self.source):                              # Copied from above (~line 181) 7-29-2020 R.E.
-            self.list_images.append(images)
-        self.list_images.sort()
         
         if 'images' in config_dict:
+            config_images = config_dict['images']
             self.list_images = [
                 'aBlank.png',
-                *(f'{x}.png' for x in config_dict['images']),
-                *(f"{x.replace('b', 'c').replace('d', 'e')}.png" for x in config_dict['images']),
+                *(f'{x.strip()}.png' for x in config_images),
+                *(f"{x.strip().replace('b', 'c').replace('d', 'e')}.png" for x in config_images),
                 'xBlack.png',
                 'yPrepare.png',
                 'zMonkey2.png',
             ]
+            def build_image_entry(i, x):
+                x = x.strip()
+                return x, {
+                    'path': f"{x}.png",
+                    'boxed_path': f"{x.replace('b', 'c').replace('d', 'e')}.png",
+                    'list_images_index': i+1,
+                }
+            
+            images = dict(
+                build_image_entry(i, x)
+                for i, x in enumerate(config_images)
+            )
+            self.images = images
             self.num_task_images = len(config_dict['images'])
         else:
             self.num_task_images = config_dict.get('num_task_images', 3)
-            # assert False, "config images is now required"
+            assert False, "config images is now required"
         
-        if 'reward_thresholds' in config_dict:
-            # threshold, low_reward, high_reward = config_dict['reward_threshold']
-            # self.reward_thresholds = (threshold, low_reward, high_reward)
-            rw_thr = config_dict['reward_thresholds']
-            self.reward_thresholds = []
-            for i in range(0,len(rw_thr)-2, 3):
-                self.reward_thresholds.append({
-                    'reward_duration': float(rw_thr[i]),
-                    'low_threshold': float(rw_thr[i+1]),
-                    'high_threshold': float(rw_thr[i+2]),
-                })
-        else:
-            self.reward_thresholds = None
-            assert False, "reward_thresholds is now required"
+        def parse_threshold(s):
+            s = s.strip()
+            s = s.split('\'')
+            s = [x.split('=') for x in s]
+            rwd = {k: v for k, v in s}
+            
+            if 'cue' in rwd:
+                assert rwd['cue'] in self.images
+            else:
+                rwd['cue'] = None
+            
+            for x in ['low', 'mid', 'high']:
+                if x in rwd:
+                    rwd[x] = float(rwd[x])
+            
+            if 'mid' not in rwd:
+                rwd['mid'] = rwd['low'] + (rwd['high'] - rwd['low']) / 2
+            elif 'low' not in rwd:
+                rwd['low'] = rwd['mid'] - (rwd['high'] - rwd['mid'])
+            elif 'high' not in rwd:
+                rwd['high'] = rwd['mid'] + (rwd['mid'] - rwd['low'])
+            
+            assert rwd['low'] < rwd['mid'] < rwd['high']
+            
+            if rwd['type'] == 'linear':
+                for x in ['reward_max', 'reward_min']:
+                    rwd[x] = float(rwd[x])
+            elif rwd['type'] == 'flat':
+                rwd['reward_duration'] = float(rwd['reward_duration'])
+            else:
+                raise ValueError(f"invalid reward type {rwd['type']}")
+            
+            return rwd
+        
+        rw_thr = config_dict['reward_thresholds']
+        rw_thr = [parse_threshold(x) for x in rw_thr]
+        # pprint(rw_thr)
+        
+        self.reward_thresholds = rw_thr
         
         # PARAMETERS
         # self.filename = 'test'
@@ -331,18 +365,18 @@ class MonkeyImages(tk.Frame,):
             self.task_type = 'joystick_pull'
         
         self.InterTrialTime = float(csvreaderdict['Inter Trial Time'][0])                                   # (seconds) Time between Trials / Reward Time
-        self.AdaptiveValue = float(csvreaderdict['Adaptive Value'][0])                                      # Probably going to use this in the form of a value
+        # self.AdaptiveValue = float(csvreaderdict['Adaptive Value'][0])                                      # Probably going to use this in the form of a value
         # self.AdaptiveAlgorithm = int(csvreaderdict['Adaptive Algorithm'][0])                                # 1: Percentage based change 2: mean, std, calculated shift of distribution (Don't move center?) 3: TBD Move center as well?
         # self.AdaptiveFrequency = int(csvreaderdict['Adaptive Frequency'][0])                                # Number of trials inbetween calling AdaptiveRewardThreshold()
         self.EarlyPullTimeOut = (csvreaderdict['Enable Early Pull Time Out'][0] == 'TRUE')                  # This Boolean sets if you want to have a timeout for a pull before the Go Red Rectangle.
         self.RewardDelayMin = float(csvreaderdict['Pre Reward Delay Min delta t3'][0])#0.010                # (seconds) Min Length of Delay before Reward (Juice) is given.
         self.RewardDelayMax = float(csvreaderdict['Pre Reward Delay Max delta t3'][0])#0.010                # (seconds) Max Length of Delay before Reward (Juice) is given.
         self.RewardDelay = self.RandomDuration(self.RewardDelayMin, self.RewardDelayMax)                    # (seconds) Length of Delay before Reward (Juice) is given.
-        self.UseMaximumRewardTime = (csvreaderdict['Use Maximum Reward Time'][0] == 'TRUE')                 # This Boolean sets if you want to use the Maximum Reward Time for each Reward or to
+        # self.UseMaximumRewardTime = (csvreaderdict['Use Maximum Reward Time'][0] == 'TRUE')                 # This Boolean sets if you want to use the Maximum Reward Time for each Reward or to
                                                                                                             # simply use scaled Reward Time relative to Pull Duration.  "Reward Time" is the duration of the 
                                                                                                             # trigger pulse that advances the feeder pump.  
-        self.RewardTime = float(csvreaderdict['Maximum Reward Time'][0])                                    #
-        self.MaxReward = float(csvreaderdict['Maximum Reward Time'][0])                                     # (seconds) maximum time to give water
+        # self.RewardTime = float(csvreaderdict['Maximum Reward Time'][0])                                    #
+        # self.MaxReward = float(csvreaderdict['Maximum Reward Time'][0])                                     # (seconds) maximum time to give water
         self.EnableTimeOut = (csvreaderdict['Enable Time Out'][0] == 'TRUE')                                # Toggle this to True if you want to include 'punishment' timeouts (black screen for self.TimeOut duration), or False for no TimeOuts.
         self.TimeOut = float(csvreaderdict['Time Out'][0])                                                  # (seconds) Time for black time out screen
         self.EnableBlooperNoise = (csvreaderdict['Enable Blooper Noise'][0] == 'TRUE')                      # Toggle this to True if you want to include the blooper noise when an incorrect pull is detected (Either too long or too short / No Reward Given)
@@ -386,7 +420,7 @@ class MonkeyImages(tk.Frame,):
         self.Area1_left = 7 # Home Area (Area 1)
         self.Area2_left = 8 # Joystick Area (Area 2)
         self.StartTimestamp = 0
-        self.RewardTime = 0
+        # self.RewardTime = 0
         #############
         # Queue 
         self.queue = queue.Queue()
@@ -599,7 +633,9 @@ class MonkeyImages(tk.Frame,):
             yield from wait(self.DiscrimStimDuration)
             
             # choose image
-            image_i = random.randint(1,self.NumEvents)
+            selected_image_key = random.choice(list(self.images))
+            selected_image = self.images[selected_image_key]
+            image_i = selected_image['list_images_index']
             
             # EV25 , EV27, EV29, EV31
             if image_i in [1,2,3,4]:
@@ -650,7 +686,7 @@ class MonkeyImages(tk.Frame,):
                 assert remote_pull_duration >= 0
                 
                 # print(pull_duration, remote_pull_duration)
-                reward_duration = self.ChooseReward(remote_pull_duration, default=None)
+                reward_duration = self.ChooseReward(remote_pull_duration, cue=selected_image_key)
                 
                 return reward_duration, remote_pull_duration, pull_duration
             
@@ -668,7 +704,7 @@ class MonkeyImages(tk.Frame,):
                 exit_time = trial_t()
                 exit_delay = exit_time - cue_time
                 
-                reward_duration = self.ChooseReward(exit_delay, default=None)
+                reward_duration = self.ChooseReward(exit_delay, cue=selected_image_key)
                 
                 return reward_duration, 0, exit_delay
             
@@ -715,7 +751,7 @@ class MonkeyImages(tk.Frame,):
                     # turn water on
                     self.plexdo.set_bit(MonkeyTest.device_number, MonkeyTest.RewardDO_chan)
                 
-                yield from wait(self.RewardTime)
+                yield from wait(reward_duration)
                 
                 if self.readyforplexon:
                     self.plexdo.clear_bit(MonkeyTest.device_number, MonkeyTest.RewardDO_chan)
@@ -766,15 +802,40 @@ class MonkeyImages(tk.Frame,):
         output = round(random.uniform(Min,Max),2)
         return output
     
-    def ChooseReward(self,Duration,default=0): #New (8/23/2019): Ranges = {X: [low, center, high],..., X:[low, center, high]}
-        if self.reward_thresholds is not None:
-            for threshold in self.reward_thresholds:
-                if Duration >= threshold['low_threshold'] and Duration <= threshold['high_threshold']:
-                    return threshold['reward_duration']
-            
-            return default
+    def ChooseReward(self, duration, cue):
         
-        assert False, "only reward_thresholds supported"
+        # if self.reward_thresholds is not None:
+        for rwd in self.reward_thresholds:
+            if duration >= rwd['low'] and duration <= rwd['high']:
+                pass
+            else:
+                continue
+            if rwd['cue'] is not None and rwd['cue'] != cue:
+                continue
+            
+            if rwd['type'] == 'flat':
+                return rwd['reward_duration']
+            elif rwd['type'] == 'linear':
+                if duration >= rwd['low'] and duration <= rwd['high']:
+                    # get distance from optimal time
+                    dist = abs(duration - rwd['mid'])
+                    # get distance from closest edge of range
+                    dist = (rwd['mid'] - rwd['low']) - dist
+                    # get percent of distance from edge of range
+                    if duration >= rwd['mid']:
+                        perc = dist / (rwd['high'] - rwd['mid'])
+                    else:
+                        perc = dist / (rwd['mid'] - rwd['low'])
+                    # get reward duration from percent
+                    rwd_dur = perc * (rwd['reward_max'] - rwd['reward_min']) + rwd['reward_min']
+                    return rwd_dur
+                
+            else:
+                assert False
+        
+        return None
+        
+        # assert False, "only reward_thresholds supported"
     
     def CheckTrialFunc(self):
         try:
@@ -801,8 +862,8 @@ class MonkeyImages(tk.Frame,):
         self.stopped = False
         
         # TODO: Include a dump of Plexon data so that any initial pulls are not included here?
-        if self.new_loop:
-            self.start_new_loop()
+        # if self.new_loop:
+        self.start_new_loop()
     
     def Pause(self):
         self.paused = True
@@ -1277,34 +1338,22 @@ class MonkeyImages(tk.Frame,):
                 pass
     #end of gathering data
 
-    ########################################
-    ##########TODO: Need to Queue water reward similar to online example to use time.sleep() / use after or some other method
-    ########################################
 
-    class WaterRewardThread(threading.Thread,):
-        def __init__(self):
-            threading.Thread.__init__(self)
+class TestFrame(tk.Frame,):
+    def __init__(self, parent, *args, **kwargs):
+        tk.Frame.__init__(self, parent, *args, **kwargs)
         
-        def run(self):
-            print('start')
-            time.sleep(MonkeyTest.RewardDelay)
-            if MonkeyTest.ImageReward == True:
-                MonkeyTest.counter = -1
-                MonkeyTest.next_image()
-            print("Water On")
-            if MonkeyTest.readyforplexon == True:
-                #EV23
-                MonkeyTest.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,MonkeyTest.event7,None,None)
-                MonkeyTest.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,MonkeyTest.begin,None,None)
-                MonkeyTest.plexdo.set_bit(MonkeyTest.device_number, MonkeyTest.RewardDO_chan)
-                time.sleep(MonkeyTest.RewardTime)
-                MonkeyTest.plexdo.clear_bit(MonkeyTest.device_number, MonkeyTest.RewardDO_chan)
-            print("Water Off")
-
+        def x():
+            pass
+        
+        startbutton = tk.Button(parent, text = "Start-'a'", fg='white', height = 5, width = 6, command = x)
+        startbutton.pack(side = LEFT)
+    
 
 if __name__ == "__main__":
     root = tk.Tk()
     
     MonkeyTest = MonkeyImages(root)
-
+    # MonkeyTest = TestFrame(root)
+    
     tk.mainloop()
