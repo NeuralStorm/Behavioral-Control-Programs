@@ -1,7 +1,9 @@
 Study ID,TIP
 Session ID,001
 Animal ID,1
-Number of Events,3
+#Number of Events,3
+Number of Events,0
+images, bOval.png, bRectangle, bStar
 Task Type,Joystick
 Path To Graphics Dir,./TaskImages_Joystick/
 Task Data Save Dir,D:/IntervalTimingTaskData
@@ -11,16 +13,19 @@ Pre Go Cue Min delta t2,0.4
 Pre Go Cue Max delta t2,0.8
 Pre Reward Delay Min delta t3,0.4
 Pre Reward Delay Max delta t3,0.7
-Use Maximum Reward Time,FALSE
-Maximum Reward Time,0.18
+#Use Maximum Reward Time,FALSE
+#Maximum Reward Time,0.18
+manual_reward_time,2
 Enable Time Out,FALSE
 Time Out,1.0
-Ranges,3,0.5,0.175,0.75,0.35,1.125,0.58125
-reward_thresholds,3,0,5
+#Ranges,3,0.5,0.175,0.75,0.35,1.125,0.58125
+#reward_thresholds,3,0,5
+#reward_thresholds,low=0'high=4'cue=bOval'type=flat'reward_duration=1
+reward_thresholds,low=0'high=4'type=linear'reward_min=0'reward_max=1
 Inter Trial Time,1
-Adaptive Value,0.05
-Adaptive Algorithm,1
-Adaptive Frequency,50
+#Adaptive Value,0.05
+#Adaptive Algorithm,1
+#Adaptive Frequency,50
 Enable Early Pull Time Out,FALSE
 Enable Blooper Noise,FALSE
 Active Joystick Channels,3

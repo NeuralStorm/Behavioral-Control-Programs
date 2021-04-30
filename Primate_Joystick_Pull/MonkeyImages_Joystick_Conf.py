@@ -235,9 +235,14 @@ class MonkeyImages(tk.Frame,):
             ]
             def build_image_entry(i, x):
                 x = x.strip()
+                if '.' in x:
+                    x, ext = x.rsplit('.', 1)
+                else:
+                    ext = '.png'
+                
                 return x, {
-                    'path': f"{x}.png",
-                    'boxed_path': f"{x.replace('b', 'c').replace('d', 'e')}.png",
+                    'path': f"{x}.{ext}",
+                    'boxed_path': f"{x.replace('b', 'c').replace('d', 'e')}.{ext}",
                     'list_images_index': i+1,
                 }
             
@@ -255,7 +260,7 @@ class MonkeyImages(tk.Frame,):
             s = s.strip()
             s = s.split('\'')
             s = [x.split('=') for x in s]
-            rwd = {k: v for k, v in s}
+            rwd = {k.strip(): v.strip() for k, v in s}
             
             if 'cue' in rwd:
                 assert rwd['cue'] in self.images
