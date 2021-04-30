@@ -34,7 +34,6 @@ from tkinter import *
 from tkinter import filedialog
 from PIL import Image, ImageTk
 import csv
-from csv import reader, writer
 import os
 import os.path
 from pathlib import Path
@@ -95,6 +94,8 @@ class MonkeyImages(tk.Frame,):
         
         # used in gathering_data_omni_new to track changes in joystick position
         self.joystick_last_state = None
+        
+        self.trial_log = []
         
         if self.readyforplexon == True:
             ## Setup Plexon Server
@@ -225,20 +226,12 @@ class MonkeyImages(tk.Frame,):
         
         if 'images' in config_dict:
             config_images = config_dict['images']
-            self.list_images = [
-                'aBlank.png',
-                *(f'{x.strip()}.png' for x in config_images),
-                *(f"{x.strip().replace('b', 'c').replace('d', 'e')}.png" for x in config_images),
-                'xBlack.png',
-                'yPrepare.png',
-                'zMonkey2.png',
-            ]
             def build_image_entry(i, x):
                 x = x.strip()
                 if '.' in x:
                     x, ext = x.rsplit('.', 1)
                 else:
-                    ext = '.png'
+                    ext = 'png'
                 
                 return x, {
                     'path': f"{x}.{ext}",
@@ -250,6 +243,14 @@ class MonkeyImages(tk.Frame,):
                 build_image_entry(i, x)
                 for i, x in enumerate(config_images)
             )
+            self.list_images = [
+                'aBlank.png',
+                *(f"{x['path']}" for x in images.values()),
+                *(f"{x['path'].replace('b', 'c').replace('d', 'e')}" for x in images.values()),
+                'xBlack.png',
+                'yPrepare.png',
+                'zMonkey2.png',
+            ]
             self.images = images
             self.num_task_images = len(config_dict['images'])
         else:
@@ -403,6 +404,12 @@ class MonkeyImages(tk.Frame,):
                         WaitForStart = False
                         self.RecordingStartTimestamp = new_data.timestamp[i]
     
+    def __enter__(self):
+        pass
+    
+    def __exit__(self, *exc):
+        self.save_log_csv()
+    
     # resets loop state, starts callback loop
     def start_new_loop(self):
         self.last_new_loop_time = time.monotonic()
@@ -519,14 +526,21 @@ class MonkeyImages(tk.Frame,):
             self.next_image()
             cue_time = trial_t()
             
+            log_failure_reason = [None]
+            def fail_r(s):
+                assert log_failure_reason[0] is None
+                log_failure_reason[0] = s
+            
             def get_pull_info():
                 if self.joystick_pulled: # joystick pulled before prompt
+                    fail_r('joystick pulled before cue')
                     return None, 0, 0
                 
                 # cue_time = trial_t()
                 # wait up to MaxTimeAfterSound for the joystick to be pulled
                 while not self.joystick_pulled:
                     if trial_t() - cue_time > self.MaxTimeAfterSound:
+                        fail_r('joystick not released within MaxTimeAfterSound')
                         return None, 0, 0
                     yield
                 
@@ -544,16 +558,21 @@ class MonkeyImages(tk.Frame,):
                 # print(pull_duration, remote_pull_duration)
                 reward_duration = self.ChooseReward(remote_pull_duration, cue=selected_image_key)
                 
+                if reward_duration is None:
+                    fail_r('joystick pulled for incorrect amount of time')
+                
                 return reward_duration, remote_pull_duration, pull_duration
             
             def get_homezone_exit_info():
                 # hand removed from home zone before cue
                 if not in_zone():
+                    fail_r('hand removed before cue')
                     return None, 0, 0
                 
                 # wait up to MaxTimeAfterSound for the hand to exit the homezone
                 while in_zone():
                     if trial_t() - cue_time > self.MaxTimeAfterSound:
+                        fail_r('hand not removed from home zone within MaxTimeAfterSound')
                         return None, 0, 0
                     yield
                 
@@ -561,6 +580,9 @@ class MonkeyImages(tk.Frame,):
                 exit_delay = exit_time - cue_time
                 
                 reward_duration = self.ChooseReward(exit_delay, cue=selected_image_key)
+                
+                if reward_duration is None:
+                    fail_r('hand removed after incorrect amount of time')
                 
                 return reward_duration, 0, exit_delay
             
@@ -619,6 +641,13 @@ class MonkeyImages(tk.Frame,):
             if self.nidaq:
                 self.task.WriteDigitalLines(1, 1, 10.0, PyDAQmx.DAQmx_Val_GroupByChannel, self.event6, None, None)
                 self.task.WriteDigitalLines(1, 1, 10.0, PyDAQmx.DAQmx_Val_GroupByChannel, self.begin, None, None)
+            
+            log_entry = {
+                'reward_duration': reward_duration, # Optional[float]
+                'pull_duration': pull_duration, # float
+                'failure_reason': log_failure_reason[0], # Optional[str]
+            }
+            self.trial_log.append(log_entry)
     
     def manual_water_dispense(self):
         def gen():
@@ -691,7 +720,7 @@ class MonkeyImages(tk.Frame,):
     
     def Pause(self):
         self.paused = True
-        self.plexdo.clear_bit(MonkeyTest.device_number, MonkeyTest.reward_nidaq_bit)
+        self.plexdo.clear_bit(self.device_number, self.reward_nidaq_bit)
         
         print('pause')
         if winsound is not None:
@@ -725,7 +754,9 @@ class MonkeyImages(tk.Frame,):
         elif key == 'z':
             self.manual_water_dispense()
         elif key == '`':
-            sys.exit()
+            self.Stop()
+            self.root.quit()
+            # sys.exit()
         elif key == '1':
             self.Area1_right_pres = not self.Area1_right_pres
             # self.Area1_left_pres = True
@@ -812,6 +843,40 @@ class MonkeyImages(tk.Frame,):
                     self.Area1_right_pres = True
                 elif chan == 14:
                     self.Area1_right_pres = False
+    
+    def save_log_csv(self):
+        csv_path = Path(self.savepath) / self.fullfilename
+        
+        with open(csv_path, 'w') as f:
+            writer = csv.writer(f)
+            
+            writer.writerow([
+                'trial',
+                'success',
+                'failure reason',
+                'time in homezone',
+                'pull duration',
+            ])
+            
+            for i, entry in enumerate(self.trial_log):
+                is_success = entry['reward_duration'] is not None
+                reason = entry['failure_reason'] or ''
+                if self.task_type == 'homezone_exit':
+                    time_in_homezone = entry['pull_duration']
+                    pull_duration = 0
+                elif self.task_type == 'joystick_pull':
+                    time_in_homezone = 0
+                    pull_duration = entry['pull_duration']
+                else:
+                    assert False
+                
+                writer.writerow([
+                    i+1,
+                    is_success,
+                    reason,
+                    time_in_homezone,
+                    pull_duration,
+                ])
 
 class TestFrame(tk.Frame,):
     def __init__(self, parent, *args, **kwargs):
@@ -827,7 +892,8 @@ class TestFrame(tk.Frame,):
 if __name__ == "__main__":
     root = tk.Tk()
     
-    MonkeyTest = MonkeyImages(root)
+    # MonkeyTest = MonkeyImages(root)
     # MonkeyTest = TestFrame(root)
     
-    tk.mainloop()
+    with MonkeyImages(root):
+        tk.mainloop()

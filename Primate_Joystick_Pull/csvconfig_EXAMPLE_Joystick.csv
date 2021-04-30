@@ -6,7 +6,8 @@ Number of Events,0
 images, bOval.png, bRectangle, bStar
 Task Type,Joystick
 Path To Graphics Dir,./TaskImages_Joystick/
-Task Data Save Dir,D:/IntervalTimingTaskData
+#Task Data Save Dir,D:/IntervalTimingTaskData
+Task Data Save Dir,./output
 Pre Discriminatory Stimulus Min delta t1,0.5
 Pre Discriminatory Stimulus Max delta t1,0.75
 Pre Go Cue Min delta t2,0.4
