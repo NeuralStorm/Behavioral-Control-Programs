@@ -21,16 +21,17 @@
 # EV32: GC 4 (Not Currently Used)
 
 try:
-    from pyopxclient import PyOPXClientAPI, CONTINUOUS_TYPE
+    from pyopxclient import PyOPXClientAPI, OPX_ERROR_NOERROR, SPIKE_TYPE, CONTINUOUS_TYPE, EVENT_TYPE, OTHER_TYPE
     from pyplexdo import PyPlexDO, DODigitalOutputInfo
     import PyDAQmx
+    from PyDAQmx import Task
 except ImportError:
     plexon_import_failed = True
 else:
     plexon_import_failed = False
 
 import tkinter as tk
-from tkinter import *
+# from tkinter import *
 from tkinter import filedialog
 from PIL import Image, ImageTk
 import csv
@@ -43,16 +44,13 @@ import sys
 try:
     import winsound
 except ImportError:
-    winsound = None
+    winsound = None # type: ignore
 import math
 import statistics
 import sys, traceback
 from pprint import pprint
 import numpy
 
-# readyforplexon = False
-
-# from definitionsRyan.py
 # This will be filled in later. Better to store these once rather than have to call the functions
 # to get this information on every returned data block
 source_numbers_types = {}
@@ -60,12 +58,10 @@ source_numbers_names = {}
 source_numbers_rates = {}
 source_numbers_voltage_scalers = {}
 
-# from definitionsRyan.py
 # To avoid overwhelming the console output, set the maximum number of data
 # blocks to print information about
 max_block_output = 1
 
-# from definitionsRyan.py
 # To avoid overwhelming the console output, set the maximum number of continuous
 # samples or waveform samples to output
 max_samples_output = 1
@@ -134,6 +130,7 @@ class MonkeyImages(tk.Frame,):
                 source_numbers_names[global_parameters.source_ids[index]] = source_name
                 if source_name == 'AI':
                     print("----- Source {} -----".format(global_parameters.source_ids[index]))
+                    source_types = { SPIKE_TYPE: "Spike", EVENT_TYPE: "Event", CONTINUOUS_TYPE: "Continuous", OTHER_TYPE: "Other" }
                     print("Name: {}, Type: {}, Channels: {}, Linear Start Channel: {}".format(source_name,
                                                                                     source_types[source_type],
                                                                                     num_chans,
@@ -189,7 +186,7 @@ class MonkeyImages(tk.Frame,):
         
         self.joystick_pull_threshold = 4
         
-        root = Tk()
+        root = tk.Tk()
         if test_config:
             self.ConfigFilename = 'csvconfig_EXAMPLE_Joystick.csv'
         else:
@@ -361,30 +358,30 @@ class MonkeyImages(tk.Frame,):
 
         ###Adjust width and height to fit monitor### bd is for if you want a border
         self.frame1 = tk.Frame(self.root, width = 1600, height = 1000, bd = 0)
-        self.frame1.pack(side = BOTTOM)
+        self.frame1.pack(side = tk.BOTTOM)
         self.cv1 = tk.Canvas(self.frame1, width = 1600, height = 800, background = "white", bd = 1, relief = tk.RAISED)
-        self.cv1.pack(side = BOTTOM)
+        self.cv1.pack(side = tk.BOTTOM)
         
         startbutton = tk.Button(self.root, text = "Start-'a'", height = 5, width = 6, command = self.Start)
-        startbutton.pack(side = LEFT)
+        startbutton.pack(side = tk.LEFT)
         
         pausebutton = tk.Button(self.root, text = "Pause-'s'", height = 5, width = 6, command = self.Pause)
-        pausebutton.pack(side = LEFT)
+        pausebutton.pack(side = tk.LEFT)
         
         unpausebutton = tk.Button(self.root, text = "Unpause-'d'", height = 5, width = 8, command = self.Unpause)
-        unpausebutton.pack(side = LEFT)
+        unpausebutton.pack(side = tk.LEFT)
         
         stopbutton = tk.Button(self.root, text = "Stop-'f'", height = 5, width = 6, command = self.Stop)
-        stopbutton.pack(side = LEFT)
+        stopbutton.pack(side = tk.LEFT)
         
         # Likely Don't Need these buttons, Image reward will always be an option, and will be controlled by %
         ImageRewardOn = tk.Button(self.root, text = "ImageReward\nOn", height = 5, width = 10, command = self.HighLevelRewardOn)
-        ImageRewardOn.pack(side = LEFT)
+        ImageRewardOn.pack(side = tk.LEFT)
         ImageRewardOff = tk.Button(self.root, text = "ImageReward\nOff", height = 5, width = 10, command = self.HighLevelRewardOff)
-        ImageRewardOff.pack(side = LEFT)
+        ImageRewardOff.pack(side = tk.LEFT)
         
         testbutton = tk.Button(self.root, text = "Water Reward-'z'", height = 5, width = 12, command = self.manual_water_dispense)
-        testbutton.pack(side = LEFT)
+        testbutton.pack(side = tk.LEFT)
         
         self.root.bind('<Key>', lambda a : self.KeyPress(a))
         
@@ -394,10 +391,10 @@ class MonkeyImages(tk.Frame,):
             while WaitForStart == True:
                 #self.client.opx_wait(1)
                 new_data = self.client.get_new_data()
-                if new_data.num_data_blocks < max_block_output:
-                    num_blocks_to_output = new_data.num_data_blocks
-                else:
-                    num_blocks_to_output = max_block_output
+                # if new_data.num_data_blocks < max_block_output:
+                #     num_blocks_to_output = new_data.num_data_blocks
+                # else:
+                #     num_blocks_to_output = max_block_output
                 for i in range(new_data.num_data_blocks):
                     if new_data.source_num_or_type[i] == self.other_event_source and new_data.channel[i] == 2: # Start event timestamp is channel 2 in 'Other Events' source
                         print ("Recording start detected. All timestamps will be relative to a start time of {} seconds.".format(new_data.timestamp[i]))
@@ -408,6 +405,8 @@ class MonkeyImages(tk.Frame,):
         pass
     
     def __exit__(self, *exc):
+        if self.readyforplexon == True:
+            self.plexdo.clear_bit(self.device_number, self.reward_nidaq_bit)
         self.save_log_csv()
     
     # resets loop state, starts callback loop
@@ -720,7 +719,6 @@ class MonkeyImages(tk.Frame,):
     
     def Pause(self):
         self.paused = True
-        self.plexdo.clear_bit(self.device_number, self.reward_nidaq_bit)
         
         print('pause')
         if winsound is not None:
@@ -886,7 +884,7 @@ class TestFrame(tk.Frame,):
             pass
         
         startbutton = tk.Button(parent, text = "Start-'a'", fg='white', height = 5, width = 6, command = x)
-        startbutton.pack(side = LEFT)
+        startbutton.pack(side = tk.LEFT)
     
 
 if __name__ == "__main__":
