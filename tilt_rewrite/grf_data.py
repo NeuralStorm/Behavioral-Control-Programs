@@ -34,6 +34,7 @@ GRAPHS: Dict[str, Dict[str, Any]] = {
     },
     'strobe': {
         'pos': (2, 0),
+        'title': 'Start of tilt from motor',
     },
     'start': {
         'pos': (2, 1),
