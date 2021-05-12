@@ -51,6 +51,8 @@ import sys, traceback
 from pprint import pprint
 import numpy
 
+CANVAS_SIZE = 1600, 800
+
 # This will be filled in later. Better to store these once rather than have to call the functions
 # to get this information on every returned data block
 source_numbers_types = {}
@@ -66,12 +68,40 @@ max_block_output = 1
 # samples or waveform samples to output
 max_samples_output = 1
 
+# img: output of pillow Image
+# color: (r, g, b)
+def recolor(img, color, *, two_tone=False):
+    # img = img.copy()
+    # create copy of image and ensure there is an alpha channel
+    img = img.convert("RGBA")
+    data = img.load()
+    
+    nr, ng, nb = color
+    
+    for x in range(img.size[0]):
+        for y in range(img.size[1]):
+            r, g, b, a = data[x, y]
+            
+            v = (r + g + b) // 3
+            v = 255 - v
+            
+            if two_tone and v > 0:
+                v = 255
+            
+            data[x, y] = (nr, ng, nb, v)
+    
+    return img
+
 ##############################################################################################
 ###M onkey Images Class set up for Tkinter GUI
 class MonkeyImages(tk.Frame,):
     def __init__(self, parent):
         test_config = 'test' in sys.argv
         use_hardware = 'test' not in sys.argv and 'nohw' not in sys.argv
+        
+        # width, height
+        self.canvas_size = CANVAS_SIZE
+        canvas_x, canvas_y = self.canvas_size
         
         self.readyforplexon = use_hardware  ### Nathan's Switch for testing while not connected to plexon omni. I will change to true / get rid of it when not needed.
                                     ### Also changed the server set up so that it won't error out and exit if the server is not on, but it will say Client isn't connected.
@@ -186,13 +216,15 @@ class MonkeyImages(tk.Frame,):
         
         self.joystick_pull_threshold = 4
         
-        root = tk.Tk()
+        
         if test_config:
             self.ConfigFilename = 'csvconfig_EXAMPLE_Joystick.csv'
         else:
+            root = tk.Tk()
             self.ConfigFilename =  filedialog.askopenfilename(initialdir = "/",title = "Select file",filetypes = (("all files","*.*"), ("csv files","*.csv")))
+            root.withdraw()
+            del root
         
-        root.withdraw()
         print (self.ConfigFilename)
         csvreaderdict = {}
         data = []
@@ -223,35 +255,61 @@ class MonkeyImages(tk.Frame,):
         
         if 'images' in config_dict:
             config_images = config_dict['images']
-            def build_image_entry(i, x):
-                x = x.strip()
-                if '.' in x:
-                    x, ext = x.rsplit('.', 1)
-                else:
-                    ext = 'png'
+            def build_image_entry(i, name):
+                name = name.strip()
+                assert '.' not in name, f"{name}"
                 
-                return x, {
-                    'path': f"{x}.{ext}",
-                    'boxed_path': f"{x.replace('b', 'c').replace('d', 'e')}.{ext}",
-                    'list_images_index': i+1,
+                obj = {}
+                
+                for color in ['white', 'red', 'green']:
+                    img = Image.open(f"./images_gen/{color}/{name}.png")
+                    width = img.size[0]
+                    obj[color] = img
+                
+                obj[None] = obj['green']
+                
+                return name, {
+                    'width': width,
+                    'img': obj,
+                    'nidaq_event_index': i+1,
                 }
             
             images = dict(
                 build_image_entry(i, x)
                 for i, x in enumerate(config_images)
             )
-            self.list_images = [
-                'aBlank.png',
-                *(f"{x['path']}" for x in images.values()),
-                *(f"{x['path'].replace('b', 'c').replace('d', 'e')}" for x in images.values()),
-                'xBlack.png',
-                'yPrepare.png',
-                'zMonkey2.png',
-            ]
+            
+            self.selectable_images = list(images)
+            
+            img = Image.open('./images_gen/prepare.png')
+            
+            images['yPrepare'] = {
+                'width': img.size[0],
+                'img': {None: img},
+            }
+            
+            red = Image.open('./images_gen/box_red.png')
+            green = Image.open('./images_gen/box_green.png')
+            white = Image.open('./images_gen/box_white.png')
+            
+            images['box'] = {
+                'width': green.size[0],
+                'img': {
+                    'red': red,
+                    'green': green,
+                    'white': white,
+                    None: green,
+                }
+            }
+            
+            for image in images.values():
+                image['tk'] = {
+                    k: ImageTk.PhotoImage(img)
+                    for k, img in image['img'].items()
+                }
+            
             self.images = images
-            self.num_task_images = len(config_dict['images'])
         else:
-            self.num_task_images = config_dict.get('num_task_images', 3)
             assert False, "config images is now required"
         
         def parse_threshold(s):
@@ -349,7 +407,7 @@ class MonkeyImages(tk.Frame,):
         self.Area2_right_pres = False   # Joystick Area
         self.Area1_left_pres = False    # Home Area
         self.Area2_left_pres = False    # Joystick Area
-        self.ImageReward = False        # Default Image Reward set to True
+        self.ImageReward = True        # Default Image Reward set to True
         
         print("ready for plexon:" , self.readyforplexon)
         tk.Frame.__init__(self, parent)
@@ -359,7 +417,7 @@ class MonkeyImages(tk.Frame,):
         ###Adjust width and height to fit monitor### bd is for if you want a border
         self.frame1 = tk.Frame(self.root, width = 1600, height = 1000, bd = 0)
         self.frame1.pack(side = tk.BOTTOM)
-        self.cv1 = tk.Canvas(self.frame1, width = 1600, height = 800, background = "white", bd = 1, relief = tk.RAISED)
+        self.cv1 = tk.Canvas(self.frame1, width = canvas_x, height = canvas_y, background = "black", bd = 1, relief = tk.RAISED)
         self.cv1.pack(side = tk.BOTTOM)
         
         startbutton = tk.Button(self.root, text = "Start-'a'", height = 5, width = 6, command = self.Start)
@@ -461,28 +519,42 @@ class MonkeyImages(tk.Frame,):
                     winsound.SND_ALIAS + winsound.SND_ASYNC + winsound.SND_NOWAIT + winsound.SND_LOOP
                 ) #Need to change the tone
             
-            icon_flash_freq = 2
-            # icon period = 1 / freq
-            # change period = 0.5 * period
-            icon_change_period = 0.5 / icon_flash_freq
-            # wait for hand to be in the home zone
-            # wait at least inter-trial time before starting
-            while True:
-                # print(trial_t())
-                # print((trial_t() * 1000 // 500))
-                if (trial_t() // icon_change_period) % 2:
-                    self.counter = 0 # blank
-                else:
-                    self.counter = -2 # black diamond
-                self.next_image()
-                
-                if trial_t() > self.InterTrialTime and in_zone():
-                    break
-                yield
+            prep_flash = False
+            
+            if prep_flash:
+                icon_flash_freq = 2
+                # icon period = 1 / freq
+                # change period = 0.5 * period
+                icon_change_period = 0.5 / icon_flash_freq
+                prep_shown = False
+                # wait for hand to be in the home zone
+                # wait at least inter-trial time before starting
+                while True:
+                    # print(trial_t())
+                    # print((trial_t() * 1000 // 500))
+                    if (trial_t() // icon_change_period) % 2:
+                        # blank
+                        if prep_shown:
+                            self.clear_image()
+                            prep_shown = False
+                    else:
+                        # black diamond
+                        if not prep_shown:
+                            self.show_image('yPrepare')
+                            prep_shown = True
+                    
+                    if trial_t() > self.InterTrialTime and in_zone():
+                        break
+                    yield
+            else:
+                self.show_image('yPrepare')
+                while True:
+                    if trial_t() > self.InterTrialTime and in_zone():
+                        break
+                    yield
             
             # switch to blank to ensure diamond is no longer showing
-            self.counter = 0
-            self.next_image()
+            self.clear_image()
             
             if winsound is not None:
                 winsound.PlaySound(winsound.Beep(100,0), winsound.SND_PURGE) #Purge looping sounds
@@ -495,9 +567,9 @@ class MonkeyImages(tk.Frame,):
             yield from wait(self.DiscrimStimDuration)
             
             # choose image
-            selected_image_key = random.choice(list(self.images))
+            selected_image_key = random.choice(list(self.selectable_images))
             selected_image = self.images[selected_image_key]
-            image_i = selected_image['list_images_index']
+            image_i = selected_image['nidaq_event_index']
             
             # EV25 , EV27, EV29, EV31
             if image_i in [1,2,3,4]:
@@ -507,8 +579,7 @@ class MonkeyImages(tk.Frame,):
                     self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
             
             # display image without red box
-            self.counter = image_i
-            self.next_image()
+            self.show_image(selected_image_key)
             
             yield from wait(self.GoCueDuration)
             
@@ -521,8 +592,7 @@ class MonkeyImages(tk.Frame,):
                     self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
             
             # display image with red box
-            self.counter = image_i + self.num_task_images
-            self.next_image()
+            self.show_image(selected_image_key, boxed=True)
             cue_time = trial_t()
             
             log_failure_reason = [None]
@@ -605,13 +675,16 @@ class MonkeyImages(tk.Frame,):
                     if winsound is not None:
                         winsound.PlaySound(self.Bloop, winsound.SND_ALIAS + winsound.SND_ASYNC + winsound.SND_NOWAIT)
                 if self.EnableTimeOut:
-                    self.counter = -3
-                    self.next_image()
+                    # self.show_image('xBlack')
+                    assert False, "EnableTimeOut == True not currently supported"
+                    yield from wait(self.TimeOut)
+                if self.ImageReward:
+                    self.show_image(selected_image_key, variant='red', boxed=True)
                     yield from wait(self.TimeOut)
             else: # pull suceeded
                 if self.ImageReward:
-                    self.counter = -1
-                    self.next_image()
+                    self.show_image(selected_image_key, variant='white', boxed=True)
+                
                 #EV20
                 if self.nidaq:
                     self.task2.WriteDigitalLines(1, 1, 10.0, PyDAQmx.DAQmx_Val_GroupByChannel, self.event6, None, None)
@@ -734,8 +807,7 @@ class MonkeyImages(tk.Frame,):
         
         if self.readyforplexon == True:
             self.plexdo.clear_bit(self.device_number, self.reward_nidaq_bit)
-        self.counter = 0
-        self.next_image()
+        self.clear_image()
         if winsound is not None:
             winsound.PlaySound(None, winsound.SND_PURGE)
     
@@ -777,29 +849,23 @@ class MonkeyImages(tk.Frame,):
     def HighLevelRewardOff(self):
         print('Image Reward Off')
         self.ImageReward = False
-
-    def next_image(self):
-        im = Image.open(self.source / self.list_images[self.counter])    # Bypassing hard-coded path strings (above lines) R.E. 7/29/2020
-        if (490-im.size[0])<(390-im.size[1]):
-            width = 1600
-            height = width*im.size[1]/im.size[0]
-            self.next_step(height, width)
-        else:
-            height = 800
-            width = height*im.size[0]/im.size[1]
-            self.next_step(height, width)
-
-    def next_step(self, height, width):
-        self.im = Image.open(self.source / self.list_images[self.counter])   # Bypassing hard-coded path strings (above lines) R.E. 7/29/2020
-        self.im.thumbnail((width, height), Image.ANTIALIAS)
-        self.root.photo = ImageTk.PhotoImage(self.im)
-        self.photo = ImageTk.PhotoImage(self.im)
-        if self.counter == 0:
-            self.cv1.create_image(0, 0, anchor = 'nw', image = self.photo)
-        else:
-            self.im.thumbnail((width, height), Image.ANTIALIAS)
-            self.cv1.delete("all")
-            self.cv1.create_image(0, 0, anchor = 'nw', image = self.photo)
+    
+    def show_image(self, k, *, variant=None, boxed=False, _clear=True):
+        if _clear:
+            self.clear_image()
+        
+        img = self.images[k]['tk'][variant]
+        
+        w = self.images[k]['width']
+        offset = (self.canvas_size[0] - w) / 2
+        
+        if boxed:
+            self.show_image('box', variant=variant, _clear=True)
+        
+        self.cv1.create_image(offset, 0, anchor = 'nw', image = img)
+    
+    def clear_image(self):
+        self.cv1.delete("all")
     
     def gathering_data_omni_new(self):
         self.client.opx_wait(1000)
@@ -887,7 +953,65 @@ class TestFrame(tk.Frame,):
         startbutton.pack(side = tk.LEFT)
     
 
-if __name__ == "__main__":
+def gen_images():
+    out_path = Path('./images_gen')
+    out_path.mkdir(exist_ok=True)
+    src = Path('./TaskImages_Joystick')
+    
+    prep_path = out_path / 'prepare.png'
+    img = Image.open(src / 'yPrepare.png')
+    img.thumbnail(CANVAS_SIZE)
+    img = recolor(img, (0, 255, 0))
+    img.save(prep_path, 'PNG')
+    
+    img = Image.open(src / 'eBlank.png')
+    img.thumbnail(CANVAS_SIZE)
+    cimg = recolor(img, (0, 255, 0), two_tone=True)
+    p = out_path / 'box_green.png'
+    cimg.save(p, 'PNG')
+    
+    cimg = recolor(img, (255, 0, 0), two_tone=True)
+    p = out_path / 'box_red.png'
+    cimg.save(p, 'PNG')
+    
+    cimg = recolor(img, (255, 255, 255), two_tone=True)
+    p = out_path / 'box_white.png'
+    cimg.save(p, 'PNG')
+    
+    green_dir = out_path / 'green'
+    red_dir = out_path / 'red'
+    white_dir = out_path / 'white'
+    colors = [
+        (green_dir, (0, 255, 0)),
+        (red_dir, (255, 0, 0)),
+        (white_dir, (255, 255, 255)),
+    ]
+    for p, _ in colors:
+        p.mkdir(exist_ok=True)
+    
+    for image_p in src.glob('*.png'):
+        c = image_p.stem[0]
+        name = image_p.stem
+        if c != 'b':
+            continue
+        print(image_p)
+        img = Image.open(image_p)
+        img.thumbnail(CANVAS_SIZE)
+        for cdir, color in colors:
+            cimg = recolor(img, color)
+            p = cdir / f"{name}.png"
+            cimg.save(p, 'PNG')
+
+def main():
+    try:
+        cmd = sys.argv[1]
+    except IndexError:
+        cmd = None
+    
+    if cmd == 'gen':
+        gen_images()
+        return
+    
     root = tk.Tk()
     
     # MonkeyTest = MonkeyImages(root)
@@ -895,3 +1019,6 @@ if __name__ == "__main__":
     
     with MonkeyImages(root):
         tk.mainloop()
+
+if __name__ == "__main__":
+    main()

@@ -1,4 +1,14 @@
 
+# Dependencies
+
+Windows  
+get numpy and Pillow installed somehow
+
+Ubuntu  
+`sudo apt-get install python3 python3-pip python3-tk python3-pil.imagetk python3-numpy`
+
+tested with numpy version 1.19.4 but it isn't used heavily so a lot of versions probably work
+
 # Config
 
 
