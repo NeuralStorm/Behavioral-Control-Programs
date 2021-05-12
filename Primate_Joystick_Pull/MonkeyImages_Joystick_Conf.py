@@ -415,31 +415,36 @@ class MonkeyImages(tk.Frame,):
         self.root.wm_title("MonkeyImages")
 
         ###Adjust width and height to fit monitor### bd is for if you want a border
-        self.frame1 = tk.Frame(self.root, width = 1600, height = 1000, bd = 0)
+        self.frame1 = tk.Frame(self.root, width = 1600, height = 1000, bd = 0, bg='black',
+            highlightthickness=0,)
         self.frame1.pack(side = tk.BOTTOM)
-        self.cv1 = tk.Canvas(self.frame1, width = canvas_x, height = canvas_y, background = "black", bd = 1, relief = tk.RAISED)
+        self.cv1 = tk.Canvas(self.frame1, width = canvas_x, height = canvas_y,
+            background = "black", bd = 1, relief = tk.FLAT,
+            highlightthickness=0,)
         self.cv1.pack(side = tk.BOTTOM)
         
-        startbutton = tk.Button(self.root, text = "Start-'a'", height = 5, width = 6, command = self.Start)
-        startbutton.pack(side = tk.LEFT)
+        def btn(text, cmd):
+            b = tk.Button(
+                self.root, text = text,
+                height = 5,
+                # width = 6,
+                command = cmd,
+                background = "black", foreground='grey',
+                bd=1,
+                relief = tk.FLAT,
+                highlightthickness=1,
+                highlightcolor='grey',
+                highlightbackground='grey',
+            )
+            b.pack(side = tk.LEFT)
         
-        pausebutton = tk.Button(self.root, text = "Pause-'s'", height = 5, width = 6, command = self.Pause)
-        pausebutton.pack(side = tk.LEFT)
-        
-        unpausebutton = tk.Button(self.root, text = "Unpause-'d'", height = 5, width = 8, command = self.Unpause)
-        unpausebutton.pack(side = tk.LEFT)
-        
-        stopbutton = tk.Button(self.root, text = "Stop-'f'", height = 5, width = 6, command = self.Stop)
-        stopbutton.pack(side = tk.LEFT)
-        
-        # Likely Don't Need these buttons, Image reward will always be an option, and will be controlled by %
-        ImageRewardOn = tk.Button(self.root, text = "ImageReward\nOn", height = 5, width = 10, command = self.HighLevelRewardOn)
-        ImageRewardOn.pack(side = tk.LEFT)
-        ImageRewardOff = tk.Button(self.root, text = "ImageReward\nOff", height = 5, width = 10, command = self.HighLevelRewardOff)
-        ImageRewardOff.pack(side = tk.LEFT)
-        
-        testbutton = tk.Button(self.root, text = "Water Reward-'z'", height = 5, width = 12, command = self.manual_water_dispense)
-        testbutton.pack(side = tk.LEFT)
+        btn("Start-'a'", self.Start)
+        btn("Pause-'s'", self.Pause)
+        btn("Unpause-'d'", self.Unpause)
+        btn("Stop-'f'", self.Stop)
+        btn("ImageReward\nOn", self.HighLevelRewardOn)
+        btn("ImageReward\nOff", self.HighLevelRewardOff)
+        btn("Water Reward-'z'", self.manual_water_dispense)
         
         self.root.bind('<Key>', lambda a : self.KeyPress(a))
         
@@ -1013,6 +1018,7 @@ def main():
         return
     
     root = tk.Tk()
+    root.configure(bg='black', bd=0)
     
     # MonkeyTest = MonkeyImages(root)
     # MonkeyTest = TestFrame(root)
