@@ -238,21 +238,21 @@ class MonkeyImages(tk.Frame,):
         
         for row in data:
             k = row[0].strip()
-            vs = (v.strip() for v in row[1:])
+            vs = [v.strip() for v in row[1:]]
             if not k or k.startswith('#'):
                 continue
             csvreaderdict[k] = vs
         
         config_dict = csvreaderdict
         # PARAMETERS META DATA
-        self.StudyID = csvreaderdict['Study ID']                            # 3 letter study code
-        self.SessionID = csvreaderdict['Session ID']                        # Type of Session
-        self.AnimalID = csvreaderdict['Animal ID']                          # 3 digit number
-        self.Date = [time.strftime('%Y%m%d_%H%M%S')]                               # Today's Date
+        self.study_id = config_dict['Study ID'][0]       # 3 letter study code
+        self.session_id = csvreaderdict['Session ID'][0] # Type of Session
+        self.animal_id = csvreaderdict['Animal ID'][0]   # 3 digit number
+        self.start_time = time.strftime('%Y%m%d_%H%M%S')
+        
         #self.TaskType = 'Joystick'
-        #self.TaskType = 'HomezoneExit'                                     # Added for Homezone exit version.  String should be 'HomezoneExit'  Leave blank for original Joystick version.
-        self.TaskType = csvreaderdict['Task Type'][0]                       # Added additional rows into the config file to reduce
-        # self.source = Path(csvreaderdict['Path To Graphics Dir'][0])              # required in-code edits to change task versions. R.E. 7-29-2020
+        #self.TaskType = 'HomezoneExit'
+        self.TaskType = csvreaderdict['Task Type'][0]
         
         if 'images' in config_dict:
             config_images = config_dict['images']
@@ -353,21 +353,8 @@ class MonkeyImages(tk.Frame,):
         
         self.reward_thresholds = rw_thr
         
-        # PARAMETERS
-        # self.filename = 'test'
-        #self.savepath = os.path.join('D:', os.sep, 'IntervalTimingTaskData')            # Path to outside target directory for saving csv file
-        self.savepath = Path(csvreaderdict['Task Data Save Dir'][0])
-        self.filename = self.StudyID[0] + '_' + self.AnimalID[0] + '_' + self.Date[0] + '_' + self.TaskType # Consolidate metadata into filename
-        self.fullfilename = self.filename + '.csv'                                                          # Append filename extension to indicate type
-        # self.DiscrimStimMin = float(csvreaderdict['Pre Discriminatory Stimulus Min delta t1'][0])           # (seconds) Minimum seconds to display Discrim Stim for before Go Cue
-        # self.DiscrimStimMax = float(csvreaderdict['Pre Discriminatory Stimulus Max delta t1'][0])           # (seconds) Maxiumum seconds to display Discrim Stim for before Go Cue
-        # self.DiscrimStimDuration = self.random_duration(self.DiscrimStimMin, self.DiscrimStimMax)             # (seconds) How long is the Discriminative Stimulus displayed for.
-        # delay before 
-        # self.DiscrimStimDuration = 0.6
-        # self.GoCueMin = float(csvreaderdict['Pre Go Cue Min delta t2'][0])#0.25                             # (seconds) Minimum seconds to display Discrim Stim for before Go Cue
-        # self.GoCueMax = float(csvreaderdict['Pre Go Cue Max delta t2'][0])#0.5                              # (seconds) Maxiumum seconds to display Discrim Stim for before Go Cue
-        # self.GoCueDuration = self.random_duration(self.GoCueMin, self.GoCueMax)                               # (seconds) How long is the Discriminative Stimulus displayed for.
-        # self.GoCueDuration = 0.6
+        self.save_path = Path(csvreaderdict['Task Data Save Dir'][0])
+        self.log_file_name = f"{self.study_id}_{self.animal_id}_{self.session_id}_{self.start_time}_{self.TaskType}.csv"
         
         self.discrim_delay_range = (
             float(config_dict['Pre Discriminatory Stimulus Min delta t1'][0]),
@@ -378,9 +365,8 @@ class MonkeyImages(tk.Frame,):
             float(config_dict['Pre Go Cue Max delta t2'][0]),
         )
         
-        self.MaxTimeAfterSound = int(csvreaderdict['Maximum Time After Sound'][0])                          # (seconds) Maximum time Monkey has to pull. However, it is currently set so that it will not reset if the Pedal is being Pulled
-        self.NumEvents = int(csvreaderdict['Number of Events'][0])                                          # Number of different (desired) interval durations for the animal to produce,
-                                                                                                            # corresponds to the number of unique discriminative stimuli.
+        self.MaxTimeAfterSound = int(csvreaderdict['Maximum Time After Sound'][0])
+        self.NumEvents = int(csvreaderdict['Number of Events'][0])
         
         if self.NumEvents == 0:
             self.NumEvents = 1
@@ -388,17 +374,12 @@ class MonkeyImages(tk.Frame,):
         else:
             self.task_type = 'joystick_pull'
         
-        self.InterTrialTime = float(csvreaderdict['Inter Trial Time'][0])                                   # (seconds) Time between Trials / Reward Time
-        # self.EarlyPullTimeOut = (csvreaderdict['Enable Early Pull Time Out'][0] == 'TRUE')                  # This Boolean sets if you want to have a timeout for a pull before the Go Red Rectangle.
-        # self.RewardDelayMin = float(csvreaderdict['Pre Reward Delay Min delta t3'][0])#0.010                # (seconds) Min Length of Delay before Reward (Juice) is given.
-        # self.RewardDelayMax = float(csvreaderdict['Pre Reward Delay Max delta t3'][0])#0.010                # (seconds) Max Length of Delay before Reward (Juice) is given.
-        # self.RewardDelay = self.random_duration(self.RewardDelayMin, self.RewardDelayMax)                    # (seconds) Length of Delay before Reward (Juice) is given.
+        self.InterTrialTime = float(csvreaderdict['Inter Trial Time'][0])
         
         self.manual_reward_time = float(csvreaderdict['manual_reward_time'][0])
-        # self.EnableTimeOut = (csvreaderdict['Enable Time Out'][0] == 'TRUE')                                # Toggle this to True if you want to include 'punishment' timeouts (black screen for self.TimeOut duration), or False for no TimeOuts.
-        self.TimeOut = float(csvreaderdict['Time Out'][0])                                                  # (seconds) Time for black time out screen
+        self.TimeOut = float(csvreaderdict['Time Out'][0])
         self.EnableTimeOut = bool(self.TimeOut)
-        self.EnableBlooperNoise = (csvreaderdict['Enable Blooper Noise'][0] == 'TRUE')                      # Toggle this to True if you want to include the blooper noise when an incorrect pull is detected (Either too long or too short / No Reward Given)
+        self.EnableBlooperNoise = (csvreaderdict['Enable Blooper Noise'][0] == 'TRUE')
         
         ############# Initializing vars
         # self.DurationList()                                 # Creates dict of lists to encapsulate press durations. Will be used for Adaptive Reward Control
@@ -935,7 +916,7 @@ class MonkeyImages(tk.Frame,):
                     self.Area1_right_pres = False
     
     def save_log_csv(self):
-        csv_path = Path(self.savepath) / self.fullfilename
+        csv_path = Path(self.save_path) / self.log_file_name
         
         with open(csv_path, 'w') as f:
             writer = csv.writer(f)

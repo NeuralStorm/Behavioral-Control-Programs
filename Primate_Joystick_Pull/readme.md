@@ -78,11 +78,6 @@ This amount of time must have elapsed after the start of a trial before the tria
 The max amount of time after the go cue that will be waited before the pull is considered a failure
 
 ---
-### `Task Type`
-
-Does nothing
-
----
 ### `Number of Events`
 
 If set to 0 the homezone exit task will be run, otherwise the joystick pull task will be run
@@ -93,7 +88,7 @@ If set to 0 the homezone exit task will be run, otherwise the joystick pull task
 Directory to which log csv files are saved
 
 ---
-### `Study ID`, `Session ID`, `Animal ID`
+### `Study ID`, `Animal ID`, `Session ID`, `Task Type`
 
 Included in the name of the output csv log file
 
