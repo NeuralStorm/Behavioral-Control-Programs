@@ -56,3 +56,58 @@ each image's boxed variant is expected to have the same name with `b` replace wi
 ### `Number of Events`
 
 If set to 0 sets the program to perform the home zone exit task.
+
+---
+### `manual_reward_time`
+
+Duration of water reward when manually triggered with the gui
+
+---
+### `Time Out`
+
+A blank screen will be displayed for `Time Out` seconds after the negative image and sound are played. If set to 0 no blank screen will be displayed before the next trial
+
+---
+### `Inter Trial Time`
+
+This amount of time must have elapsed after the start of a trial before the trial will begin regardless of wether the hand is in the home zone
+
+---
+### `Maximum Time After Sound`
+
+The max amount of time after the go cue that will be waited before the pull is considered a failure
+
+---
+### `Task Type`
+
+Does nothing
+
+---
+### `Number of Events`
+
+If set to 0 the homezone exit task will be run, otherwise the joystick pull task will be run
+
+---
+### `Task Data Save Dir`
+
+Directory to which log csv files are saved
+
+---
+### `Study ID`, `Session ID`, `Animal ID`
+
+Included in the name of the output csv log file
+
+---
+### `Enable Blooper Noise`
+
+if set to "TRUE" a noise will be played after an unsuccesful trial (the noise after a succesful trial can't be disabled)
+
+---
+### `Pre Discriminatory Stimulus Min delta t1`, `Pre Discriminatory Stimulus Max delta t1`
+
+A number in the range [`Pre Discriminatory Stimulus Min delta t1`, `Pre Discriminatory Stimulus Max delta t1`] will be selected each trial for the delay between the hand entering the home zone and a shape being shown on the screen. Min and max can be set to the same value to have a fixed delay.
+
+---
+### `Pre Go Cue Min delta t2`, `Pre Go Cue Max delta t2`
+
+A number in the range [`Pre Go Cue Min delta t2`, `Pre Go Cue Max delta t2`] will be selected each trial for the delay between a shape being shown and the go cue being shown. Min and max can be set to the same value to have a fixed delay.

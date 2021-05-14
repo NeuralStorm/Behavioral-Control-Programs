@@ -1,4 +1,6 @@
-
+"""
+    Sound effects obtained from https://www.zapsplat.com
+    """
 # For keypad controls, search "def KeyPress"
 
 # Defs- DS: Discriminatory Stimuli, GC: Go Cue, 
@@ -103,12 +105,10 @@ class MonkeyImages(tk.Frame,):
         self.canvas_size = CANVAS_SIZE
         canvas_x, canvas_y = self.canvas_size
         
-        self.readyforplexon = use_hardware  ### Nathan's Switch for testing while not connected to plexon omni. I will change to true / get rid of it when not needed.
-                                    ### Also changed the server set up so that it won't error out and exit if the server is not on, but it will say Client isn't connected.
-        self.nidaq = self.readyforplexon
-        self.plexon = self.readyforplexon
+        self.nidaq = use_hardware
+        self.plexon = use_hardware
         
-        if self.readyforplexon:
+        if self.plexon:
             assert not plexon_import_failed
         
         # delay for how often state is updated, only used for new loop
@@ -123,7 +123,7 @@ class MonkeyImages(tk.Frame,):
         
         self.trial_log = []
         
-        if self.readyforplexon == True:
+        if self.plexon == True:
             ## Setup Plexon Server
             # Initialize the API class
             self.client = PyOPXClientAPI()
@@ -132,7 +132,7 @@ class MonkeyImages(tk.Frame,):
             if not self.client.connected:
                 print("Client isn't connected, exiting.\n")
                 print("Error code: {}\n".format(self.client.last_result))
-                self.readyforplexon = False
+                self.plexon = False
 
             print("Connected to OmniPlex Server\n")
             # Get global parameters
@@ -201,7 +201,7 @@ class MonkeyImages(tk.Frame,):
         self.event6  = numpy.array([0,0,0,0,0,0,1,0], dtype=numpy.uint8) #task: EV24    #task2: EV20
         self.event7  = numpy.array([0,0,0,0,0,0,0,1], dtype=numpy.uint8) #task: EV23    #task2: EV19
         
-        if self.readyforplexon == True:
+        if self.nidaq == True:
             self.task = Task()
             self.task.CreateDOChan("/Dev2/port2/line0:7","",PyDAQmx.DAQmx_Val_ChanForAllLines)
             self.task.StartTask()
@@ -216,6 +216,7 @@ class MonkeyImages(tk.Frame,):
         
         self.joystick_pull_threshold = 4
         
+        self.auto_water_reward_enabled = True
         
         if test_config:
             self.ConfigFilename = 'csvconfig_EXAMPLE_Joystick.csv'
@@ -235,23 +236,23 @@ class MonkeyImages(tk.Frame,):
                 data.append(row)
         csvfile.close()
         
-        for row in range(0,len(data)):
-            for entry in range(0,len(data[row])):
-                if entry == 0:
-                    csvreaderdict[data[row][0]] = []
-                else:
-                    csvreaderdict[data[row][0]].append(data[row][entry])
+        for row in data:
+            k = row[0].strip()
+            vs = (v.strip() for v in row[1:])
+            if not k or k.startswith('#'):
+                continue
+            csvreaderdict[k] = vs
         
         config_dict = csvreaderdict
         # PARAMETERS META DATA
         self.StudyID = csvreaderdict['Study ID']                            # 3 letter study code
         self.SessionID = csvreaderdict['Session ID']                        # Type of Session
         self.AnimalID = csvreaderdict['Animal ID']                          # 3 digit number
-        self.Date = [time.strftime('%Y%m%d')]                               # Today's Date
+        self.Date = [time.strftime('%Y%m%d_%H%M%S')]                               # Today's Date
         #self.TaskType = 'Joystick'
         #self.TaskType = 'HomezoneExit'                                     # Added for Homezone exit version.  String should be 'HomezoneExit'  Leave blank for original Joystick version.
         self.TaskType = csvreaderdict['Task Type'][0]                       # Added additional rows into the config file to reduce
-        self.source = Path(csvreaderdict['Path To Graphics Dir'][0])              # required in-code edits to change task versions. R.E. 7-29-2020
+        # self.source = Path(csvreaderdict['Path To Graphics Dir'][0])              # required in-code edits to change task versions. R.E. 7-29-2020
         
         if 'images' in config_dict:
             config_images = config_dict['images']
@@ -358,12 +359,25 @@ class MonkeyImages(tk.Frame,):
         self.savepath = Path(csvreaderdict['Task Data Save Dir'][0])
         self.filename = self.StudyID[0] + '_' + self.AnimalID[0] + '_' + self.Date[0] + '_' + self.TaskType # Consolidate metadata into filename
         self.fullfilename = self.filename + '.csv'                                                          # Append filename extension to indicate type
-        self.DiscrimStimMin = float(csvreaderdict['Pre Discriminatory Stimulus Min delta t1'][0])           # (seconds) Minimum seconds to display Discrim Stim for before Go Cue
-        self.DiscrimStimMax = float(csvreaderdict['Pre Discriminatory Stimulus Max delta t1'][0])           # (seconds) Maxiumum seconds to display Discrim Stim for before Go Cue
-        self.DiscrimStimDuration = self.random_duration(self.DiscrimStimMin, self.DiscrimStimMax)             # (seconds) How long is the Discriminative Stimulus displayed for.
-        self.GoCueMin = float(csvreaderdict['Pre Go Cue Min delta t2'][0])#0.25                             # (seconds) Minimum seconds to display Discrim Stim for before Go Cue
-        self.GoCueMax = float(csvreaderdict['Pre Go Cue Max delta t2'][0])#0.5                              # (seconds) Maxiumum seconds to display Discrim Stim for before Go Cue
-        self.GoCueDuration = self.random_duration(self.GoCueMin, self.GoCueMax)                               # (seconds) How long is the Discriminative Stimulus displayed for.
+        # self.DiscrimStimMin = float(csvreaderdict['Pre Discriminatory Stimulus Min delta t1'][0])           # (seconds) Minimum seconds to display Discrim Stim for before Go Cue
+        # self.DiscrimStimMax = float(csvreaderdict['Pre Discriminatory Stimulus Max delta t1'][0])           # (seconds) Maxiumum seconds to display Discrim Stim for before Go Cue
+        # self.DiscrimStimDuration = self.random_duration(self.DiscrimStimMin, self.DiscrimStimMax)             # (seconds) How long is the Discriminative Stimulus displayed for.
+        # delay before 
+        # self.DiscrimStimDuration = 0.6
+        # self.GoCueMin = float(csvreaderdict['Pre Go Cue Min delta t2'][0])#0.25                             # (seconds) Minimum seconds to display Discrim Stim for before Go Cue
+        # self.GoCueMax = float(csvreaderdict['Pre Go Cue Max delta t2'][0])#0.5                              # (seconds) Maxiumum seconds to display Discrim Stim for before Go Cue
+        # self.GoCueDuration = self.random_duration(self.GoCueMin, self.GoCueMax)                               # (seconds) How long is the Discriminative Stimulus displayed for.
+        # self.GoCueDuration = 0.6
+        
+        self.discrim_delay_range = (
+            float(config_dict['Pre Discriminatory Stimulus Min delta t1'][0]),
+            float(config_dict['Pre Discriminatory Stimulus Max delta t1'][0]),
+        )
+        self.go_cue_delay_range = (
+            float(config_dict['Pre Go Cue Min delta t2'][0]),
+            float(config_dict['Pre Go Cue Max delta t2'][0]),
+        )
+        
         self.MaxTimeAfterSound = int(csvreaderdict['Maximum Time After Sound'][0])                          # (seconds) Maximum time Monkey has to pull. However, it is currently set so that it will not reset if the Pedal is being Pulled
         self.NumEvents = int(csvreaderdict['Number of Events'][0])                                          # Number of different (desired) interval durations for the animal to produce,
                                                                                                             # corresponds to the number of unique discriminative stimuli.
@@ -375,25 +389,17 @@ class MonkeyImages(tk.Frame,):
             self.task_type = 'joystick_pull'
         
         self.InterTrialTime = float(csvreaderdict['Inter Trial Time'][0])                                   # (seconds) Time between Trials / Reward Time
-        self.EarlyPullTimeOut = (csvreaderdict['Enable Early Pull Time Out'][0] == 'TRUE')                  # This Boolean sets if you want to have a timeout for a pull before the Go Red Rectangle.
-        self.RewardDelayMin = float(csvreaderdict['Pre Reward Delay Min delta t3'][0])#0.010                # (seconds) Min Length of Delay before Reward (Juice) is given.
-        self.RewardDelayMax = float(csvreaderdict['Pre Reward Delay Max delta t3'][0])#0.010                # (seconds) Max Length of Delay before Reward (Juice) is given.
-        self.RewardDelay = self.random_duration(self.RewardDelayMin, self.RewardDelayMax)                    # (seconds) Length of Delay before Reward (Juice) is given.
+        # self.EarlyPullTimeOut = (csvreaderdict['Enable Early Pull Time Out'][0] == 'TRUE')                  # This Boolean sets if you want to have a timeout for a pull before the Go Red Rectangle.
+        # self.RewardDelayMin = float(csvreaderdict['Pre Reward Delay Min delta t3'][0])#0.010                # (seconds) Min Length of Delay before Reward (Juice) is given.
+        # self.RewardDelayMax = float(csvreaderdict['Pre Reward Delay Max delta t3'][0])#0.010                # (seconds) Max Length of Delay before Reward (Juice) is given.
+        # self.RewardDelay = self.random_duration(self.RewardDelayMin, self.RewardDelayMax)                    # (seconds) Length of Delay before Reward (Juice) is given.
         
         self.manual_reward_time = float(csvreaderdict['manual_reward_time'][0])
-        self.EnableTimeOut = (csvreaderdict['Enable Time Out'][0] == 'TRUE')                                # Toggle this to True if you want to include 'punishment' timeouts (black screen for self.TimeOut duration), or False for no TimeOuts.
+        # self.EnableTimeOut = (csvreaderdict['Enable Time Out'][0] == 'TRUE')                                # Toggle this to True if you want to include 'punishment' timeouts (black screen for self.TimeOut duration), or False for no TimeOuts.
         self.TimeOut = float(csvreaderdict['Time Out'][0])                                                  # (seconds) Time for black time out screen
+        self.EnableTimeOut = bool(self.TimeOut)
         self.EnableBlooperNoise = (csvreaderdict['Enable Blooper Noise'][0] == 'TRUE')                      # Toggle this to True if you want to include the blooper noise when an incorrect pull is detected (Either too long or too short / No Reward Given)
         
-        ############# Task sounds 
-        self.RewardSound = 'Exclamation'
-        #self.Bloop       = 'Question'
-        #self.Bloop = '.\\TaskSounds\\WrongHoldDuration.wav'
-        self.Bloop = str(Path('./TaskSounds/WrongHoldDuration.wav'))
-        #self.OutOfHomeZoneSound = '.\\TaskSounds\\OutOfHomeZone.wav'
-        self.OutOfHomeZoneSound = str(Path('./TaskSounds/OutOfHomeZone.wav'))
-        ##############
-
         ############# Initializing vars
         # self.DurationList()                                 # Creates dict of lists to encapsulate press durations. Will be used for Adaptive Reward Control
         self.counter = 0 # Counter Values: Alphabetic from TestImages folder
@@ -409,7 +415,7 @@ class MonkeyImages(tk.Frame,):
         self.Area2_left_pres = False    # Joystick Area
         self.ImageReward = True        # Default Image Reward set to True
         
-        print("ready for plexon:" , self.readyforplexon)
+        print("ready for plexon:" , self.plexon)
         tk.Frame.__init__(self, parent)
         self.root = parent
         self.root.wm_title("MonkeyImages")
@@ -446,9 +452,16 @@ class MonkeyImages(tk.Frame,):
         btn("ImageReward\nOff", self.HighLevelRewardOff)
         btn("Water Reward-'z'", self.manual_water_dispense)
         
+        def water_rw_cb(val):
+            def inner():
+                self.auto_water_reward_enabled = val
+            return inner
+        btn("Water Reward\nOn", water_rw_cb(True))
+        btn("Water Reward\nOff", water_rw_cb(False))
+        
         self.root.bind('<Key>', lambda a : self.KeyPress(a))
         
-        if self.readyforplexon == True:
+        if self.plexon == True:
             WaitForStart = True
             print('Start Plexon Recording now')
             while WaitForStart == True:
@@ -468,7 +481,7 @@ class MonkeyImages(tk.Frame,):
         pass
     
     def __exit__(self, *exc):
-        if self.readyforplexon == True:
+        if self.plexon:
             self.plexdo.clear_bit(self.device_number, self.reward_nidaq_bit)
         self.save_log_csv()
     
@@ -503,6 +516,9 @@ class MonkeyImages(tk.Frame,):
     
     def new_loop_gen(self):
         while True:
+            discrim_delay = random.uniform(*self.discrim_delay_range)
+            go_cue_delay = random.uniform(*self.go_cue_delay_range)
+            
             # print(self.normalized_time)
             
             trial_start = self.normalized_time
@@ -518,11 +534,11 @@ class MonkeyImages(tk.Frame,):
                 while trial_t() - start_time < t:
                     yield
             
-            if winsound is not None:
-                winsound.PlaySound(
-                    self.OutOfHomeZoneSound,
-                    winsound.SND_ALIAS + winsound.SND_ASYNC + winsound.SND_NOWAIT + winsound.SND_LOOP
-                ) #Need to change the tone
+            # if winsound is not None:
+            #     winsound.PlaySound(
+            #         self.OutOfHomeZoneSound,
+            #         winsound.SND_ALIAS + winsound.SND_ASYNC + winsound.SND_NOWAIT + winsound.SND_LOOP
+            #     ) #Need to change the tone
             
             prep_flash = False
             
@@ -561,15 +577,15 @@ class MonkeyImages(tk.Frame,):
             # switch to blank to ensure diamond is no longer showing
             self.clear_image()
             
-            if winsound is not None:
-                winsound.PlaySound(winsound.Beep(100,0), winsound.SND_PURGE) #Purge looping sounds
+            # if winsound is not None:
+            #     winsound.PlaySound(winsound.Beep(100,0), winsound.SND_PURGE) #Purge looping sounds
             
             # EV19 Ready # TODO: Take this out when finish the connector since new start of trial comes from hand in home zone
             if self.nidaq:
                 self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event7,None,None)
                 self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
             
-            yield from wait(self.DiscrimStimDuration)
+            yield from wait(discrim_delay)
             
             # choose image
             selected_image_key = random.choice(list(self.selectable_images))
@@ -586,7 +602,7 @@ class MonkeyImages(tk.Frame,):
             # display image without red box
             self.show_image(selected_image_key)
             
-            yield from wait(self.GoCueDuration)
+            yield from wait(go_cue_delay)
             
             # EV26, EV28, EV30 EV32
             if image_i in [1,2,3,4]:
@@ -678,13 +694,17 @@ class MonkeyImages(tk.Frame,):
                     self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
                 if self.EnableBlooperNoise:
                     if winsound is not None:
-                        winsound.PlaySound(self.Bloop, winsound.SND_ALIAS + winsound.SND_ASYNC + winsound.SND_NOWAIT)
-                if self.EnableTimeOut:
-                    # self.show_image('xBlack')
-                    assert False, "EnableTimeOut == True not currently supported"
-                    yield from wait(self.TimeOut)
+                        winsound.PlaySound(
+                            str(Path('./TaskSounds/zapsplat_multimedia_game_sound_kids_fun_cheeky_layered_mallets_negative_66204.mp3')),
+                            winsound.SND_ALIAS + winsound.SND_ASYNC + winsound.SND_NOWAIT)
+                
                 if self.ImageReward:
                     self.show_image(selected_image_key, variant='red', boxed=True)
+                if self.ImageReward or self.EnableBlooperNoise:
+                    # 1.20 is the duration of the sound effect
+                    yield from wait(1.20)
+                if self.EnableTimeOut:
+                    self.clear_image()
                     yield from wait(self.TimeOut)
             else: # pull suceeded
                 if self.ImageReward:
@@ -695,11 +715,14 @@ class MonkeyImages(tk.Frame,):
                     self.task2.WriteDigitalLines(1, 1, 10.0, PyDAQmx.DAQmx_Val_GroupByChannel, self.event6, None, None)
                     self.task2.WriteDigitalLines(1, 1, 10.0, PyDAQmx.DAQmx_Val_GroupByChannel, self.begin, None, None)
                 if winsound is not None:
-                    winsound.PlaySound('550Hz_0.5s_test.wav', winsound.SND_ALIAS + winsound.SND_ASYNC + winsound.SND_NOWAIT)
+                    winsound.PlaySound(
+                        str(Path('./TaskSounds/zapsplat_multimedia_game_sound_kids_fun_cheeky_layered_mallets_complete_66202.mp3')),
+                        winsound.SND_ALIAS + winsound.SND_ASYNC + winsound.SND_NOWAIT)
                 
-                yield from wait(self.RewardDelay)
+                # 1.87 is the duration of the sound effect
+                yield from wait(1.87)
                 
-                if self.readyforplexon:
+                if self.nidaq and self.auto_water_reward_enabled:
                     #EV23
                     self.task.WriteDigitalLines(1, 1, 10.0, PyDAQmx.DAQmx_Val_GroupByChannel, self.event7, None, None)
                     self.task.WriteDigitalLines(1, 1, 10.0, PyDAQmx.DAQmx_Val_GroupByChannel, self.begin, None, None)
@@ -708,11 +731,8 @@ class MonkeyImages(tk.Frame,):
                 
                 yield from wait(reward_duration)
                 
-                if self.readyforplexon:
+                if self.nidaq:
                     self.plexdo.clear_bit(self.device_number, self.reward_nidaq_bit)
-                
-                self.DiscrimStimDuration = self.random_duration(self.DiscrimStimMin, self.DiscrimStimMax)
-                self.GoCueDuration = self.random_duration(self.GoCueMin, self.GoCueMax)
             
             # EV24
             if self.nidaq:
@@ -729,16 +749,17 @@ class MonkeyImages(tk.Frame,):
     def manual_water_dispense(self):
         def gen():
             print("water on")
-            if self.readyforplexon:
+            if self.nidaq:
                 #EV23
                 self.task.WriteDigitalLines(1, 1, 10.0, PyDAQmx.DAQmx_Val_GroupByChannel, self.event7, None, None)
                 self.task.WriteDigitalLines(1, 1, 10.0, PyDAQmx.DAQmx_Val_GroupByChannel, self.begin, None, None)
+            if self.plexon:
                 self.plexdo.set_bit(self.device_number, self.reward_nidaq_bit)
             t = time.monotonic()
             while time.monotonic() - t < self.manual_reward_time:
                 yield
             print("water off")
-            if self.readyforplexon:
+            if self.plexon:
                 self.plexdo.clear_bit(self.device_number, self.reward_nidaq_bit)
         
         loop_iter = gen()
@@ -801,7 +822,7 @@ class MonkeyImages(tk.Frame,):
         print('pause')
         if winsound is not None:
             winsound.PlaySound(None, winsound.SND_PURGE)
-        if self.readyforplexon == True:
+        if self.plexon == True:
             self.plexdo.clear_bit(self.device_number, self.reward_nidaq_bit)
     
     def Unpause(self):
@@ -810,7 +831,7 @@ class MonkeyImages(tk.Frame,):
     def Stop(self):
         self.stopped = True
         
-        if self.readyforplexon == True:
+        if self.plexon == True:
             self.plexdo.clear_bit(self.device_number, self.reward_nidaq_bit)
         self.clear_image()
         if winsound is not None:
@@ -925,6 +946,7 @@ class MonkeyImages(tk.Frame,):
                 'failure reason',
                 'time in homezone',
                 'pull duration',
+                'reward duration',
             ])
             
             for i, entry in enumerate(self.trial_log):
@@ -945,6 +967,7 @@ class MonkeyImages(tk.Frame,):
                     reason,
                     time_in_homezone,
                     pull_duration,
+                    entry['reward_duration'] or 0,
                 ])
 
 class TestFrame(tk.Frame,):
@@ -959,6 +982,9 @@ class TestFrame(tk.Frame,):
     
 
 def gen_images():
+    # saturation of colors
+    SAT = 255 // 2
+    
     out_path = Path('./images_gen')
     out_path.mkdir(exist_ok=True)
     src = Path('./TaskImages_Joystick')
@@ -966,20 +992,20 @@ def gen_images():
     prep_path = out_path / 'prepare.png'
     img = Image.open(src / 'yPrepare.png')
     img.thumbnail(CANVAS_SIZE)
-    img = recolor(img, (0, 255, 0))
+    img = recolor(img, (0, SAT, 0))
     img.save(prep_path, 'PNG')
     
     img = Image.open(src / 'eBlank.png')
     img.thumbnail(CANVAS_SIZE)
-    cimg = recolor(img, (0, 255, 0), two_tone=True)
+    cimg = recolor(img, (0, SAT, 0), two_tone=True)
     p = out_path / 'box_green.png'
     cimg.save(p, 'PNG')
     
-    cimg = recolor(img, (255, 0, 0), two_tone=True)
+    cimg = recolor(img, (SAT, 0, 0), two_tone=True)
     p = out_path / 'box_red.png'
     cimg.save(p, 'PNG')
     
-    cimg = recolor(img, (255, 255, 255), two_tone=True)
+    cimg = recolor(img, (SAT, SAT, SAT), two_tone=True)
     p = out_path / 'box_white.png'
     cimg.save(p, 'PNG')
     
@@ -987,9 +1013,9 @@ def gen_images():
     red_dir = out_path / 'red'
     white_dir = out_path / 'white'
     colors = [
-        (green_dir, (0, 255, 0)),
-        (red_dir, (255, 0, 0)),
-        (white_dir, (255, 255, 255)),
+        (green_dir, (0, SAT, 0)),
+        (red_dir, (SAT, 0, 0)),
+        (white_dir, (SAT, SAT, SAT)),
     ]
     for p, _ in colors:
         p.mkdir(exist_ok=True)
