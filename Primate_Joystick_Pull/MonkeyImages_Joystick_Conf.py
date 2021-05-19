@@ -549,7 +549,7 @@ class MonkeyImages(tk.Frame,):
                         break
                     yield
             else:
-                self.show_image('yPrepare')
+                # self.show_image('yPrepare')
                 while True:
                     if trial_t() > self.InterTrialTime and in_zone():
                         break
