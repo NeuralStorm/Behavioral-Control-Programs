@@ -1,12 +1,19 @@
 
+# Setup
+
+If using live graph view  
+`pip install pyside6`  
+if installation fails use  
+`pip install pyside2==5.15.2`  
+
+# Usage
+
 Example command line calls
 ```bash
 python main.py example_config.hjson --template-out x.json
 python main.py example_config.hjson --template-out x_2.json --template-in x.json
 python main.py example_config.hjson --template-out x_2.json --template-in x.json --loadcell-out grf_data.csv
 ```
-
-# Usage
 
 ## Usage example
 
@@ -217,9 +224,13 @@ for i in 0..num_tilts:
     wait for a random time within delay range
 ```
 
+## monitor
+
+waits for enter to be pressed (so recording/live view can be used)
+
 # Config keys
 
-`mode`: Literal['open_loop', 'closed_loop']
+`mode`: Literal['open_loop', 'closed_loop', 'monitor']
 
 see program flow section
 

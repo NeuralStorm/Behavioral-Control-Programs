@@ -35,9 +35,11 @@ GRAPHS: Dict[str, Dict[str, Any]] = {
     'strobe': {
         'pos': (2, 0),
         'title': 'Start of tilt from motor',
+        'y_max': 6,
     },
     'start': {
         'pos': (2, 1),
+        'y_max': 6,
     },
     'inclinometer': {
         'pos': (2, 2),
@@ -220,6 +222,7 @@ def live_view(*, state: RecordState, sample_rate: int, seconds: int):
     import pyqtgraph as pg
     from pyqtgraph.ptime import time
     from pyqtgraph import PlotDataItem
+    from pyqtgraph.graphicsItems.ViewBox import ViewBox
     # https://github.com/pyqtgraph/pyqtgraph/blob/master/examples/GraphicsLayout.py
     
     @contextmanager
@@ -252,6 +255,13 @@ def live_view(*, state: RecordState, sample_rate: int, seconds: int):
             row, col = graph_info['pos']
             title = graph_info.get('title', graph_name)
             plot = layout.addPlot(row=row+1, col=col, title=title)
+            
+            y_max = graph_info.get('y_max')
+            if y_max:
+                view_box = plot.getViewBox()
+                view_box.disableAutoRange(axis=ViewBox.YAxis)
+                view_box.setRange(yRange=(0, y_max))
+            
             plots[graph_name] = plot
         
         def get_curve(i):
