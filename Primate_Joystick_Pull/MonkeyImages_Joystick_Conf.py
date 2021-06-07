@@ -676,8 +676,8 @@ class MonkeyImages(tk.Frame,):
                 if self.EnableBlooperNoise:
                     if winsound is not None:
                         winsound.PlaySound(
-                            str(Path('./TaskSounds/zapsplat_multimedia_game_sound_kids_fun_cheeky_layered_mallets_negative_66204.mp3')),
-                            winsound.SND_ALIAS + winsound.SND_ASYNC + winsound.SND_NOWAIT)
+                            str(Path('./TaskSounds/zapsplat_multimedia_game_sound_kids_fun_cheeky_layered_mallets_negative_66204.wav')),
+                            winsound.SND_FILENAME + winsound.SND_ASYNC + winsound.SND_NOWAIT)
                 
                 if self.ImageReward:
                     self.show_image(selected_image_key, variant='red', boxed=True)
@@ -697,8 +697,8 @@ class MonkeyImages(tk.Frame,):
                     self.task2.WriteDigitalLines(1, 1, 10.0, PyDAQmx.DAQmx_Val_GroupByChannel, self.begin, None, None)
                 if winsound is not None:
                     winsound.PlaySound(
-                        str(Path('./TaskSounds/zapsplat_multimedia_game_sound_kids_fun_cheeky_layered_mallets_complete_66202.mp3')),
-                        winsound.SND_ALIAS + winsound.SND_ASYNC + winsound.SND_NOWAIT)
+                        str(Path('./TaskSounds/zapsplat_multimedia_game_sound_kids_fun_cheeky_layered_mallets_complete_66202.wav')),
+                        winsound.SND_FILENAME + winsound.SND_ASYNC + winsound.SND_NOWAIT)
                 
                 # 1.87 is the duration of the sound effect
                 yield from wait(1.87)
