@@ -98,7 +98,7 @@ def recolor(img, color, *, two_tone=False):
 ###M onkey Images Class set up for Tkinter GUI
 class MonkeyImages(tk.Frame,):
     def __init__(self, parent):
-        test_config = 'test' in sys.argv
+        test_config = 'test' in sys.argv or 'tc' in sys.argv
         use_hardware = 'test' not in sys.argv and 'nohw' not in sys.argv
         
         # width, height
