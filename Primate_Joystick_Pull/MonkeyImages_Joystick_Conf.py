@@ -99,6 +99,7 @@ def recolor(img, color, *, two_tone=False):
 class MonkeyImages(tk.Frame,):
     def __init__(self, parent):
         test_config = 'test' in sys.argv or 'tc' in sys.argv
+        no_wait_for_start = 'nw' in sys.argv
         use_hardware = 'test' not in sys.argv and 'nohw' not in sys.argv
         
         # width, height
@@ -443,8 +444,9 @@ class MonkeyImages(tk.Frame,):
         self.root.bind('<Key>', lambda a : self.KeyPress(a))
         
         if self.plexon == True:
-            WaitForStart = True
-            print('Start Plexon Recording now')
+            WaitForStart = not no_wait_for_start
+            if WaitForStart:
+                print('Start Plexon Recording now')
             while WaitForStart == True:
                 #self.client.opx_wait(1)
                 new_data = self.client.get_new_data()
@@ -878,17 +880,18 @@ class MonkeyImages(tk.Frame,):
         self.client.opx_wait(1000)
         new_data = self.client.get_new_data()
         
-        JOYSTICK_CHANNEL = 3
+        JOYSTICK_CHANNEL = 4
         # joystick threshold
         js_thresh = self.joystick_pull_threshold
         
         for i in range(new_data.num_data_blocks):
             num_or_type = new_data.source_num_or_type[i]
             block_type = source_numbers_types[new_data.source_num_or_type[i]]
+            source_name = source_numbers_names[new_data.source_num_or_type[i]]
             chan = new_data.channel[i]
             ts = new_data.timestamp[i]
             
-            if block_type == CONTINUOUS_TYPE:
+            if block_type == CONTINUOUS_TYPE and source_name == 'AI':
                 # Convert the samples from AD units to voltage using the voltage scaler, use tmp_samples[0] because it could be a list.
                 voltage_scaler = source_numbers_voltage_scalers[num_or_type]
                 samples = new_data.waveform[i][:max_samples_output]
