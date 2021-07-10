@@ -1,0 +1,16 @@
+Start Omniplex server
+Open PlexControl – load config file (be sure the system is stopped – black square with green line)
+
+Open Cineplex – load config file joystick task.txt
+Arm the video – hit the white A in the red circle
+
+
+Go to:
+C:\PlexonSDK_python3\Behavioral-Control-Programs\Primate_Joystick_Pull
+Right click in Explorer – select ‘Gitbash Here’
+In the command window type:
+winpty py MonkeyImages_Joystick_Conf.py
+Opens file selection dialogue.Open file:
+ C:\PlexonSDK_python3\Behavioral-Control-Programs\Primate_Joystick_Pull\csvconfig_EXAMPLE_Joystick.csv
+Start Plexon Recording (hit the start record icon)
+ Select a file to write data to
