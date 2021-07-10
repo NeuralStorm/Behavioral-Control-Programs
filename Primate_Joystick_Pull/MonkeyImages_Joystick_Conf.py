@@ -106,7 +106,8 @@ class MonkeyImages(tk.Frame,):
         self.canvas_size = CANVAS_SIZE
         canvas_x, canvas_y = self.canvas_size
         
-        self.nidaq = use_hardware
+        # self.nidaq = use_hardware
+        self.nidaq = False
         self.plexon = use_hardware
         
         if self.plexon:
@@ -141,6 +142,7 @@ class MonkeyImages(tk.Frame,):
 
             for source_id in global_parameters.source_ids:
                 source_name, _, _, _ = self.client.get_source_info(source_id)
+                print('source', source_name, source_id)
                 if source_name == 'KBD':
                     self.keyboard_event_source = source_id
                 if source_name == 'AI':
@@ -321,7 +323,7 @@ class MonkeyImages(tk.Frame,):
             rwd = {k.strip(): v.strip() for k, v in s}
             
             if 'cue' in rwd:
-                assert rwd['cue'] in self.images
+                assert rwd['cue'] in self.selectable_images, f"unknown cue {rwd['cue']}"
             else:
                 rwd['cue'] = None
             
@@ -351,6 +353,11 @@ class MonkeyImages(tk.Frame,):
         rw_thr = config_dict['reward_thresholds']
         rw_thr = [parse_threshold(x) for x in rw_thr]
         # pprint(rw_thr)
+        
+        # ensure that there are reward thresholds for all images or a threshold for all cues
+        if all('cue' in x for x in rw_thr):
+            for img in self.selectable_images:
+                assert any(x['cue'] == img for x in rw_thr), f"cue {img} has no reward threshold"
         
         self.reward_thresholds = rw_thr
         
@@ -389,7 +396,7 @@ class MonkeyImages(tk.Frame,):
         self.current_counter = 0 
         self.excluded_events = [] #Might want this for excluded events
         
-        self.reward_nidaq_bit = 1 # DO Channel
+        self.reward_nidaq_bit = 17 # DO Channel
         
         self.Area1_right_pres = False   # Home Area
         self.Area2_right_pres = False   # Joystick Area
@@ -605,6 +612,10 @@ class MonkeyImages(tk.Frame,):
                 log_failure_reason[0] = s
             
             def get_pull_info():
+                if not in_zone():
+                    fail_r('hand removed from homezone before cue')
+                    return None, 0, 0
+                
                 if self.joystick_pulled: # joystick pulled before prompt
                     fail_r('joystick pulled before cue')
                     return None, 0, 0
@@ -705,16 +716,18 @@ class MonkeyImages(tk.Frame,):
                 # 1.87 is the duration of the sound effect
                 yield from wait(1.87)
                 
-                if self.nidaq and self.auto_water_reward_enabled:
-                    #EV23
-                    self.task.WriteDigitalLines(1, 1, 10.0, PyDAQmx.DAQmx_Val_GroupByChannel, self.event7, None, None)
-                    self.task.WriteDigitalLines(1, 1, 10.0, PyDAQmx.DAQmx_Val_GroupByChannel, self.begin, None, None)
-                    # turn water on
-                    self.plexdo.set_bit(self.device_number, self.reward_nidaq_bit)
+                if self.auto_water_reward_enabled and reward_duration > 0:
+                    if self.nidaq:
+                        #EV23
+                        self.task.WriteDigitalLines(1, 1, 10.0, PyDAQmx.DAQmx_Val_GroupByChannel, self.event7, None, None)
+                        self.task.WriteDigitalLines(1, 1, 10.0, PyDAQmx.DAQmx_Val_GroupByChannel, self.begin, None, None)
+                    if self.plexon:
+                        # turn water on
+                        self.plexdo.set_bit(self.device_number, self.reward_nidaq_bit)
                 
                 yield from wait(reward_duration)
                 
-                if self.nidaq:
+                if self.plexon:
                     self.plexdo.clear_bit(self.device_number, self.reward_nidaq_bit)
             
             # EV24
@@ -880,7 +893,7 @@ class MonkeyImages(tk.Frame,):
         self.client.opx_wait(1000)
         new_data = self.client.get_new_data()
         
-        JOYSTICK_CHANNEL = 4
+        JOYSTICK_CHANNEL = 3
         # joystick threshold
         js_thresh = self.joystick_pull_threshold
         
@@ -913,9 +926,10 @@ class MonkeyImages(tk.Frame,):
                     
                     self.joystick_last_state = val
             elif num_or_type == self.event_source:
-                if chan == 9:
+                # enter joystick zone = 11
+                if chan == 14: # enter home zone
                     self.Area1_right_pres = True
-                elif chan == 14:
+                elif chan == 12: # exit either zone
                     self.Area1_right_pres = False
     
     def save_log_csv(self):
