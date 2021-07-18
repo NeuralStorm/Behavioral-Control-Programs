@@ -1,12 +1,13 @@
 
 from typing import List, Dict, get_type_hints, Any, Literal, Tuple, Optional, Callable
+import os
 import time
 import csv
 from collections import deque
 from contextlib import ExitStack, AbstractContextManager, contextmanager
 from itertools import count
 from multiprocessing import Process, Event as PEvent, Queue
-from queue import Empty
+from queue import Empty, Full
 import atexit
 
 RECORD_PROCESS_STOP_TIMEOUT = 30
@@ -49,111 +50,135 @@ GRAPHS: Dict[str, Dict[str, Any]] = {
 # rhl = red
 # lhl = green
 # fl = blue
+# cal indicates column name for calibration
 HEADERS: List[Dict[str, Any]] = [
     { # rhl_fx
         'csv': "Dev6/ai18",
+        'cal': 'rhl_fx',
         'graph': 'force_x',
         'color': (255, 0, 0),
     },
     { # rhl_fy
         'csv': "Dev6/ai19",
+        'cal': 'rhl_fy',
         'graph': 'force_y',
         'color': (255, 0, 0),
     },
     { # rhl_fz
         'csv': "Dev6/ai20",
+        'cal': 'rhl_fz',
         'graph': 'force_z',
         'color': (255, 0, 0),
     },
     { # rhl_tx
         'csv': "Dev6/ai21",
+        'cal': 'rhl_tx',
         'graph': 'torque_x',
         'color': (255, 0, 0),
     },
     { # rhl_ty
         'csv': "Dev6/ai22",
+        'cal': 'rhl_ty',
         'graph': 'torque_y',
         'color': (255, 0, 0),
     },
     { # rhl_tz
         'csv': "Dev6/ai23",
+        'cal': 'rhl_tz',
         'graph': 'torque_z',
         'color': (255, 0, 0),
     },
     { # lhl_fx
         'csv': "Dev6/ai32",
+        'cal': 'lhl_fx',
         'graph': 'force_x',
         'color': (0, 255, 0),
     },
     { # lhl_fy
         'csv': "Dev6/ai33",
+        'cal': 'lhl_fy',
         'graph': 'force_y',
         'color': (0, 255, 0),
     },
     { # lhl_fz
         'csv': "Dev6/ai34",
+        'cal': 'lhl_fz',
         'graph': 'force_z',
         'color': (0, 255, 0),
     },
     { # lhl_tx
         'csv': "Dev6/ai35",
+        'cal': 'lhl_tx',
         'graph': 'torque_x',
         'color': (0, 255, 0),
     },
     { # lhl_ty
         'csv': "Dev6/ai36",
+        'cal': 'lhl_ty',
         'graph': 'torque_y',
         'color': (0, 255, 0),
     },
     { #lhl_tz
         'csv': "Dev6/ai37",
+        'cal': 'lhl_tz',
         'graph': 'torque_z',
         'color': (0, 255, 0),
     },
     { # fl_fx
         'csv': "Dev6/ai38",
+        'cal': 'fl_fx',
         'graph': 'force_x',
         'color': (0, 0, 255),
     },
     { # fl_fy
         'csv': "Dev6/ai39",
+        'cal': 'fl_fy',
         'graph': 'force_y',
         'color': (0, 0, 255),
     },
     { # fl_fz
         'csv': "Dev6/ai48",
+        'cal': 'fl_fz',
         'graph': 'force_z',
         'color': (0, 0, 255),
     },
     { # fl_tx
         'csv': "Dev6/ai49",
+        'cal': 'fl_tx',
         'graph': 'torque_x',
         'color': (0, 0, 255),
     },
     { # fl_ty
         'csv': "Dev6/ai50",
+        'cal': 'fl_ty',
         'graph': 'torque_y',
         'color': (0, 0, 255),
     },
     { # fl_tz
         'csv': "Dev6/ai51",
+        'cal': 'fl_tz',
         'graph': 'torque_z',
         'color': (0, 0, 255),
     },
     {
         'csv': "Strobe",
+        'cal': 'Strobe',
         'graph': 'strobe',
     },
     {
         'csv': "Start",
+        'cal': 'Start',
         'graph': 'start',
     },
     {
         'csv': "Inclinometer",
+        'cal': 'Inclinometer',
         'graph': 'inclinometer',
     },
     {
         'csv': 'Timestamp',
+        'cal': 'Timestamp',
+        'synthetic': True,
     },
 ]
 
@@ -169,6 +194,10 @@ class LiveViewState:
         
         self.queue = Queue(10)
         self.stopped = PEvent()
+        
+        self.calibrated: bool = False
+        # bias file to use for calibration
+        self.bias_file: Optional[str] = None
     
     def stop(self):
         if self.enabled:
@@ -215,7 +244,11 @@ class RecordEventContext(AbstractContextManager):
         # time.sleep(5)
         self.stop_event.stopped.set()
 
-def live_view(*, state: RecordState, sample_rate: int, seconds: int):
+def _live_view(
+        *, state: RecordState, sample_rate: int, downsample_to: Optional[int],
+        seconds: int,
+        calibrate: Optional[Tuple[int, str]],
+    ):
     
     from pyqtgraph.Qt import QtGui, QtCore
     import numpy as np
@@ -224,6 +257,13 @@ def live_view(*, state: RecordState, sample_rate: int, seconds: int):
     from pyqtgraph import PlotDataItem
     from pyqtgraph.graphicsItems.ViewBox import ViewBox
     # https://github.com/pyqtgraph/pyqtgraph/blob/master/examples/GraphicsLayout.py
+    
+    # data will be downsampled to this value
+    # downsample_to: Optional[int] = 100
+    # (hw version, bias path)
+    # bp = '<grf_python>/test_data/CSM016/bias_20191120.csv'
+    # calibrate: Optional[Tuple[int, str]] = (1, bp)
+    # calibrate = None
     
     @contextmanager
     def app_closer(app):
@@ -234,6 +274,65 @@ def live_view(*, state: RecordState, sample_rate: int, seconds: int):
     
     with ExitStack() as stack:
         stack.enter_context(LiveViewContext(state))
+        
+        live_headers = [h for h in HEADERS if not h.get('synthetic')]
+        
+        if downsample_to is not None:
+            assert sample_rate % downsample_to == 0, "sample rate must be evenly divisible by downsampled rate"
+            downsample_factor: Optional[int] = sample_rate // downsample_to
+            sample_rate = downsample_to
+        else:
+            downsample_factor = None
+    
+        if calibrate is not None:
+            import importlib.util
+            import sys
+            
+            hw_version, bias_path = calibrate
+            
+            # adding the grf_python folder to path risks breaking stuff
+            # but it should only break the live view process at worst
+            
+            # note that tilt_rewrites util will shadow grf_python's
+            
+            grf_python_path = os.environ['grf_python_path']
+            
+            sys.path.append(grf_python_path)
+            
+            from load_table import apply_bias, apply_best_voltage, load_bias
+            from cop import calc_all_cop, add_cop_columns
+            from hardware_config import HardwareConfig
+            import numpy as np
+            
+            bias_column_mapping = [
+                (h['csv'], h['cal'])
+                for h in HEADERS
+                if 'cal' in h and h['csv'].startswith('Dev6/')
+            ]
+            bias_column_mapping_ = [
+                ('Dev6/ai18', 'rhl_fx'), ('Dev6/ai19', 'rhl_fy'), ('Dev6/ai20', 'rhl_fz'),
+                ('Dev6/ai21', 'rhl_tx'), ('Dev6/ai22', 'rhl_ty'), ('Dev6/ai23', 'rhl_tz'),
+                ('Dev6/ai32', 'lhl_fx'), ('Dev6/ai33', 'lhl_fy'), ('Dev6/ai34', 'lhl_fz'),
+                ('Dev6/ai35', 'lhl_tx'), ('Dev6/ai36', 'lhl_ty'), ('Dev6/ai37', 'lhl_tz'),
+                ('Dev6/ai38', 'fl_fx'), ('Dev6/ai39', 'fl_fy'), ('Dev6/ai48', 'fl_fz'),
+                ('Dev6/ai49', 'fl_tx'), ('Dev6/ai50', 'fl_ty'), ('Dev6/ai51', 'fl_tz'),
+            ]
+            assert bias_column_mapping == bias_column_mapping_
+            
+            bias = load_bias(bias_path, column_mapping=bias_column_mapping)
+            
+            hw_conf = HardwareConfig(1)
+            
+            # data = {
+            #     'np': np.array([[1.0 for _ in live_headers] for _ in range(10)]),
+            #     'column_names': [x['cal'] for x in live_headers],
+            # }
+            # print(bias)
+            # apply_bias(data, bias)
+            # apply_best_voltage(data, hw_conf)
+            # print(data)
+            # cop = calc_all_cop(data, hw_conf)
+            # print(cop)
         
         app = pg.mkQApp("Data")
         stack.enter_context(app_closer(app))
@@ -248,7 +347,7 @@ def live_view(*, state: RecordState, sample_rate: int, seconds: int):
         
         layout.addLabel('red=rhl green=lhl blue=fl')
         
-        collectors: List[deque[float]] = [deque(maxlen=sample_rate*seconds) for _ in HEADERS]
+        collectors: List[deque[float]] = [deque(maxlen=sample_rate*seconds) for _ in live_headers]
         
         plots = {}
         for graph_name, graph_info in GRAPHS.items():
@@ -265,7 +364,7 @@ def live_view(*, state: RecordState, sample_rate: int, seconds: int):
             plots[graph_name] = plot
         
         def get_curve(i):
-            h = HEADERS[i]
+            h = live_headers[i]
             if 'graph' not in h:
                 # curves.append(None)
                 # continue
@@ -275,7 +374,7 @@ def live_view(*, state: RecordState, sample_rate: int, seconds: int):
             curve = plot.plot(pen=color)
             return curve
         
-        curves: List[PlotDataItem] = [get_curve(i) for i in range(len(HEADERS))]
+        curves: List[PlotDataItem] = [get_curve(i) for i in range(len(live_headers))]
         
         def update():
             try:
@@ -287,15 +386,40 @@ def live_view(*, state: RecordState, sample_rate: int, seconds: int):
                 app.quit()
                 return
             
-            for i, h in enumerate(HEADERS):
+            for i, h in enumerate(live_headers):
                 # skip timestamp column since it isn't actually in the collected data
                 if h['csv'] == 'Timestamp':
                     continue
                 
-                collectors[i].extend(data[i])
-                curve = curves[i]
-                if curve is not None:
-                    curve.setData(collectors[i])
+                if downsample_factor is None:
+                    collectors[i].extend(data[i])
+                else:
+                    downsampled = (data[i][x] for x in range(0, len(data[i]), downsample_factor))
+                    collectors[i].extend(downsampled)
+            
+            def apply_cal():
+                data = np.array(collectors, dtype=float)
+                data = data.swapaxes(0, 1)
+                
+                data = {
+                    'np': data,
+                    'column_names': [x['cal'] for x in live_headers],
+                }
+                
+                apply_bias(data, bias)
+                apply_best_voltage(data, hw_conf)
+                
+                out_data = data['np'].swapaxes(0, 1)
+                for i, curve in enumerate(curves):
+                    if curve is not None:
+                        curve.setData(out_data[i])
+            
+            if calibrate is not None:
+                apply_cal()
+            else:
+                for i, curve in enumerate(curves):
+                    if curve is not None:
+                        curve.setData(collectors[i])
             
             app.processEvents()
         
@@ -331,10 +455,18 @@ def record_data(*,
         stack.enter_context(RecordEventContext(state))
         
         if state.live.enabled:
-            _spawn_process(live_view,
+            if state.live.calibrated:
+                assert state.live.bias_file is not None
+                cal: Any = (1, state.live.bias_file)
+            else:
+                cal = None
+            
+            _spawn_process(_live_view,
                 state=state,
                 sample_rate=clock_rate,
+                downsample_to=100,
                 seconds=live_view_seconds,
+                calibrate=cal,
             )
         
         if not mock:
@@ -387,7 +519,10 @@ def record_data(*,
             data = task.read(SAMPLE_BATCH_SIZE, read_timeout)
             
             if state.live.enabled:
-                state.live.queue.put(data)
+                try:
+                    state.live.queue.put(data, block=False)
+                except Full:
+                    print("live view queue full, data is being discarded (will still be written to csv)")
             
             for i in range(SAMPLE_BATCH_SIZE):
                 def gen_row():

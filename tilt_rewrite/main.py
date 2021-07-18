@@ -468,6 +468,10 @@ def parse_args_config():
         help='skip recording loadcell data')
     parser.add_argument('--live', action='store_true',
         help='show real time data')
+    parser.add_argument('--live-cal', action='store_true',
+        help='show real time calibrated data')
+    parser.add_argument('--live-bias',
+        help='path to a bias file or glob pattern matching the bias file for live view')
     parser.add_argument('--live-secs', type=int, default=5,
         help='number of seconds to keep data for in live view (5)')
     
@@ -509,7 +513,7 @@ def bias_main(config: Config, loadcell_out: str, mock: bool):
 def main():
     args = parse_args_config()
     config = load_config(args.config, args.labels)
-    print(config.channels)
+    print("channels", config.channels)
     
     args_record = dict(vars(args))
     dev_flags = [
@@ -559,6 +563,24 @@ def main():
         record_stop_event = RecordState()
         if args.live:
             record_stop_event.live.enabled = True
+            assert not args.live_cal, "can not use both --live and --live-cal at the same time"
+            
+        if args.live_cal:
+            record_stop_event.live.enabled = True
+            record_stop_event.live.calibrated = True
+            
+            live_bias_str = args.live_bias
+            assert live_bias_str is not None, "--live-bias is required when --live-cal is present"
+            live_bias = Path(live_bias_str)
+            if live_bias.exists():
+                record_stop_event.live.bias_file = live_bias_str
+            else:
+                matches = list(live_bias.glob(f"*/{live_bias_str}"))
+                assert len(matches) != 0, "no files matching bias file pattern found"
+                if len(matches) > 1:
+                    print(f"warning: multiple bias files match pattern, using {matches[0]}")
+                record_stop_event.live.bias_file = str(matches[0])
+        
         _recording_check_event['_'] = record_stop_event.failed
         spawn_process(
             _error_record_data, clock_source=clock_source,

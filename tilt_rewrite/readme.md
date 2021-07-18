@@ -29,6 +29,7 @@ This will read setting from `your_config.hjson` and write recorded grf data to `
 
 The program will run through the specified number of tilts then exit.
 
+---
 ### Closed loop, initial run
 
 Make a copy of example_config.hjson, set `mode` to closed_loop, `baseline` to true and `sham` to false. Set `num_tilts`, `delay_range`, and `channels` to the desired values. `reward` is not used.
@@ -43,6 +44,7 @@ Make sure to use enter and not ctrl-c if you need to pause the program.
 
 The program will perform tilts and record the psth templates.
 
+---
 ### Closed loop, after initial run
 
 Make a copy of the config used for the initial run and change `baseline` to false.
@@ -55,6 +57,39 @@ This will read settings from `your_other_config.hjson` and write recorded grf da
 
 The program will perform tilts and attempt to classify the tilt type based on templates from `template_a.json` and perform punish/reward actions based on if the classification was correct. It will also record a new set of templates.
 
+---
+### Live view
+
+Add the `--live` parameter to enable the live view.
+```
+python main.py your_config.hjson --monitor --live
+```
+
+### Calibrated live view
+
+The path `/grf_python` will need to be substituted with the location of grf_python on your system ([Behavior-Analysis-Programs](https://github.com/moxon-lab-codebase/Behavior-Analysis-Programs), tested with commit `5f005e1a5530fd36f4ea0879e8453bc01a65871b`)
+
+The `grf_python_path` must be set to the location of grf python.
+e.g.  
+`fish`
+```
+set -gx grf_python_path /grf_python
+```
+`bash`
+```
+export grf_python_path=/grf_python
+```
+`windows`
+```
+set grf_python_path=/grf_python
+```
+
+Run the program
+```
+python main.py your_config.hjson --monitor --live-cal --live-bias ./your_bias_file
+```
+
+---
 ## Pausing
 
 ### open loop
@@ -114,6 +149,8 @@ Timestamp: Timestamp (generated based on
 
 # Arguments
 
+Some arguments aren't listed in the readme. Run the program with `--help` for a fill list of arguments.
+
 `--template-in`
 
 path to a template file created by a previous run of the program
@@ -129,10 +166,6 @@ optional in closed loop, otherwise unused
 `--loadcell-out`
 
 path to write ground reaction force data csv to
-
-`--no-record`
-
-disables recording of grf data
 
 `--labels`
 
