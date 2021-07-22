@@ -43,6 +43,7 @@ from pathlib import Path
 import time
 import random
 import sys
+from contextlib import ExitStack
 try:
     import winsound
 except ImportError:
@@ -94,6 +95,20 @@ def recolor(img, color, *, two_tone=False):
     
     return img
 
+class RegisteredCallback:
+    def __init__(self, cb, _clear_callback):
+        self._cb = cb
+        self._clear_callback = _clear_callback
+    
+    def __enter__(self):
+        pass
+    
+    def __exit__(self, *exc):
+        self.clear()
+    
+    def clear(self):
+        self._clear_callback(self._cb)
+
 ##############################################################################################
 ###M onkey Images Class set up for Tkinter GUI
 class MonkeyImages(tk.Frame,):
@@ -116,12 +131,29 @@ class MonkeyImages(tk.Frame,):
         # delay for how often state is updated, only used for new loop
         self.cb_delay_ms: int = 1
         
-        self.joystick_pulled = False
+        # False while the game is running or paused
+        self.stopped: bool = True
+        self.paused: bool = False
+        
+        self.joystick_pulled: bool = False # wether the joystick is currently pulled
         self.joystick_pull_remote_ts = None
         self.joystick_release_remote_ts = None
         
+        # set in gathering_data_omni_new
+        # if joystick_zone_enter is not None and joystick_zone_exit is None the hand is currently in the joystick zone
+        # these track the time reported by plexon
+        self.joystick_zone_enter = None # Optional[float]
+        self.joystick_zone_exit = None # Optional[float]
+        
         # used in gathering_data_omni_new to track changes in joystick position
         self.joystick_last_state = None
+        
+        # callbacks triggered by external events
+        # Dict[str, Set[Callable[[], None]]]
+        self._callbacks = {
+            'homezone_enter': set(),
+            'homezone_exit': set(),
+        }
         
         self.trial_log = []
         
@@ -391,17 +423,17 @@ class MonkeyImages(tk.Frame,):
         
         ############# Initializing vars
         # self.DurationList()                                 # Creates dict of lists to encapsulate press durations. Will be used for Adaptive Reward Control
-        self.counter = 0 # Counter Values: Alphabetic from TestImages folder
+        # self.counter = 0 # Counter Values: Alphabetic from TestImages folder
         # Blank(white screen), disc stim 1, disc stim 2, disc stim 3, disc stim go 1, disc stim go 2, disc stim go 3, black(timeout), Prepare(to put hand in position), Monkey image
-        self.current_counter = 0 
-        self.excluded_events = [] #Might want this for excluded events
+        # self.current_counter = 0 
+        # self.excluded_events = [] #Might want this for excluded events
         
         self.reward_nidaq_bit = 17 # DO Channel
         
         self.Area1_right_pres = False   # Home Area
-        self.Area2_right_pres = False   # Joystick Area
-        self.Area1_left_pres = False    # Home Area
-        self.Area2_left_pres = False    # Joystick Area
+        # self.Area2_right_pres = False   # Joystick Area
+        # self.Area1_left_pres = False    # Home Area
+        # self.Area2_left_pres = False    # Joystick Area
         self.ImageReward = True        # Default Image Reward set to True
         
         print("ready for plexon:" , self.plexon)
@@ -475,6 +507,26 @@ class MonkeyImages(tk.Frame,):
             self.plexdo.clear_bit(self.device_number, self.reward_nidaq_bit)
         self.save_log_csv()
     
+    def _register_callback(self, event_key, cb):
+        self._callbacks[event_key].add(cb)
+        cb_obj = RegisteredCallback(cb, self._clear_callback)
+        return cb_obj
+    
+    def _clear_callback(self, cb):
+        for v in self._callbacks.values():
+            v.discard(cb)
+    
+    def _clear_callbacks(self):
+        for v in self._callbacks.values():
+            v.clear()
+    
+    # call callbacks registered for event key
+    def _trigger_event(self, key):
+        if self.paused:
+            return
+        for cb in self._callbacks[key]:
+            cb()
+    
     # resets loop state, starts callback loop
     def start_new_loop(self):
         self.last_new_loop_time = time.monotonic()
@@ -495,7 +547,9 @@ class MonkeyImages(tk.Frame,):
             self.normalized_time += elapsed_time
         
         self.new_loop_upkeep()
-        next(self.new_loop_iter)
+        
+        if not self.paused:
+            next(self.new_loop_iter)
         
         self.after(self.cb_delay_ms, self.progress_new_loop)
     
@@ -506,15 +560,25 @@ class MonkeyImages(tk.Frame,):
     
     def new_loop_gen(self):
         while True:
+            yield from self.run_trial()
+    
+    def run_trial(self):
+        with ExitStack() as trial_stack:
             discrim_delay = random.uniform(*self.discrim_delay_range)
             go_cue_delay = random.uniform(*self.go_cue_delay_range)
             
             # print(self.normalized_time)
             
+            # reset state for new trial
+            self.joystick_pull_remote_ts = None
+            self.joystick_release_remote_ts = None
+            self.joystick_zone_enter = None
+            self.joystick_zone_exit = None
+            
             trial_start = self.normalized_time
             
             def in_zone():
-                return self.Area1_right_pres or self.Area1_left_pres
+                return self.Area1_right_pres
             
             def trial_t():
                 return self.normalized_time - trial_start
@@ -559,13 +623,36 @@ class MonkeyImages(tk.Frame,):
                     yield
             else:
                 # self.show_image('yPrepare')
+                def register_in_zone_cb():
+                    def _enter():
+                        self.show_image('yPrepare')
+                        if winsound is not None:
+                            winsound.PlaySound(
+                                str(Path('./TaskSounds/mixkit-arcade-bonus-229.wav')),
+                                winsound.SND_FILENAME + winsound.SND_ASYNC + winsound.SND_NOWAIT)
+                    
+                    def _exit():
+                        self.clear_image()
+                    
+                    if in_zone():
+                        _enter()
+                    
+                    enter_cb = self._register_callback('homezone_enter', _enter)
+                    trial_stack.enter_context(enter_cb)
+                    exit_cb = self._register_callback('homezone_exit', _exit)
+                    trial_stack.enter_context(exit_cb)
+                    
+                    return enter_cb, exit_cb
+                
+                in_zone_cbs = register_in_zone_cb()
                 while True:
                     if trial_t() > self.InterTrialTime and in_zone():
                         break
                     yield
             
             # switch to blank to ensure diamond is no longer showing
-            self.clear_image()
+            if prep_flash:
+                self.clear_image()
             
             # if winsound is not None:
             #     winsound.PlaySound(winsound.Beep(100,0), winsound.SND_PURGE) #Purge looping sounds
@@ -589,6 +676,8 @@ class MonkeyImages(tk.Frame,):
                     self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,event_array,None,None)
                     self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
             
+            for cb in in_zone_cbs:
+                cb.clear()
             # display image without red box
             self.show_image(selected_image_key)
             
@@ -602,8 +691,14 @@ class MonkeyImages(tk.Frame,):
                     self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,event_array,None,None)
                     self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
             
-            # display image with red box
+            # display image with box
             self.show_image(selected_image_key, boxed=True)
+            in_zone_at_go_cue = in_zone()
+            if in_zone_at_go_cue:
+                if winsound is not None:
+                    winsound.PlaySound(
+                        str(Path('./TaskSounds/mixkit-unlock-game-notification-253.wav')),
+                        winsound.SND_FILENAME + winsound.SND_ASYNC + winsound.SND_NOWAIT)
             cue_time = trial_t()
             
             log_failure_reason = [None]
@@ -612,7 +707,7 @@ class MonkeyImages(tk.Frame,):
                 log_failure_reason[0] = s
             
             def get_pull_info():
-                if not in_zone():
+                if not in_zone_at_go_cue:
                     fail_r('hand removed from homezone before cue')
                     return None, 0, 0
                 
@@ -649,7 +744,7 @@ class MonkeyImages(tk.Frame,):
             
             def get_homezone_exit_info():
                 # hand removed from home zone before cue
-                if not in_zone():
+                if not in_zone_at_go_cue:
                     fail_r('hand removed before cue')
                     return None, 0, 0
                 
@@ -713,8 +808,9 @@ class MonkeyImages(tk.Frame,):
                         str(Path('./TaskSounds/zapsplat_multimedia_game_sound_kids_fun_cheeky_layered_mallets_complete_66202.wav')),
                         winsound.SND_FILENAME + winsound.SND_ASYNC + winsound.SND_NOWAIT)
                 
-                # 1.87 is the duration of the sound effect
-                yield from wait(1.87)
+                if self.ImageReward:
+                    # 1.87 is the duration of the sound effect
+                    yield from wait(1.87)
                 
                 if self.auto_water_reward_enabled and reward_duration > 0:
                     if self.nidaq:
@@ -729,6 +825,8 @@ class MonkeyImages(tk.Frame,):
                 
                 if self.plexon:
                     self.plexdo.clear_bit(self.device_number, self.reward_nidaq_bit)
+                
+                self.clear_image()
             
             # EV24
             if self.nidaq:
@@ -739,6 +837,8 @@ class MonkeyImages(tk.Frame,):
                 'reward_duration': reward_duration, # Optional[float]
                 'pull_duration': pull_duration, # float
                 'failure_reason': log_failure_reason[0], # Optional[str]
+                'joystick_zone_enter': self.joystick_zone_enter, # Optional[float]
+                'joystick_zone_exit': self.joystick_zone_exit, # Optional[float]
             }
             self.trial_log.append(log_entry)
     
@@ -807,10 +907,12 @@ class MonkeyImages(tk.Frame,):
         return None
     
     def Start(self):
+        already_started = not self.stopped
         self.paused = False
         self.stopped = False
         
-        self.start_new_loop()
+        if not already_started:
+            self.start_new_loop()
     
     def Pause(self):
         self.paused = True
@@ -826,6 +928,7 @@ class MonkeyImages(tk.Frame,):
     
     def Stop(self):
         self.stopped = True
+        self._clear_callbacks()
         
         if self.plexon == True:
             self.plexdo.clear_bit(self.device_number, self.reward_nidaq_bit)
@@ -851,7 +954,10 @@ class MonkeyImages(tk.Frame,):
             # sys.exit()
         elif key == '1':
             self.Area1_right_pres = not self.Area1_right_pres
-            # self.Area1_left_pres = True
+            if self.Area1_right_pres:
+                self._trigger_event('homezone_enter')
+            else:
+                self._trigger_event('homezone_exit')
             print('in zone toggled', self.Area1_right_pres)
         elif key == '2':
             if not self.joystick_pulled:
@@ -861,7 +967,14 @@ class MonkeyImages(tk.Frame,):
                 self.joystick_release_remote_ts = time.monotonic()
                 self.joystick_pulled = False
             
-            print('press', self.joystick_pulled, event)
+            print('joystick', self.joystick_pulled)
+        elif key == '3':
+            if self.joystick_zone_enter is None:
+                self.joystick_zone_enter = time.monotonic()
+            elif self.joystick_zone_exit is None:
+                self.joystick_zone_exit = time.monotonic()
+            
+            print('joystick zone', self.joystick_zone_enter, self.joystick_zone_exit)
     
     ### These attach to buttons that will select if Monkey has access to the highly coveted monkey image reward
     def HighLevelRewardOn(self):
@@ -882,7 +995,7 @@ class MonkeyImages(tk.Frame,):
         offset = (self.canvas_size[0] - w) / 2
         
         if boxed:
-            self.show_image('box', variant=variant, _clear=True)
+            self.show_image('box', variant=variant, _clear=False)
         
         self.cv1.create_image(offset, 0, anchor = 'nw', image = img)
     
@@ -926,11 +1039,17 @@ class MonkeyImages(tk.Frame,):
                     
                     self.joystick_last_state = val
             elif num_or_type == self.event_source:
-                # enter joystick zone = 11
                 if chan == 14: # enter home zone
                     self.Area1_right_pres = True
+                    self._trigger_event('homezone_enter')
+                elif chan == 11: # enter joystick zone
+                    if self.joystick_zone_enter is None:
+                        self.joystick_zone_enter = ts
                 elif chan == 12: # exit either zone
                     self.Area1_right_pres = False
+                    self._trigger_event('homezone_exit')
+                    if self.joystick_zone_enter is not None and self.joystick_zone_exit is None:
+                        self.joystick_zone_exit = ts
     
     def save_log_csv(self):
         csv_path = Path(self.save_path) / self.log_file_name
@@ -945,6 +1064,8 @@ class MonkeyImages(tk.Frame,):
                 'time in homezone',
                 'pull duration',
                 'reward duration',
+                'joystick_zone_enter',
+                'joystick_zone_exit',
             ])
             
             for i, entry in enumerate(self.trial_log):
@@ -966,6 +1087,8 @@ class MonkeyImages(tk.Frame,):
                     time_in_homezone,
                     pull_duration,
                     entry['reward_duration'] or 0,
+                    entry['joystick_zone_enter'] or '',
+                    entry['joystick_zone_exit'] or '',
                 ])
 
 class TestFrame(tk.Frame,):
