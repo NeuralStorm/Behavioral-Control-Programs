@@ -722,7 +722,18 @@ class MonkeyImages(tk.Frame,):
                 'selected_image': selected_image_key,
             })
             
-            yield from wait(go_cue_delay)
+            # yield from wait(go_cue_delay)
+            # def wait_until_go_cue():
+            # track if hand is removed early to skip rest of trial
+            gc_hand_removed_early = False
+            gc_t = go_cue_delay
+            gc_start_time = trial_t()
+            while trial_t() - gc_start_time < gc_t:
+                if not in_zone():
+                    gc_hand_removed_early = True
+                    break
+                yield
+            # yield from wait_until_go_cue()
             
             # EV26, EV28, EV30 EV32
             if image_i in [1,2,3,4]:
@@ -732,13 +743,17 @@ class MonkeyImages(tk.Frame,):
                     self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,event_array,None,None)
                     self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
             
-            # display image with box
-            self.show_image(selected_image_key, boxed=True)
-            self.log_event('go_cue_shown', tags=['game_flow'], info={
-                'selected_image': selected_image_key,
-            })
+            if gc_hand_removed_early:
+                in_zone_at_go_cue = False
+            else:
+                # display image with box
+                self.show_image(selected_image_key, boxed=True)
+                self.log_event('go_cue_shown', tags=['game_flow'], info={
+                    'selected_image': selected_image_key,
+                })
+                
+                in_zone_at_go_cue = in_zone()
             
-            in_zone_at_go_cue = in_zone()
             if in_zone_at_go_cue:
                 if winsound is not None:
                     winsound.PlaySound(
