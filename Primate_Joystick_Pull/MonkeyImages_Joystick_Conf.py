@@ -54,6 +54,7 @@ except ImportError:
     winsound = None # type: ignore
 import math
 import statistics
+from collections import defaultdict
 import sys, traceback
 from pprint import pprint
 import numpy
@@ -812,8 +813,10 @@ class MonkeyImages(tk.Frame,):
             task_type = self.task_type
             if task_type == 'joystick_pull':
                 reward_duration, remote_pull_duration, pull_duration = yield from get_pull_info()
+                action_duration = remote_pull_duration
             elif task_type == 'homezone_exit':
                 reward_duration, remote_pull_duration, pull_duration = yield from get_homezone_exit_info()
+                action_duration = pull_duration
             else:
                 assert False, f"invalid task_type {task_type}"
             
@@ -821,12 +824,16 @@ class MonkeyImages(tk.Frame,):
                 'reward_duration': reward_duration,
                 'remote_pull_duration': remote_pull_duration,
                 'pull_duration': pull_duration,
+                'action_duration': action_duration,
                 'success': reward_duration is not None,
                 'failure_reason': log_failure_reason[0],
             })
             
-            print('Press Duration: {:.4f} (remote: {:.4f})'.format(pull_duration, remote_pull_duration))
+            print('Press Duration: {:.4f} (remote: {:.4f})'.format(action_duration, pull_duration))
             print('Reward Duration: {}'.format(reward_duration))
+            if log_failure_reason[0]:
+                print(log_failure_reason[0])
+            self.print_histogram()
             
             if reward_duration is None: # pull failed
                 # EV21 Pull failure
@@ -1210,6 +1217,43 @@ class MonkeyImages(tk.Frame,):
                     entry['joystick_zone_enter'] or '',
                     entry['joystick_zone_exit'] or '',
                 ])
+    
+    def print_histogram(self):
+        events = [e for e in self.event_log if e['name'] == 'task_completed']
+        
+        def get_bin_ranges():
+            start = 0
+            # end = math.ceil(self.MaxTimeAfterSound)
+            end = max(rwd.get('high', 0) for rwd in self.reward_thresholds)
+            step = (end - start) / 10
+            
+            # start both at 0 so we have a 0-0 bin that catches non duration failures
+            ws = start # window start
+            we = start # window end
+            while ws < end:
+                yield ws, we
+                ws = we
+                if we < 1.999999999:
+                    we = ws + 0.2
+                else:
+                    we = ws + step
+        bins = {
+            k: []
+            for k in get_bin_ranges()
+        }
+        
+        for e in events:
+            for (bin_s, bin_e), bin_events in bins.items():
+                a_d = e['info']['action_duration']
+                if bin_s <= a_d < bin_e:
+                    bin_events.append(e['info']['success'])
+                    break
+        
+        for i, ((bin_s, bin_e), bin_events) in enumerate(bins.items()):
+            events_str = "".join('O' if e else 'X' for e in bin_events)
+            print(f"{bin_s:>5.1f}-{bin_e:<5.1f} {events_str}")
+            if i%4==0:
+                print('-'*20)
 
 class TestFrame(tk.Frame,):
     def __init__(self, parent, *args, **kwargs):
