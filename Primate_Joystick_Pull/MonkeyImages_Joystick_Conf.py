@@ -700,7 +700,15 @@ class MonkeyImages(tk.Frame,):
                 self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event7,None,None)
                 self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
             
-            yield from wait(discrim_delay)
+            gc_hand_removed_early = False
+            ds_t = discrim_delay
+            ds_start_time = trial_t()
+            while trial_t() - ds_start_time < ds_t:
+                if not in_zone():
+                    gc_hand_removed_early = True
+                    break
+                yield
+            # yield from wait(discrim_delay)
             
             # choose image
             selected_image_key = random.choice(list(self.selectable_images))
@@ -716,23 +724,26 @@ class MonkeyImages(tk.Frame,):
             
             for cb in in_zone_cbs:
                 cb.clear()
-            # display image without red box
-            self.show_image(selected_image_key)
-            self.log_event('discrim_shown', tags=['game_flow'], info={
-                'selected_image': selected_image_key,
-            })
+            
+            if not gc_hand_removed_early:
+                # display image without red box
+                self.show_image(selected_image_key)
+                self.log_event('discrim_shown', tags=['game_flow'], info={
+                    'selected_image': selected_image_key,
+                })
             
             # yield from wait(go_cue_delay)
             # def wait_until_go_cue():
             # track if hand is removed early to skip rest of trial
-            gc_hand_removed_early = False
+            # gc_hand_removed_early = False
             gc_t = go_cue_delay
             gc_start_time = trial_t()
-            while trial_t() - gc_start_time < gc_t:
-                if not in_zone():
-                    gc_hand_removed_early = True
-                    break
-                yield
+            if not gc_hand_removed_early:
+                while trial_t() - gc_start_time < gc_t:
+                    if not in_zone():
+                        gc_hand_removed_early = True
+                        break
+                    yield
             # yield from wait_until_go_cue()
             
             # EV26, EV28, EV30 EV32
