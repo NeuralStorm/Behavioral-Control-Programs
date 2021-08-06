@@ -55,7 +55,7 @@ each image's boxed variant is expected to have the same name with `b` replace wi
 ---
 ### `Number of Events`
 
-If set to 0 sets the program to perform the home zone exit task.
+If set to 0 the homezone exit task will be run, otherwise the joystick pull task will be run
 
 ---
 ### `manual_reward_time`
@@ -76,11 +76,6 @@ This amount of time must have elapsed after the start of a trial before the tria
 ### `Maximum Time After Sound`
 
 The max amount of time after the go cue that will be waited before the pull is considered a failure
-
----
-### `Number of Events`
-
-If set to 0 the homezone exit task will be run, otherwise the joystick pull task will be run
 
 ---
 ### `Task Data Save Dir`

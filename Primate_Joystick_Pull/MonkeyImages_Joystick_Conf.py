@@ -22,6 +22,8 @@
 # EV31: DS 4 (Not Currently Used)
 # EV32: GC 4 (Not Currently Used)
 
+from typing import List, Tuple, Optional
+
 try:
     from pyopxclient import PyOPXClientAPI, OPX_ERROR_NOERROR, SPIKE_TYPE, CONTINUOUS_TYPE, EVENT_TYPE, OTHER_TYPE
     from pyplexdo import PyPlexDO, DODigitalOutputInfo
@@ -37,10 +39,12 @@ import tkinter as tk
 from tkinter import filedialog
 from PIL import Image, ImageTk
 import csv
+import json
 import os
 import os.path
 from pathlib import Path
 import time
+from datetime import datetime
 import random
 import sys
 from contextlib import ExitStack
@@ -156,6 +160,7 @@ class MonkeyImages(tk.Frame,):
         }
         
         self.trial_log = []
+        self.event_log = []
         
         if self.plexon == True:
             ## Setup Plexon Server
@@ -274,6 +279,8 @@ class MonkeyImages(tk.Frame,):
         for row in data:
             k = row[0].strip()
             vs = [v.strip() for v in row[1:]]
+            # remove empty cells after the key and first value column
+            vs[1:] = [v for v in vs[1:] if v]
             if not k or k.startswith('#'):
                 continue
             csvreaderdict[k] = vs
@@ -394,7 +401,8 @@ class MonkeyImages(tk.Frame,):
         self.reward_thresholds = rw_thr
         
         self.save_path = Path(csvreaderdict['Task Data Save Dir'][0])
-        self.log_file_name = f"{self.study_id}_{self.animal_id}_{self.session_id}_{self.start_time}_{self.TaskType}.csv"
+        self.log_file_name_base = f"{self.study_id}_{self.animal_id}_{self.session_id}_{self.start_time}_{self.TaskType}"
+        self.ensure_log_file_creatable()
         
         self.discrim_delay_range = (
             float(config_dict['Pre Discriminatory Stimulus Min delta t1'][0]),
@@ -505,7 +513,30 @@ class MonkeyImages(tk.Frame,):
     def __exit__(self, *exc):
         if self.plexon:
             self.plexdo.clear_bit(self.device_number, self.reward_nidaq_bit)
-        self.save_log_csv()
+        self.save_log_files()
+    
+    def log_event(self, name: str, *, tags: List[str], info=None):
+        if info is None:
+            info = {}
+        human_time = datetime.utcnow().isoformat()
+        mono_time = time.monotonic()
+        out = {
+            'time_human': human_time,
+            'time_m': mono_time,
+            'name': name,
+            'tags': tags,
+            'info': info,
+        }
+        
+        self.event_log.append(out)
+    
+    def log_hw(self, name, *, sim: bool = False, info=None):
+        tags = ['hw']
+        if info is None:
+            info = {}
+        if sim: # event actually triggered manually via keyboard
+            tags.append('hw_simulated')
+        self.log_event(name, tags=tags, info=info)
     
     def _register_callback(self, event_key, cb):
         self._callbacks[event_key].add(cb)
@@ -587,6 +618,12 @@ class MonkeyImages(tk.Frame,):
                 start_time = trial_t()
                 while trial_t() - start_time < t:
                     yield
+            
+            self.log_event('trial_start', tags=['game_flow'], info={
+                'discrim_delay': discrim_delay,
+                'go_cue_delay': go_cue_delay,
+                'task_type': self.task_type,
+            })
             
             # if winsound is not None:
             #     winsound.PlaySound(
@@ -680,6 +717,9 @@ class MonkeyImages(tk.Frame,):
                 cb.clear()
             # display image without red box
             self.show_image(selected_image_key)
+            self.log_event('discrim_shown', tags=['game_flow'], info={
+                'selected_image': selected_image_key,
+            })
             
             yield from wait(go_cue_delay)
             
@@ -693,6 +733,10 @@ class MonkeyImages(tk.Frame,):
             
             # display image with box
             self.show_image(selected_image_key, boxed=True)
+            self.log_event('go_cue_shown', tags=['game_flow'], info={
+                'selected_image': selected_image_key,
+            })
+            
             in_zone_at_go_cue = in_zone()
             if in_zone_at_go_cue:
                 if winsound is not None:
@@ -773,7 +817,15 @@ class MonkeyImages(tk.Frame,):
             else:
                 assert False, f"invalid task_type {task_type}"
             
-            print('Press Duration: {:.4f} ({:.4f})'.format(remote_pull_duration, pull_duration))
+            self.log_event('task_completed', tags=['game_flow'], info={
+                'reward_duration': reward_duration,
+                'remote_pull_duration': remote_pull_duration,
+                'pull_duration': pull_duration,
+                'success': reward_duration is not None,
+                'failure_reason': log_failure_reason[0],
+            })
+            
+            print('Press Duration: {:.4f} (remote: {:.4f})'.format(pull_duration, remote_pull_duration))
             print('Reward Duration: {}'.format(reward_duration))
             
             if reward_duration is None: # pull failed
@@ -789,15 +841,26 @@ class MonkeyImages(tk.Frame,):
                 
                 if self.ImageReward:
                     self.show_image(selected_image_key, variant='red', boxed=True)
+                    self.log_event('image_reward_shown', tags=['game_flow'], info={
+                        'selected_image': selected_image_key,
+                        'color': 'red',
+                    })
                 if self.ImageReward or self.EnableBlooperNoise:
                     # 1.20 is the duration of the sound effect
                     yield from wait(1.20)
                 if self.EnableTimeOut:
+                    self.log_event('time_out_shown', tags=['game_flow'], info={
+                        'duration': self.TimeOut,
+                    })
                     self.clear_image()
                     yield from wait(self.TimeOut)
             else: # pull suceeded
                 if self.ImageReward:
                     self.show_image(selected_image_key, variant='white', boxed=True)
+                    self.log_event('image_reward_shown', tags=['game_flow'], info={
+                        'selected_image': selected_image_key,
+                        'color': 'white',
+                    })
                 
                 #EV20
                 if self.nidaq:
@@ -813,6 +876,7 @@ class MonkeyImages(tk.Frame,):
                     yield from wait(1.87)
                 
                 if self.auto_water_reward_enabled and reward_duration > 0:
+                    self.log_event("water_dispense", tags=['game_flow'], info={'duration': reward_duration})
                     if self.nidaq:
                         #EV23
                         self.task.WriteDigitalLines(1, 1, 10.0, PyDAQmx.DAQmx_Val_GroupByChannel, self.event7, None, None)
@@ -841,8 +905,11 @@ class MonkeyImages(tk.Frame,):
                 'joystick_zone_exit': self.joystick_zone_exit, # Optional[float]
             }
             self.trial_log.append(log_entry)
+            self.log_event("trial_end", tags=['game_flow'], info={})
+            self.save_log_files(partial=True)
     
     def manual_water_dispense(self):
+        self.log_event("manual_water_dispense", tags=[], info={'duration': self.manual_reward_time})
         def gen():
             print("water on")
             if self.nidaq:
@@ -869,11 +936,11 @@ class MonkeyImages(tk.Frame,):
         
         inner()
     
-    def random_duration(self, d_min, d_max):
+    def random_duration(self, d_min, d_max) -> float:
         output = round(random.uniform(d_min,d_max),2)
         return output
     
-    def ChooseReward(self, duration, cue):
+    def ChooseReward(self, duration, cue) -> Optional[float]:
         
         # if self.reward_thresholds is not None:
         for rwd in self.reward_thresholds:
@@ -912,9 +979,11 @@ class MonkeyImages(tk.Frame,):
         self.stopped = False
         
         if not already_started:
+            self.log_event('game_start', tags=['game_flow'])
             self.start_new_loop()
     
     def Pause(self):
+        self.log_event('game_pause', tags=['game_flow'], info={'was_paused': self.paused})
         self.paused = True
         
         print('pause')
@@ -922,11 +991,15 @@ class MonkeyImages(tk.Frame,):
             winsound.PlaySound(None, winsound.SND_PURGE)
         if self.plexon == True:
             self.plexdo.clear_bit(self.device_number, self.reward_nidaq_bit)
+        
+        self.save_log_files(partial=True)
     
     def Unpause(self):
+        self.log_event('game_unpause', tags=['game_flow'], info={'was_paused': self.paused})
         self.paused = False
     
     def Stop(self):
+        self.log_event('game_stop', tags=['game_flow'], info={'was_stopped': self.stopped})
         self.stopped = True
         self._clear_callbacks()
         
@@ -935,6 +1008,7 @@ class MonkeyImages(tk.Frame,):
         self.clear_image()
         if winsound is not None:
             winsound.PlaySound(None, winsound.SND_PURGE)
+        self.save_log_files(partial=True)
     
     def KeyPress(self, event):
         key = event.char
@@ -956,23 +1030,29 @@ class MonkeyImages(tk.Frame,):
             self.Area1_right_pres = not self.Area1_right_pres
             if self.Area1_right_pres:
                 self._trigger_event('homezone_enter')
+                self.log_hw('homezone_enter', sim=True)
             else:
                 self._trigger_event('homezone_exit')
+                self.log_hw('zone_exit', sim=True, info={'simulated_zone': 'homezone'})
             print('in zone toggled', self.Area1_right_pres)
         elif key == '2':
             if not self.joystick_pulled:
                 self.joystick_pull_remote_ts = time.monotonic()
                 self.joystick_pulled = True
+                self.log_hw('joystick_pulled', sim=True)
             else:
                 self.joystick_release_remote_ts = time.monotonic()
                 self.joystick_pulled = False
+                self.log_hw('joystick_released', sim=True)
             
             print('joystick', self.joystick_pulled)
         elif key == '3':
             if self.joystick_zone_enter is None:
                 self.joystick_zone_enter = time.monotonic()
+                self.log_hw('joystick_zone_enter', sim=True)
             elif self.joystick_zone_exit is None:
                 self.joystick_zone_exit = time.monotonic()
+                self.log_hw('zone_exit', sim=True, info={'simulated_zone': 'joystick_zone'})
             
             print('joystick zone', self.joystick_zone_enter, self.joystick_zone_exit)
     
@@ -1030,29 +1110,69 @@ class MonkeyImages(tk.Frame,):
                     
                     # joystick has transitioned from not pulled to pulled
                     if self.joystick_last_state < js_thresh and val >= js_thresh:
+                        self.log_hw('joystick_pulled')
                         self.joystick_pulled = True
                         self.joystick_pull_remote_ts = ts
                     # joystick has transitioned from pulled to not pulled
                     elif self.joystick_last_state >= js_thresh and val < js_thresh:
+                        self.log_hw('joystick_released')
                         self.joystick_pulled = False
                         self.joystick_release_remote_ts = ts
                     
                     self.joystick_last_state = val
             elif num_or_type == self.event_source:
                 if chan == 14: # enter home zone
+                    self.log_hw('homezone_enter')
                     self.Area1_right_pres = True
                     self._trigger_event('homezone_enter')
                 elif chan == 11: # enter joystick zone
+                    self.log_hw('joystick_zone_enter')
                     if self.joystick_zone_enter is None:
                         self.joystick_zone_enter = ts
                 elif chan == 12: # exit either zone
-                    self.Area1_right_pres = False
-                    self._trigger_event('homezone_exit')
+                    self.log_hw('zone_exit')
+                    if self.Area1_right_pres:
+                        self.Area1_right_pres = False
+                        self._trigger_event('homezone_exit')
                     if self.joystick_zone_enter is not None and self.joystick_zone_exit is None:
                         self.joystick_zone_exit = ts
     
-    def save_log_csv(self):
-        csv_path = Path(self.save_path) / self.log_file_name
+    def get_log_file_paths(self) -> Tuple[Path, Path]:
+        base = self.log_file_name_base
+        csv_path = Path(self.save_path) / f"{base}.csv"
+        event_log_path = Path(self.save_path) / f"{base}_events.json"
+        
+        return csv_path, event_log_path
+    
+    def ensure_log_file_creatable(self):
+        """Attempts to create, write to and delete the non partial log files.
+            raises an exception if this fails
+            raises an exception if any of the files already exist"""
+        paths = self.get_log_file_paths()
+        
+        for path in paths:
+            assert not path.exists()
+            with open(path, 'x') as f:
+                f.write('_')
+            path.unlink()
+    
+    def save_log_files(self, *, partial: bool = False):
+        base = self.log_file_name_base
+        if partial:
+            partial_dir = Path(self.save_path) / "partial"
+            partial_dir.mkdir(exist_ok=True)
+            gen_time = str(time.monotonic())
+            csv_path = partial_dir / f"{base}_{gen_time}.csv"
+            event_log_path = partial_dir / f"{base}_{gen_time}_events.json"
+        else:
+            csv_path, event_log_path = self.get_log_file_paths()
+        
+        out = {
+            'events': self.event_log,
+        }
+        
+        with open(event_log_path, 'w') as f:
+            json.dump(out, f, indent=2)
         
         with open(csv_path, 'w') as f:
             writer = csv.writer(f)
