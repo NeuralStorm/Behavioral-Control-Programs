@@ -54,7 +54,7 @@ except ImportError:
     winsound = None # type: ignore
 import math
 import statistics
-from collections import defaultdict
+from collections import defaultdict, Counter
 import sys, traceback
 from pprint import pprint
 import numpy
@@ -1253,9 +1253,8 @@ class MonkeyImages(tk.Frame,):
             end = max(rwd.get('high', 0) for rwd in self.reward_thresholds)
             step = (end - start) / 10
             
-            # start both at 0 so we have a 0-0 bin that catches non duration failures
             ws = start # window start
-            we = start # window end
+            we = step # window end
             while ws < end:
                 yield ws, we
                 ws = we
@@ -1267,19 +1266,29 @@ class MonkeyImages(tk.Frame,):
             k: []
             for k in get_bin_ranges()
         }
+        errors = Counter()
         
         for e in events:
+            a_d = e['info']['action_duration']
+            if a_d == 0 and e['info']['failure_reason'] is not None:
+                errors[e['info']['failure_reason']] += 1
+                continue
             for (bin_s, bin_e), bin_events in bins.items():
-                a_d = e['info']['action_duration']
                 if bin_s <= a_d < bin_e:
                     bin_events.append(e['info']['success'])
                     break
         
+        if errors:
+            print('-'*20)
+            error_col_width = max(len(e) for e in errors)
+            for error, count in errors.items():
+                print(f"{error.rjust(error_col_width)} {count}")
+        
         for i, ((bin_s, bin_e), bin_events) in enumerate(bins.items()):
-            events_str = "".join('O' if e else 'X' for e in bin_events)
-            print(f"{bin_s:>5.1f}-{bin_e:<5.1f} {events_str}")
             if i%4==0:
                 print('-'*20)
+            events_str = "".join('O' if e else 'X' for e in bin_events)
+            print(f"{bin_s:>5.1f}-{bin_e:<5.1f} {events_str}")
 
 class TestFrame(tk.Frame,):
     def __init__(self, parent, *args, **kwargs):
