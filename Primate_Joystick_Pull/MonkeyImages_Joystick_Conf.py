@@ -22,7 +22,7 @@
 # EV31: DS 4 (Not Currently Used)
 # EV32: GC 4 (Not Currently Used)
 
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Literal
 
 try:
     from pyopxclient import PyOPXClientAPI, OPX_ERROR_NOERROR, SPIKE_TYPE, CONTINUOUS_TYPE, EVENT_TYPE, OTHER_TYPE
@@ -113,6 +113,37 @@ class RegisteredCallback:
     
     def clear(self):
         self._clear_callback(self._cb)
+
+class Waiter:
+    def __init__(self, parent: 'MonkeyImages', trial_t):
+        self.parent = parent
+        self.trial_t = trial_t
+        
+        self.trigger: Literal['time', 'event', 'cond'] = 'time'
+        self.time_waited: float = 0
+    
+    def wait(self, t: Optional[float], *, event: Optional[str] = None, cond=None):
+        start_time = self.trial_t()
+        with ExitStack() as wait_stack:
+            event_triggered = [False]
+            if event is not None:
+                def event_cb():
+                    event_triggered[0] = True
+                cb = self.parent._register_callback(event, event_cb)
+                wait_stack.enter_context(cb)
+            while 1:
+                if t is not None and self.trial_t() - start_time >= t:
+                    self.trigger = 'time'
+                    break
+                if event_triggered[0]:
+                    self.trigger = 'event'
+                    break
+                if cond is not None and cond():
+                    self.trigger = 'cond'
+                    break
+                yield
+        
+        self.time_waited = self.trial_t() - start_time
 
 ##############################################################################################
 ###M onkey Images Class set up for Tkinter GUI
@@ -615,7 +646,9 @@ class MonkeyImages(tk.Frame,):
             def trial_t():
                 return self.normalized_time - trial_start
             
-            def wait(t):
+            waiter = Waiter(self, trial_t)
+            
+            def wait(t: float):
                 start_time = trial_t()
                 while trial_t() - start_time < t:
                     yield
@@ -701,14 +734,9 @@ class MonkeyImages(tk.Frame,):
                 self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
             
             gc_hand_removed_early = False
-            ds_t = discrim_delay
-            ds_start_time = trial_t()
-            while trial_t() - ds_start_time < ds_t:
-                if not in_zone():
-                    gc_hand_removed_early = True
-                    break
-                yield
-            # yield from wait(discrim_delay)
+            yield from waiter.wait(t=discrim_delay, event='homezone_exit')
+            if waiter.trigger == 'event':
+                gc_hand_removed_early = True
             
             # choose image
             selected_image_key = random.choice(list(self.selectable_images))
@@ -732,19 +760,10 @@ class MonkeyImages(tk.Frame,):
                     'selected_image': selected_image_key,
                 })
             
-            # yield from wait(go_cue_delay)
-            # def wait_until_go_cue():
-            # track if hand is removed early to skip rest of trial
-            # gc_hand_removed_early = False
-            gc_t = go_cue_delay
-            gc_start_time = trial_t()
             if not gc_hand_removed_early:
-                while trial_t() - gc_start_time < gc_t:
-                    if not in_zone():
-                        gc_hand_removed_early = True
-                        break
-                    yield
-            # yield from wait_until_go_cue()
+                yield from waiter.wait(t=go_cue_delay, cond=lambda: not in_zone())
+                if waiter.trigger == 'cond':
+                    gc_hand_removed_early = True
             
             # EV26, EV28, EV30 EV32
             if image_i in [1,2,3,4]:
