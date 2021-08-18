@@ -809,7 +809,7 @@ class MonkeyImages(tk.Frame,):
                 # wait up to MaxTimeAfterSound for the joystick to be pulled
                 while not self.joystick_pulled:
                     if trial_t() - cue_time > self.MaxTimeAfterSound:
-                        fail_r('joystick not released within MaxTimeAfterSound')
+                        fail_r('joystick not pulled within MaxTimeAfterSound')
                         return None, 0, 0
                     yield
                 
@@ -952,6 +952,8 @@ class MonkeyImages(tk.Frame,):
             log_entry = {
                 'reward_duration': reward_duration, # Optional[float]
                 'pull_duration': pull_duration, # float
+                'discrim_delay': discrim_delay,
+                'go_cue_delay': go_cue_delay,
                 'failure_reason': log_failure_reason[0], # Optional[str]
                 'joystick_zone_enter': self.joystick_zone_enter, # Optional[float]
                 'joystick_zone_exit': self.joystick_zone_exit, # Optional[float]
@@ -1238,6 +1240,8 @@ class MonkeyImages(tk.Frame,):
                 'reward duration',
                 'joystick_zone_enter',
                 'joystick_zone_exit',
+                'discrim_delay',
+                'go_cue_delay',
             ])
             
             for i, entry in enumerate(self.trial_log):
@@ -1261,6 +1265,8 @@ class MonkeyImages(tk.Frame,):
                     entry['reward_duration'] or 0,
                     entry['joystick_zone_enter'] or '',
                     entry['joystick_zone_exit'] or '',
+                    entry['discrim_delay'],
+                    entry['go_cue_delay'],
                 ])
     
     def print_histogram(self):
