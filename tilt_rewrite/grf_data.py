@@ -3,6 +3,7 @@ from typing import List, Dict, get_type_hints, Any, Literal, Tuple, Optional, Ca
 import os
 import time
 import csv
+import json
 from collections import deque
 from contextlib import ExitStack, AbstractContextManager, contextmanager
 from itertools import count
@@ -436,6 +437,7 @@ def record_data(*,
         mock: bool,
         num_samples: Optional[int] = None,
         live_view_seconds: int = 10,
+        output_meta: Optional[Dict[str, Any]] = None,
     ):
     
     # samples per second
@@ -501,6 +503,11 @@ def record_data(*,
         
         csv_file = stack.enter_context(open(csv_path, 'w+', newline=''))
         writer = csv.writer(csv_file)
+        
+        # write metadata
+        writer.writerow(['v', '1'])
+        writer.writerow([json.dumps(output_meta, indent=2)])
+        
         writer.writerow(csv_headers)
         
         if not mock:

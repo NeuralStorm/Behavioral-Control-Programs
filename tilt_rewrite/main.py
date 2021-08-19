@@ -559,6 +559,15 @@ def main():
     
     clock_source = NIDAQ_CLOCK_PINS[config.clock_source]
     
+    output_extra = {
+        'config': config.raw,
+        'args': args_record,
+    }
+    record_output_extra = {
+        **output_extra,
+        'tilt_sequence': tilt_sequence,
+    }
+    
     if not args.no_record:
         record_stop_event = RecordState()
         if args.live:
@@ -587,6 +596,7 @@ def main():
             clock_rate=config.clock_rate, csv_path=args.loadcell_out,
             state=record_stop_event, mock=args.mock,
             live_view_seconds=args.live_secs,
+            output_meta=record_output_extra,
         )
     else:
         _recording_check_event['_'] = False
@@ -610,11 +620,6 @@ def main():
     if mode == 'psth': # closed loop
         print("running psth")
         baseline_recording = config.baseline
-        
-        output_extra = {
-            'config': config.raw,
-            'args': args_record,
-        }
         
         def before_platform_close(platform):
             # if the platform is already closed the psth will have written
