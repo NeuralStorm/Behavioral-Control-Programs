@@ -460,6 +460,9 @@ def parse_args_config():
     parser.add_argument('--monitor', action='store_true',
         help="overrides the mode in the config file with `monitor`")
     
+    parser.add_argument('--overwrite', action='store_true',
+        help='overwrite existing output files')
+    
     parser.add_argument('--no-start-pulse', action='store_true',
         help='do not wait for plexon start pulse or enter press, skips initial 3 second wait')
     parser.add_argument('--loadcell-out', default='./loadcell_tilt.csv',
@@ -531,7 +534,6 @@ def main():
     
     if args.bias is not None:
         config.mode = 'bias'
-        args.loadcell_out = args.bias
     if args.monitor:
         config.mode = 'monitor'
     
@@ -541,7 +543,9 @@ def main():
         DEBUG_CONFIG['mock'] = True
     
     if config.mode == 'bias':
-        return bias_main(config, args.loadcell_out, args.mock)
+        if not args.overwrite:
+            assert not Path(args.bias).exists(), f"output file {args.bias} already exists"
+        return bias_main(config, args.bias, args.mock)
     
     # mode = 'normal' if args.non_psth else 'psth'
     if config.mode == 'open_loop':
@@ -591,6 +595,10 @@ def main():
                 record_stop_event.live.bias_file = str(matches[0])
         
         _recording_check_event['_'] = record_stop_event.failed
+        
+        if not args.overwrite:
+            assert not Path(args.loadcell_out).exists(), f"output file {args.loadcell_out} already exists"
+        
         spawn_process(
             _error_record_data, clock_source=clock_source,
             clock_rate=config.clock_rate, csv_path=args.loadcell_out,
@@ -644,6 +652,9 @@ def main():
                 yield
             finally:
                 before_platform_close(platform)
+        
+        if args.template_out and not args.overwrite:
+            assert not Path(args.template_out).exists(), f"output file {args.template_out} already exists"
         
         with PsthTiltPlatform(
             baseline_recording = baseline_recording,

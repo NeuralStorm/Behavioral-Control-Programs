@@ -69,7 +69,7 @@ python main.py your_config.hjson --monitor --live
 
 The path `/grf_python` will need to be substituted with the location of grf_python on your system ([Behavior-Analysis-Programs](https://github.com/moxon-lab-codebase/Behavior-Analysis-Programs), tested with commit `5f005e1a5530fd36f4ea0879e8453bc01a65871b`)
 
-The `grf_python_path` must be set to the location of grf python.
+The environment variable `grf_python_path` must be set to the location of grf python.
 e.g.  
 `fish`
 ```

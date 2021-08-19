@@ -504,9 +504,10 @@ def record_data(*,
         csv_file = stack.enter_context(open(csv_path, 'w+', newline=''))
         writer = csv.writer(csv_file)
         
-        # write metadata
-        writer.writerow(['v', '1'])
-        writer.writerow([json.dumps(output_meta, indent=2)])
+        if output_meta is not None:
+            # write metadata
+            writer.writerow(['v', '1'])
+            writer.writerow([json.dumps(output_meta, indent=2)])
         
         writer.writerow(csv_headers)
         
