@@ -734,8 +734,9 @@ class MonkeyImages(tk.Frame,):
                 self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
             
             gc_hand_removed_early = False
-            yield from waiter.wait(t=discrim_delay, event='homezone_exit')
-            if waiter.trigger == 'event':
+            # yield from waiter.wait(t=discrim_delay, event='homezone_exit')
+            yield from waiter.wait(t=discrim_delay, cond=lambda: not in_zone())
+            if waiter.trigger != 'time':
                 gc_hand_removed_early = True
             
             # choose image
@@ -762,7 +763,7 @@ class MonkeyImages(tk.Frame,):
             
             if not gc_hand_removed_early:
                 yield from waiter.wait(t=go_cue_delay, cond=lambda: not in_zone())
-                if waiter.trigger == 'cond':
+                if waiter.trigger != 'time':
                     gc_hand_removed_early = True
             
             # EV26, EV28, EV30 EV32
