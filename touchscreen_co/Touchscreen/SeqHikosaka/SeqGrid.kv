@@ -1,0 +1,56 @@
+#:kivy 1.0.9
+#:import Clock kivy.clock.Clock
+
+<TargetSet>:
+    canvas:
+        Rectangle:
+            pos: self.pos
+            size: self.height/6, self.height/6
+
+<SequenceGame>:   
+    target1: target_one
+    target2: target_two
+     
+    canvas:
+        Clear
+        Rectangle: # bottom line
+            pos: self.center_x-2*self.height/6, self.center_y-2*self.height/6
+            size: 4*self.height/6, self.height/100
+        Rectangle: # 2nd from bottom line
+            pos: self.center_x-2*self.height/6, self.center_y-self.height/6
+            size: 4*self.height/6, self.height/100
+        Rectangle: # 3rd from bottom line
+            pos: self.center_x-2*self.height/6, self.center_y
+            size: 4*self.height/6, self.height/100
+        Rectangle: # 4th from bottom line
+            pos: self.center_x-2*self.height/6, self.center_y+self.height/6
+            size: 4*self.height/6, self.height/100
+        Rectangle: # top line
+            pos: self.center_x-2*self.height/6, self.center_y+2*self.height/6
+            size: 4*self.height/6+self.height/100, self.width/100
+        Rectangle: # left line
+            pos: self.center_x-2*self.height/6, self.center_y-2*self.height/6
+            size: self.width/100, 4*self.height/6
+        Rectangle: # 2nd from left line
+            pos: self.center_x-self.height/6, self.center_y-2*self.height/6
+            size: self.width/100, 4*self.height/6
+        Rectangle: # 3rd from left line
+            pos: self.center_x, self.center_y-2*self.height/6
+            size: self.width/100, 4*self.height/6
+        Rectangle: # 4th from left line
+            pos: self.center_x+self.height/6, self.center_y-2*self.height/6
+            size: self.width/100, 4*self.height/6
+        Rectangle: # right line
+            pos: self.center_x+2*self.height/6, self.center_y-2*self.height/6
+            size: self.height/100, 4*self.height/6+self.height/100
+            
+    TargetSet:
+        id: target_one
+        center: self.parent.center
+        height: self.parent.height
+    
+    TargetSet:
+        id: target_two
+        center: self.parent.center
+        height: self.parent.height
+        
