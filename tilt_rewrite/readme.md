@@ -84,6 +84,8 @@ export grf_python_path=/grf_python
 set grf_python_path=/grf_python
 ```
 
+The python dependencies for grf_python will need to be installed.
+
 Run the program
 ```
 python main.py your_config.hjson --monitor --live-cal --live-bias ./your_bias_file

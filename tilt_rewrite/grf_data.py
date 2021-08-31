@@ -409,11 +409,17 @@ def _live_view(
                 
                 apply_bias(data, bias)
                 apply_best_voltage(data, hw_conf)
+                cop = calc_all_cop(data, hw_conf)
                 
                 out_data = data['np'].swapaxes(0, 1)
-                for i, curve in enumerate(curves):
+                for i, (curve, header) in enumerate(zip(curves, live_headers)):
                     if curve is not None:
-                        curve.setData(out_data[i])
+                        if header['csv'] == 'Strobe':
+                            curve.setData(cop['cop_x'])
+                        elif header['csv'] == 'Start':
+                            curve.setData(cop['cop_y'])
+                        else:
+                            curve.setData(out_data[i])
             
             if calibrate is not None:
                 apply_cal()
