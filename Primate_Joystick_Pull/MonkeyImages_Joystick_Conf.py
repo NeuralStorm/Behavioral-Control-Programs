@@ -59,8 +59,6 @@ import sys, traceback
 from pprint import pprint
 import numpy
 
-CANVAS_SIZE = 1600, 800
-
 # This will be filled in later. Better to store these once rather than have to call the functions
 # to get this information on every returned data block
 source_numbers_types = {}
@@ -152,10 +150,6 @@ class MonkeyImages(tk.Frame,):
         test_config = 'test' in sys.argv or 'tc' in sys.argv
         no_wait_for_start = 'nw' in sys.argv
         use_hardware = 'test' not in sys.argv and 'nohw' not in sys.argv
-        
-        # width, height
-        self.canvas_size = CANVAS_SIZE
-        canvas_x, canvas_y = self.canvas_size
         
         # self.nidaq = use_hardware
         self.nidaq = False
@@ -339,12 +333,14 @@ class MonkeyImages(tk.Frame,):
                 for color in ['white', 'red', 'green']:
                     img = Image.open(f"./images_gen/{color}/{name}.png")
                     width = img.size[0]
+                    height = img.size[1]
                     obj[color] = img
                 
                 obj[None] = obj['green']
                 
                 return name, {
                     'width': width,
+                    'height': height,
                     'img': obj,
                     'nidaq_event_index': i+1,
                 }
@@ -360,6 +356,7 @@ class MonkeyImages(tk.Frame,):
             
             images['yPrepare'] = {
                 'width': img.size[0],
+                'height': img.size[1],
                 'img': {None: img},
             }
             
@@ -369,6 +366,7 @@ class MonkeyImages(tk.Frame,):
             
             images['box'] = {
                 'width': green.size[0],
+                'height': green.size[1],
                 'img': {
                     'red': red,
                     'green': green,
@@ -481,22 +479,40 @@ class MonkeyImages(tk.Frame,):
         self.root = parent
         self.root.wm_title("MonkeyImages")
 
+
+        hide_buttons = False
+        layout_debug = False
+        def bgc(color):
+            return color if layout_debug else 'black'
+        
         ###Adjust width and height to fit monitor### bd is for if you want a border
-        self.frame1 = tk.Frame(self.root, width = 1600, height = 1000, bd = 0, bg='black',
+        self.frame1 = tk.Frame(self.root,
+            # width = canvas_x, height = canvas_y,
+            bd = 0, bg=bgc('yellow'),
             highlightthickness=0,)
-        self.frame1.pack(side = tk.BOTTOM)
-        self.cv1 = tk.Canvas(self.frame1, width = canvas_x, height = canvas_y,
-            background = "black", bd = 1, relief = tk.FLAT,
+        self.frame1.pack(side = tk.BOTTOM, expand=True, fill=tk.BOTH)
+        self.cv1 = tk.Canvas(self.frame1,
+            # width = canvas_x, height = canvas_y,
+            background = bgc('#F0B000'), bd = 0, relief = tk.FLAT,
             highlightthickness=0,)
-        self.cv1.pack(side = tk.BOTTOM)
+        self.cv1.pack(side = tk.BOTTOM, expand=True, fill=tk.BOTH)
+        
+        btn_frame = tk.Frame(self.root,
+            # width = canvas_x, height = canvas_y,
+            bd = 0, bg=bgc('green'),
+            highlightthickness=0)
+        btn_frame.pack(side = tk.TOP, expand=False, fill=tk.BOTH)
         
         def btn(text, cmd):
+            if hide_buttons:
+                return
             b = tk.Button(
-                self.root, text = text,
+                # self.root, text = text,
+                btn_frame, text = text,
                 height = 5,
                 # width = 6,
                 command = cmd,
-                background = "black", foreground='grey',
+                background = bgc('lightgreen'), foreground='grey',
                 bd=1,
                 relief = tk.FLAT,
                 highlightthickness=1,
@@ -1126,13 +1142,19 @@ class MonkeyImages(tk.Frame,):
         
         img = self.images[k]['tk'][variant]
         
-        w = self.images[k]['width']
-        offset = (self.canvas_size[0] - w) / 2
+        canvas_size = self.cv1.winfo_width(), self.cv1.winfo_height()
+        # w = self.images[k]['width']
+        # offset = (canvas_size[0] - w) / 2
+        offset = (canvas_size[0]) / 2
+        
+        # h = self.images[k]['height']
+        # y_offset = (canvas_size[1] - h) / 2
+        y_offset = (canvas_size[1]) / 2
         
         if boxed:
             self.show_image('box', variant=variant, _clear=False)
         
-        self.cv1.create_image(offset, 0, anchor = 'nw', image = img)
+        self.cv1.create_image(offset, y_offset, anchor = 'c', image = img)
     
     def clear_image(self):
         self.cv1.delete("all")
@@ -1328,6 +1350,8 @@ class TestFrame(tk.Frame,):
     
 
 def gen_images():
+    CANVAS_SIZE = 1600, 800
+    
     # saturation of colors
     SAT = 255 // 2
     
