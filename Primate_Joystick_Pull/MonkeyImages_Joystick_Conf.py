@@ -481,6 +481,15 @@ class MonkeyImages(tk.Frame,):
         jc = int(jc[0])
         self.joystick_channel = jc
         
+        num_trials = config_dict.get('no_trials')
+        if num_trials == ['true']:
+            num_trials = [0]
+        elif num_trials in [[''], [], ['0']]:
+            num_trials = None
+        if num_trials is not None:
+            num_trials = int(num_trials[0])
+        self.max_trials = num_trials
+        
         self.Area1_right_pres = False   # Home Area
         # self.Area2_right_pres = False   # Joystick Area
         # self.Area1_left_pres = False    # Home Area
@@ -651,8 +660,15 @@ class MonkeyImages(tk.Frame,):
             self.gathering_data_omni_new()
     
     def new_loop_gen(self):
+        completed_trials = 0
         while True:
+            if self.max_trials is not None and completed_trials >= self.max_trials:
+                yield
+                continue
             yield from self.run_trial()
+            completed_trials += 1
+            if self.max_trials is not None:
+                print(f"trial {completed_trials}/{self.max_trials} complete")
     
     def run_trial(self):
         with ExitStack() as trial_stack:

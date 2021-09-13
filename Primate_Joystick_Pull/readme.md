@@ -121,3 +121,8 @@ If not specified the delay will be the length of the sound played (1.87s).
 ### `joystick_channel` (optional)
 
 The channel (direction) of the joystick to use. Default 3.
+
+---
+### `no_trials` (optional)
+
+Number of trials to run before stopping. If unspecified or "0" an unlimited number of trials will be performed.
