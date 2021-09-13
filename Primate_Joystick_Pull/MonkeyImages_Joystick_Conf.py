@@ -1112,6 +1112,7 @@ class MonkeyImages(tk.Frame,):
         if winsound is not None:
             winsound.PlaySound(None, winsound.SND_PURGE)
         self.save_log_files(partial=True)
+        pprint(self.get_end_info())
     
     def KeyPress(self, event):
         key = event.char
@@ -1322,6 +1323,22 @@ class MonkeyImages(tk.Frame,):
                     entry['discrim_delay'],
                     entry['go_cue_delay'],
                 ])
+            
+            end_info = self.get_end_info()
+            dur = end_info['action_duration']
+            writer.writerow([
+                'count', end_info['count'],
+                'percent_correct', end_info['percent_correct'],
+            ])
+            writer.writerow([
+                'min', dur['min'],
+                'max', dur['max'],
+                'mean', dur['mean'],
+                'stdev', dur['stdev'],
+            ])
+            writer.writerow(['error', 'count', 'percent'])
+            for e, ei in end_info['errors'].items():
+                writer.writerow([e, ei['count'], ei['percent']])
     
     def print_histogram(self):
         events = [e for e in self.event_log if e['name'] == 'task_completed']
@@ -1368,6 +1385,46 @@ class MonkeyImages(tk.Frame,):
                 print('-'*20)
             events_str = "".join('O' if e else 'X' for e in bin_events)
             print(f"{bin_s:>5.1f}-{bin_e:<5.1f} {events_str}")
+    
+    def get_end_info(self):
+        events = [e for e in self.event_log if e['name'] == 'task_completed']
+        
+        n = len(events)
+        def perc(count):
+            if n == 0:
+                return 0
+            return count/n
+        
+        error_counts = Counter()
+        for e in events:
+            reason = e['info']['failure_reason']
+            if reason is None:
+                continue
+            error_counts[reason] += 1
+        error_info = {
+            reason: {'count': c, 'percent': perc(c)}
+            for reason, c in error_counts.items()
+        }
+        
+        correct = [e for e in events if e['info']['success']]
+        correct_n = len(correct)
+        
+        pull_durations = [e['info']['action_duration'] for e in events]
+        pull_durations = [x for x in pull_durations if x != 0]
+        
+        info = {
+            'count': n,
+            'percent_correct': perc(correct_n),
+            'action_duration': {
+                'min': min(pull_durations),
+                'max': max(pull_durations),
+                'mean': statistics.mean(pull_durations),
+                'stdev': statistics.pstdev(pull_durations),
+            },
+            'errors': error_info,
+        }
+        
+        return info
 
 class TestFrame(tk.Frame,):
     def __init__(self, parent, *args, **kwargs):
