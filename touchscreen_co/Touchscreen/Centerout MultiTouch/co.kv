@@ -1,0 +1,108 @@
+#:kivy 1.10.0
+#:import Clock kivy.clock.Clock
+
+<Manager>:
+    id: screen_manager
+
+    Screen:
+        name: 'home'
+
+        BoxLayout
+            id: starting
+            orientation: 'vertical'
+            
+            BoxLayout
+                id: starting2
+                orientation: 'vertical'
+                    
+                BoxLayout
+                    id: haunting
+                    orientation: 'horizontal'
+
+                    Label: 
+                        text: 'Haunting'
+                        fontsize: 28
+                        halign: 'center'                        
+                    
+                    CheckBox: 
+                        group: 'check'
+                        id: chk_h
+
+                BoxLayout
+                    id: sandpiper
+                    orientation: 'horizontal'
+
+                    Label: 
+                        text: 'Sandpiper'
+                        fontsize: 28
+                        halign: 'center'                        
+                    
+                    CheckBox: 
+                        group: 'check'
+                        id: chk_sand
+
+                BoxLayout
+                    id: sabotage
+                    orientation: 'horizontal'
+
+                    Label: 
+                        text: 'Sabotage'
+                        fontsize: 28
+                        halign: 'center'                        
+                    
+                    CheckBox: 
+                        group: 'check'
+                        id: chk_sabo
+
+                BoxLayout
+                    id: mardi
+                    orientation: 'horizontal'
+
+                    Label: 
+                        text: 'Mardi'
+                        fontsize: 28
+                        halign: 'center'                        
+                    
+                    CheckBox: 
+                        group: 'check'
+                        id: chk_m
+
+
+            Button:
+                text: 'Play Centerout Game'
+                halign: 'center'
+                valign: 'middle'
+                font_size: 50
+                text_size: self.size
+                on_release: root.current = 'game_screen'; game.init(dict(haun=chk_h.active, sand=chk_sand.active,sabo=chk_sabo.active,mard=chk_m.active)); Clock.schedule_interval(game.update, 1.0 / 60.0)
+
+    Screen:
+        name: 'game_screen'
+        COGame:
+            id: game
+            
+<COGame>:
+    center_target: target_c
+    periph_target: target_p
+    exit_target1: target_e1
+    exit_target2: target_e2
+
+    Target:
+        id: target_c
+        
+    Target: 
+        id: target_p
+
+    Target:
+        id: target_e1
+
+    Target:
+        id: target_e2
+
+<Target>:
+    canvas:
+        Color:
+            rgba:self.color
+        Ellipse: 
+            pos:self.pos
+            size:self.size

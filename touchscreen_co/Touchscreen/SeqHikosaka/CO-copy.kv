@@ -1,0 +1,842 @@
+#:kivy 1.10.0
+#:import Clock kivy.clock.Clock
+
+<Manager>:
+    id: screen_manager
+
+    Screen:
+        name: 'home'
+
+        BoxLayout
+            id: starting
+            orientation: 'vertical'
+
+            Label:
+                text: ''
+                fontsize: 50
+
+            Label:
+                text: 'Welcome! Make a Selection in Each Row:'
+                fontsize: 80
+                color: 0,0,1,1
+                canvas.before:
+                    Color: 
+                        rgb: 1,1,0
+
+            BoxLayout 
+                id: top
+                orientation: 'horizontal'
+                canvas:
+                    Color:
+                        rgba: 0.1, 0.1, 0.7, 0.5
+                    Rectangle:
+                        size: self.size
+                        pos: self.pos
+
+                Label:
+                    text: ''
+                    fontsize: 50
+
+                Label: 
+                    text: 'Reward Setup:        '
+                    color: 1, 1, 0, 1
+           
+                Label: 
+                    text: 'Small rew for CENTER touch\n pls big rew for TARGET touch'
+
+                CheckBox:
+                    group: 'rew'
+                    id: rew_center_pls_targ_chk
+                    active: True
+            
+                Label: 
+                    text: 'Big rew for TARGET touch'
+
+                CheckBox:
+                    group: 'rew'
+                    id: rew_targ_chk
+
+                Label:
+                    text: ''
+                    fontsize: 50
+
+                Label:
+                    text: ''
+                    fontsize: 50
+
+            BoxLayout 
+                id: top
+                orientation: 'horizontal'
+                canvas:
+                    Color:
+                        rgba: 0.1, 0.1, 0.7, 0.5
+                    Rectangle:
+                        size: self.size
+                        pos: self.pos
+
+                Label:
+                    text: ''
+                    fontsize: 50
+
+                Label: 
+                    text: 'Target Timeout (from first att.)'
+                    color: 1, 1, 0, 1
+           
+                Label: 
+                    text: '15 sec'
+
+                CheckBox:
+                    group: 'tt'
+                    id: tt_15_sec
+            
+                Label: 
+                    text: '30 sec'
+
+                CheckBox:
+                    group: 'tt'
+                    id: tt_30_sec
+                    
+                Label: 
+                    text: '45 sec'
+
+                CheckBox:
+                    group: 'tt'
+                    id: tt_45_sec
+
+                Label: 
+                    text: '60 sec'
+
+                CheckBox:
+                    group: 'tt'
+                    id: tt_60_sec
+                    active: True
+            
+                Label:
+                    text: ''
+                    fontsize: 50
+
+                Label:
+                    text: ''
+                    fontsize: 50
+
+
+            BoxLayout
+                id: starting2
+                orientation: 'horizontal'
+                Label:
+                    text: ''
+                    fontsize: 50
+
+                Label:
+                    text: ''
+                    fontsize: 50
+
+                Label:
+                    text: 'Animal Names:'
+                    color: 1, 1, 0, 1
+                    fontsize: 50
+                    
+                Label: 
+                    text: 'Donut'
+                    fontsize: 28
+                    halign: 'center'                        
+                
+                CheckBox: 
+                    group: 'check'
+                    id: chk_h
+                    
+                Label: 
+                    text: 'Sandpiper'
+                    fontsize: 28
+                    halign: 'center'                        
+                
+                CheckBox: 
+                    group: 'check'
+                    id: chk_sand
+                
+                Label: 
+                    text: 'Sabotage'
+                    fontsize: 28
+                    halign: 'center' 
+                                         
+                
+                CheckBox: 
+                    group: 'check'
+                    id: chk_sabo
+                    active: True  
+                   
+                Label:
+                    text: ''
+                    fontsize: 50
+                Label:
+                    text: ''
+                    fontsize: 50
+
+            BoxLayout 
+                id: small_rew
+                orientation: 'horizontal'
+                canvas:
+                    Color:
+                        rgba: 0.2, 0.2, 0.5, 0.5
+                    Rectangle:
+                        size: self.size
+                        pos: self.pos
+
+                Label:
+                    text: ''
+                    fontsize: 50
+
+                Label:
+                    text: ''
+                    fontsize: 50
+
+                Label: 
+                    text: 'Center Targ reward'
+                    color: 1, 1, 0, 1
+
+                Label:
+                    text: '0.0 sec'
+                CheckBox:
+                    id: small_rew_zero_sec
+                    group: 'small_rew'
+
+                Label: 
+                    text: '0.1 sec'
+
+                CheckBox:
+                    id: small_rew_pt1_sec
+                    group: 'small_rew'
+                    active: True
+
+                Label: 
+                    text: '0.3 sec'
+
+                CheckBox:
+                    id: small_rew_pt3_sec
+                    group: 'small_rew'
+
+                Label: 
+                    text: '0.5 sec'
+
+                CheckBox:
+                    id: small_rew_pt5_sec
+                    group: 'small_rew'
+
+                Label:
+                    text: ''
+                    fontsize: 50
+                Label:
+                    text: ''
+                    fontsize: 50
+
+            BoxLayout 
+                id: big_rew
+                orientation: 'horizontal'
+                Label:
+                    text: ''
+                    fontsize: 50
+                Label:
+                    text: ''
+                    fontsize: 50
+                Label: 
+                    text: 'Periph Target reward'
+                    color: 1, 1, 0, 1
+
+                Label: 
+                    text: '0.3 sec'
+
+                CheckBox:
+                    id: big_rew_pt3_sec
+                    group: 'big_rew'
+
+                Label: 
+                    text: '0.5 sec'
+
+                CheckBox:
+                    id: big_rew_pt5_sec
+                    group: 'big_rew'
+
+                Label: 
+                    text: '0.7 sec'
+
+                CheckBox:
+                    id: big_rew_pt7_sec
+                    group: 'big_rew'
+                    active: True
+
+                Label:
+                    text: ''
+                    fontsize: 50
+                Label:
+                    text: ''
+                    fontsize: 50
+            
+            BoxLayout 
+                id: big_rew
+                orientation: 'horizontal'
+                Label:
+                    text: ''
+                    fontsize: 50
+                Label:
+                    text: ''
+                    fontsize: 50
+                Label: 
+                    text: 'Reward Variability'
+                    color: 1, 1, 0, 1
+
+                Label: 
+                    text: 'Reward All'
+                CheckBox:
+                    id: rew_all
+                    group: 'rew_var'
+                    active: True
+                    
+                Label: 
+                    text: 'Reward 50% '
+
+                CheckBox:
+                    id: rew_50
+                    group: 'rew_var'
+
+                Label: 
+                    text: 'Reward 33% w/ 10% doubled'
+
+                CheckBox:
+                    id: rew_30
+                    group: 'rew_var'
+
+
+                Label:
+                    text: ''
+                    fontsize: 50
+                Label:
+                    text: ''
+                    fontsize: 50
+
+
+
+            BoxLayout:
+                id: params:
+                orientation: 'horizontal'
+                canvas:
+                    Color:
+                        rgba: 0.1, 0.1, 0.7, 0.5
+                    Rectangle:
+                        size: self.size
+                        pos: self.pos
+
+                Label:
+                    text: ''
+                    fontsize: 50
+                Label:
+                    text: ''
+                    fontsize: 50
+                Label:
+                    text: ''
+                    fontsize: 50
+
+                Label: 
+                    text: 'Target Radius'
+                    color: 1, 1, 0, 1
+
+                Label: 
+                    text: '.5 cm'
+                CheckBox:
+                    id: targ_rad_5
+                    group: 'targ_cm'
+
+                Label: 
+                    text: '.75 cm'
+                CheckBox:
+                    id: targ_rad_75
+                    group: 'targ_cm'
+                    
+                Label: 
+                    text: '.82 cm'
+                CheckBox:
+                    id: targ_rad_82
+                    group: 'targ_cm'
+
+                Label: 
+                    text: '.91 cm'
+                CheckBox:
+                    id: targ_rad_91
+                    group: 'targ_cm'
+
+                Label: 
+                    text: '1.0 cm'
+
+                CheckBox:
+                    id: targ_rad_10
+                    group: 'targ_cm'
+                Label: 
+                    text: '1.5 cm'
+
+                CheckBox:
+                    id: targ_rad_15
+                    group: 'targ_cm'
+
+                Label: 
+                    text: '2.25cm'
+                CheckBox:
+                    id: targ_rad_22
+                    group: 'targ_cm'
+                    active: True
+
+                Label:
+                    text: '3.0 cm'
+                CheckBox:
+                    id: targ_rad_30
+                    group: 'targ_cm'
+                                        
+                Label:
+                    text: ''
+                    fontsize: 50
+
+                Label:
+                    text: ''
+                    fontsize: 50
+                Label:
+                    text: ''
+                    fontsize: 50
+
+            BoxLayout:
+                id: params:
+                orientation: 'horizontal'
+                Label:
+                    text: ''
+                    fontsize: 50
+
+                Label:
+                    text: ''
+                    fontsize: 50
+
+                Label:
+                    text: ''
+                    fontsize: 50
+
+                Label: 
+                    text: 'CENTER Hold Time'
+                    color: 1, 1, 0, 1
+
+                Label: 
+                    text: '0.0 sec'
+                CheckBox: 
+                    id: c_zero_sec
+                    group: 'chold_time'
+                    active: True
+
+                Label:  
+                    text: '0.1 sec'
+                CheckBox:
+                    id: c_hund_sec
+                    group: 'chold_time'
+
+                Label: 
+                    text: '0.375 sec'
+
+                CheckBox:
+                    id: c_three_sev_five_sec
+                    group: 'chold_time'
+
+                Label: 
+                    text: '0.5 sec'
+
+                CheckBox:
+                    id: c_half_sec
+                    group: 'chold_time'
+                
+                Label: 
+                    text: '0.575 sec'
+
+                CheckBox:
+                    id: c_575
+                    group: 'chold_time'
+
+                Label: 
+                    text: '0.6 sec'
+
+                CheckBox:
+                    id: c_60
+                    group: 'chold_time'
+             
+
+                Label:
+                    text: 'Rand: .4-.6'
+                    fontsize: 50
+
+                CheckBox:
+                    id: c_big_rand
+                    group: 'chold_time'
+
+                Label:
+                    text: ''
+                    fontsize: 50
+                Label:
+                    text: ''
+                    fontsize: 50
+                Label:
+                    text: ''
+                    fontsize: 50
+
+
+            BoxLayout:
+                id: params:
+                orientation: 'horizontal'
+
+                Label:
+                    text: ''
+                    fontsize: 50
+                Label:
+                    text: ''
+                    fontsize: 50
+                Label:
+                    text: ''
+                    fontsize: 50
+
+                Label: 
+                    text: 'Target Hold Time'
+                    color: 1, 1, 0, 1
+
+                Label: 
+                    text: '0.0 sec'
+                CheckBox:
+                    id: zero_sec
+                    group: 'hold_time'
+                    active: True
+
+                Label: 
+                    text: '0.1 sec'
+                CheckBox: 
+                    id: hund_sec
+                    group: 'hold_time'
+
+                Label: 
+                    text: '0.375 sec'
+
+                CheckBox:
+                    id: three_sev_five_sec
+                    group: 'hold_time'
+
+                Label: 
+                    text: '0.5 sec'
+
+                CheckBox:
+                    id: half_sec
+                    group: 'hold_time'
+
+                Label: 
+                    text: '0.575 sec'
+
+                CheckBox:
+                    id: t_575
+                    group: 'hold_time'
+
+                Label: 
+                    text: '0.6 sec'
+
+                CheckBox:
+                    id: t_60
+                    group: 'hold_time'
+
+
+                Label:
+                    text: 'Rand: .4-.6'
+                    fontsize: 50
+
+                CheckBox:
+                    id: big_rand
+                    group: 'hold_time'
+
+                Label:
+                    text: ''
+                    fontsize: 50
+                Label:
+                    text: ''
+                    fontsize: 50
+                Label:
+                    text: ''
+                    fontsize: 50
+
+            BoxLayout:
+                id: test
+                orientation: 'horizontal'
+                Label:
+                    text: ''
+                    fontsize: 50
+                Label:
+                    text: ''
+                    fontsize: 50
+                Label:
+                    text: ''
+                    fontsize: 50
+
+                Label: 
+                    text: 'Auto-Quit After: '
+                    color: 1, 1, 0, 1
+
+                Label: 
+                    text: '10 trials'
+                CheckBox:
+                    id: ten_trials
+                    group: 'trials'
+                    active: True
+
+                Label: 
+                    text: '25 trials'
+                CheckBox:
+                    id: twenty_five_trials
+                    group: 'trials'
+
+                Label:
+                    text: '50 trials'
+                CheckBox:
+                    id: fifty_trials
+                    group: 'trials'
+                    
+                Label:
+                    text: '100 trials!'
+                CheckBox:
+                    id: hundred_trials
+                    group: 'trials'
+
+
+                Label:
+                    text: 'Dont AutoQuit'
+                CheckBox:
+                    id: no_trials
+                    group: 'trials'
+
+                Label:
+                    text: ''
+                    fontsize: 50
+                Label:
+                    text: ''
+                    fontsize: 50
+                Label:
+                    text: ''
+                    fontsize: 50
+
+
+            Button:
+                text: 'Play Centerout Game'
+                halign: 'center'
+                valign: 'middle'
+                font_size: 50
+                text_size: self.size
+                on_release: 
+                    root.current = 'splash_start'
+                    splash.init(dict(donu=chk_h.active, sand=chk_sand.active,sabo=chk_sabo.active), dict(rew_manual=False, rew_anytouch=False, rew_center_pls_targ=rew_center_pls_targ_chk.active, rew_targ=rew_targ_chk.active, snd_only=False, small_rew=[small_rew_zero_sec.active, small_rew_pt1_sec.active, small_rew_pt3_sec.active, small_rew_pt5_sec.active], big_rew=[big_rew_pt3_sec.active, big_rew_pt5_sec.active, big_rew_pt7_sec.active]), 
+                    dict(targ_rad=[targ_rad_5.active, targ_rad_75.active, targ_rad_82.active, targ_rad_91.active, targ_rad_10.active, targ_rad_15.active, targ_rad_22.active, targ_rad_30.active]), dict(test=[False, True, False]), dict(chold=[c_zero_sec.active, c_hund_sec.active, c_three_sev_five_sec.active, c_half_sec.active, c_575.active, c_60.active, c_big_rand.active],
+                    hold=[zero_sec.active, hund_sec.active, three_sev_five_sec.active, half_sec.active, t_575.active, t_60.active, big_rand.active]), 
+                    dict(get_targets_rand=False, get_4targets=False, get_targets_co=True), 
+                    dict(autoquit=[ten_trials.active, twenty_five_trials.active, fifty_trials.active, hundred_trials.active, no_trials.active]),
+                    dict(rew_var=[rew_all.active, rew_50.active, rew_30.active]),
+                    dict(tt=[tt_15_sec.active, tt_30_sec.active, tt_45_sec.active, tt_60_sec.active]))
+
+            Label:
+                text: ''
+                fontsize: 50
+            Label:
+                text: ''
+                fontsize: 50
+
+    Screen: 
+        name: 'splash_start'
+        Splash:
+            id: splash
+
+        BoxLayout:
+            id: test
+            orientation: 'vertical'
+         
+            Label:
+                text: 'Parameters Cached!! \n \n Prepare the Monkey! \n \n Pausing Until Start Button Pressed. '
+                halign: 'center'
+                fontsize: 50
+
+            Label:
+                text: ''
+                fontsize: 50
+
+            Label:
+                text: ''
+                fontsize: 50
+
+            Label:
+                text: ''
+                fontsize: 50
+
+            Label:
+                text: ''
+                fontsize: 50
+                
+            BoxLayout:
+                id: test2
+                orientation: 'horizontal'
+
+                Label:
+                    text: ''
+                    fontsize: 50
+                
+                Label:
+                    text: ''
+                    fontsize: 50
+
+                Label:
+                    text: ''
+                    fontsize: 50
+
+                Label:
+                    text: ''
+                    fontsize: 50
+
+                Button: 
+                    text: 'Start'
+                    color: .25, .25, .25, 1
+                    background_color: (.2, .2, .2, 1.0)
+
+                    on_release:
+                        root.current = 'game_screen'
+                        game.init(*splash.args)
+                        Clock.schedule_interval(game.update, 1.0 / 60.0)
+                
+                Label:
+                    text: ''
+                    fontsize: 50
+
+                Label:
+                    text: ''
+                    fontsize: 50
+
+            Label:
+                text: ''
+                fontsize: 50
+                
+    Screen:
+        name: 'game_screen'
+        COGame:
+            id: game
+
+<COGame>:
+    center_target: target_c
+    periph_target: target_p
+    exit_target1: target_e1
+    exit_target2: target_e2
+    indicator_targ: indicator
+
+    Target:
+        id: indicator
+
+    Target:
+        id: target_c
+        
+    Target: 
+        id: target_p
+
+    Target:
+        id: target_e1
+
+    Target:
+        id: target_e2
+
+    Label:
+        color: .5,.5,.5,1
+        font_size: 50
+        center_x: root.width * 6/8
+        top: root.top - 70
+        text: str(root.trial_counter)
+
+
+    Label:
+        color: .5,.5,.5,1
+        font_size: 50
+        center_x: root.width * 2/8
+        top: root.top - 170
+        text: root.cht_text
+    Label:
+        color: .5,.5,.5,1
+        font_size: 50
+        center_x: root.width * 5/8
+        top: root.top - 170
+        text: root.cht_param
+
+
+    Label:
+        color: .5,.5,.5,1
+        font_size: 50
+        center_x: root.width * 2/8
+        top: root.top - 270
+        text: root.tht_text
+    Label:
+        color: .5,.5,.5,1
+        font_size: 50
+        center_x: root.width * 5/8
+        top: root.top - 270
+        text: root.tht_param
+
+
+    Label:
+        color: .5,.5,.5,1
+        font_size: 50
+        center_x: root.width * 2/8
+        top: root.top - 370
+        text: root.generatorz_text
+    Label:
+        color: .5,.5,.5,1
+        font_size: 50
+        center_x: root.width * 5/8
+        top: root.top - 370
+        text: root.generatorz_param
+
+
+    Label:
+        color: .5,.5,.5,1
+        font_size: 50
+        center_x: root.width * 2/8
+        top: root.top - 470
+        text: root.targ_size_text
+    Label:
+        color: .5,.5,.5,1
+        font_size: 50
+        center_x: root.width * 5/8
+        top: root.top - 470
+        text: root.targ_size_param
+
+    Label:
+        color: .5,.5,.5,1
+        font_size: 50
+        center_x: root.width * 2/8
+        top: root.top - 570
+        text: root.big_rew_text
+    Label:
+        color: .5,.5,.5,1
+        font_size: 50
+        center_x: root.width * 5/8
+        top: root.top - 570
+        text: root.big_rew_time_param
+
+    Label:
+        color: .5,.5,.5,1
+        font_size: 50
+        center_x: root.width * 2/8
+        top: root.top - 670
+        text: root.nudge_text
+    Label:
+        color: .5,.5,.5,1
+        font_size: 50
+        center_x: root.width * 5/8
+        top: root.top - 670
+        text: root.nudge_param
+
+
+
+
+
+<Target>:
+    canvas:
+        Color:
+            rgba:self.color
+        Ellipse: 
+            pos:self.pos
+            size:self.size
