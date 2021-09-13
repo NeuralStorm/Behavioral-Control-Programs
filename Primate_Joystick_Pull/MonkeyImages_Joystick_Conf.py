@@ -1416,10 +1416,10 @@ class MonkeyImages(tk.Frame,):
             'count': n,
             'percent_correct': perc(correct_n),
             'action_duration': {
-                'min': min(pull_durations),
-                'max': max(pull_durations),
-                'mean': statistics.mean(pull_durations),
-                'stdev': statistics.pstdev(pull_durations),
+                'min': min(pull_durations, default=0),
+                'max': max(pull_durations, default=0),
+                'mean': statistics.mean(pull_durations) if pull_durations else 0,
+                'stdev': statistics.pstdev(pull_durations) if pull_durations else 0,
             },
             'errors': error_info,
         }
