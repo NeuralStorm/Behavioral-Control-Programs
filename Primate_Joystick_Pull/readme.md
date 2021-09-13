@@ -9,6 +9,14 @@ Ubuntu
 
 tested with numpy version 1.19.4 but it isn't used heavily so a lot of versions probably work
 
+Optional parameters are considered unspecified if they are ommited, have no values, or have a single empty string value  
+The following lines are consided unspecified and will use the default value for `key`
+```csv
+key
+key,
+
+```
+
 # Config
 
 
@@ -101,3 +109,15 @@ A number in the range [`Pre Discriminatory Stimulus Min delta t1`, `Pre Discrimi
 ### `Pre Go Cue Min delta t2`, `Pre Go Cue Max delta t2`
 
 A number in the range [`Pre Go Cue Min delta t2`, `Pre Go Cue Max delta t2`] will be selected each trial for the delay between a shape being shown and the go cue being shown. Min and max can be set to the same value to have a fixed delay.
+
+---
+### `post_succesful_pull_delay` (optional)
+
+The delay after a succesful pull before the water reward is dispensed.  
+If not specified the delay will be the length of the sound played (1.87s).  
+**Note**: If image reward is turned off via the gui this delay will be disabled.
+
+---
+### `joystick_channel` (optional)
+
+The channel (direction) of the joystick to use. Default 3.

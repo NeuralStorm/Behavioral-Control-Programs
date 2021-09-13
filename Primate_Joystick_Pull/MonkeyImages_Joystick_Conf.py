@@ -459,6 +459,13 @@ class MonkeyImages(tk.Frame,):
         self.EnableTimeOut = bool(self.TimeOut)
         self.EnableBlooperNoise = (csvreaderdict['Enable Blooper Noise'][0] == 'TRUE')
         
+        pspd = config_dict.get('post_succesful_pull_delay')
+        if pspd in [[''], []]:
+            pspd = None
+        if pspd is not None:
+            pspd = float(pspd[0])
+        self.post_succesful_pull_delay: Optional[float] = pspd
+        
         ############# Initializing vars
         # self.DurationList()                                 # Creates dict of lists to encapsulate press durations. Will be used for Adaptive Reward Control
         # self.counter = 0 # Counter Values: Alphabetic from TestImages folder
@@ -467,6 +474,12 @@ class MonkeyImages(tk.Frame,):
         # self.excluded_events = [] #Might want this for excluded events
         
         self.reward_nidaq_bit = 17 # DO Channel
+        
+        jc = config_dict.get('joystick_channel')
+        if jc in [[''], [], None]:
+            jc = [3]
+        jc = int(jc[0])
+        self.joystick_channel = jc
         
         self.Area1_right_pres = False   # Home Area
         # self.Area2_right_pres = False   # Joystick Area
@@ -941,8 +954,11 @@ class MonkeyImages(tk.Frame,):
                         winsound.SND_FILENAME + winsound.SND_ASYNC + winsound.SND_NOWAIT)
                 
                 if self.ImageReward:
-                    # 1.87 is the duration of the sound effect
-                    yield from wait(1.87)
+                    if self.post_succesful_pull_delay is not None:
+                        yield from wait(self.post_succesful_pull_delay)
+                    else:
+                        # 1.87 is the duration of the sound effect
+                        yield from wait(1.87)
                 
                 if self.auto_water_reward_enabled and reward_duration > 0:
                     self.log_event("water_dispense", tags=['game_flow'], info={'duration': reward_duration})
@@ -1163,7 +1179,6 @@ class MonkeyImages(tk.Frame,):
         self.client.opx_wait(1000)
         new_data = self.client.get_new_data()
         
-        JOYSTICK_CHANNEL = 3
         # joystick threshold
         js_thresh = self.joystick_pull_threshold
         
@@ -1181,7 +1196,7 @@ class MonkeyImages(tk.Frame,):
                 samples = [s * voltage_scaler for s in samples]
                 val = samples[0]
                 
-                if chan == JOYSTICK_CHANNEL:
+                if chan == self.joystick_channel:
                     if self.joystick_last_state is None:
                         self.joystick_last_state = val
                     

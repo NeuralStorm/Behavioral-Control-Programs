@@ -19,3 +19,5 @@ reward_thresholds,low=0'high=4'cue=bOval'type=flat'reward_duration=1
 Inter Trial Time,1
 Enable Blooper Noise,TRUE
 Maximum Time After Sound,20
+#post_succesful_pull_delay,20
+#joystick_channel,3
