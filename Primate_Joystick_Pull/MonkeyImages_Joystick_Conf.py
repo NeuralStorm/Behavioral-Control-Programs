@@ -37,6 +37,7 @@ else:
 import tkinter as tk
 # from tkinter import *
 from tkinter import filedialog
+from tkinter.font import Font
 from PIL import Image, ImageTk
 import csv
 import json
@@ -143,6 +144,114 @@ class Waiter:
         
         self.time_waited = self.trial_t() - start_time
 
+class InfoView:
+    def __init__(self, root):
+        _orig_root = root
+        self.window = tk.Toplevel(root)
+        root = self.window
+        
+        font = Font(family='consolas', size=15)
+        self.label = tk.Label(root, text = '-', justify=tk.LEFT, font=font)
+        self.label.pack(side=tk.TOP, anchor=tk.NW)
+        
+        self.rows = []
+    
+    @staticmethod
+    def gen_histogram(event_log, *, h_range):
+        events = [e for e in event_log if e['name'] == 'task_completed']
+        
+        def get_bin_ranges():
+            start, end = h_range
+            step = 0.5
+            
+            ws = start # window start
+            we = step # window end
+            while ws < end:
+                yield ws, we
+                ws = we
+                if we < 1.999999999:
+                    we = ws + 0.2
+                else:
+                    we = ws + step
+        bins = {
+            k: []
+            for k in get_bin_ranges()
+        }
+        errors = Counter()
+        
+        for e in events:
+            a_d = e['info']['action_duration']
+            if a_d == 0 and e['info']['failure_reason'] is not None:
+                errors[e['info']['failure_reason']] += 1
+                continue
+            for (bin_s, bin_e), bin_events in bins.items():
+                if bin_s <= a_d < bin_e:
+                    bin_events.append(e['info']['success'])
+                    break
+        
+        # bins = {(start:float, end:float): [success:bool,...],...}
+        # errors = {errors:str: error_count:int}
+        return bins, errors
+    
+    def update_info(self, end_info, event_log):
+        out = []
+        
+        ad = end_info['action_duration']
+        out.append("duration")
+        out.append(f"  min-max: {ad['min']:.3f}-{ad['max']:.3f}")
+        out.append(f"  mean: {ad['mean']:.3f} stdev: {ad['stdev']:.3f}")
+        
+        out.append(f"trials: {end_info['count']}")
+        out.append("")
+        errors = end_info['errors']
+        error_col_width = max(len(e) for e in errors)
+        for error, error_info in errors.items():
+            count = error_info['count']
+            perc = error_info['percent']
+            out.append(f"{error.rjust(error_col_width)} {count:>2} {perc*100:.1f}%")
+        out.append("")
+        
+        print("\n".join(out))
+        self.label['text'] = "\n".join(out)
+        # import pdb;pdb.set_trace()
+        
+        h_min = math.floor(ad['min'])
+        h_max = math.ceil(ad['max'])
+        bins, errors = self.gen_histogram(event_log, h_range=(h_min, h_max))
+        
+        for row in self.rows:
+            row.destroy()
+        self.rows = []
+        
+        for (start, end), results in bins.items():
+            frame = tk.Frame(self.window,
+                # width = canvas_x, height = canvas_y,
+                height = 5,
+                bd = 0, bg='yellow',
+                highlightthickness=0,)
+            frame.pack(side = tk.TOP, anchor='nw', fill='x')
+            font = Font(size=15)
+            label = tk.Label(frame, text = f"{start:.2f}-{end:.2f}", justify=tk.LEFT, font=font,
+                width=10, bg='red')
+            label.pack(side=tk.LEFT, anchor=tk.NW, expand=False)
+            
+            canvas = tk.Canvas(frame,
+                # width = canvas_x, height = canvas_y,
+                height=0,
+                # background = '#D0D0D0',
+                background = 'black',
+                bd = 0, relief = tk.FLAT,
+                highlightthickness=0,)
+            canvas.pack(side = tk.LEFT, expand=True, fill='both')
+            
+            x = 0
+            for res in results:
+                canvas.create_rectangle(x, 0, x+10, 100,
+                    fill='green' if res else 'red')
+                x += 12
+            
+            self.rows.append(frame)
+
 ##############################################################################################
 ###M onkey Images Class set up for Tkinter GUI
 class MonkeyImages(tk.Frame,):
@@ -150,6 +259,10 @@ class MonkeyImages(tk.Frame,):
         test_config = 'test' in sys.argv or 'tc' in sys.argv
         no_wait_for_start = 'nw' in sys.argv
         use_hardware = 'test' not in sys.argv and 'nohw' not in sys.argv
+        
+        show_info_view = 'noinfo' not in sys.argv
+        hide_buttons = 'nobtn' in sys.argv
+        layout_debug = 'layout_debug' in sys.argv
         
         # self.nidaq = use_hardware
         self.nidaq = False
@@ -502,8 +615,8 @@ class MonkeyImages(tk.Frame,):
         self.root.wm_title("MonkeyImages")
 
 
-        hide_buttons = False
-        layout_debug = False
+        # hide_buttons = False
+        # layout_debug = False
         def bgc(color):
             return color if layout_debug else 'black'
         
@@ -559,6 +672,11 @@ class MonkeyImages(tk.Frame,):
         btn("Water Reward\nOff", water_rw_cb(False))
         
         self.root.bind('<Key>', lambda a : self.KeyPress(a))
+        
+        if show_info_view:
+            self.info_view = InfoView(self.root)
+        else:
+            self.info_view = None
         
         if self.plexon == True:
             WaitForStart = not no_wait_for_start
@@ -925,6 +1043,8 @@ class MonkeyImages(tk.Frame,):
             if log_failure_reason[0]:
                 print(log_failure_reason[0])
             self.print_histogram()
+            if self.info_view is not None:
+                self.info_view.update_info(self.get_end_info(), self.event_log)
             
             if reward_duration is None: # pull failed
                 # EV21 Pull failure
