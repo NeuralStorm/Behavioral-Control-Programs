@@ -204,12 +204,13 @@ class InfoView:
         out.append(f"trials: {end_info['count']}")
         out.append("")
         errors = end_info['errors']
-        error_col_width = max(len(e) for e in errors)
-        for error, error_info in errors.items():
-            count = error_info['count']
-            perc = error_info['percent']
-            out.append(f"{error.rjust(error_col_width)} {count:>2} {perc*100:.1f}%")
-        out.append("")
+        if errors:
+            error_col_width = max(len(e) for e in errors)
+            for error, error_info in errors.items():
+                count = error_info['count']
+                perc = error_info['percent']
+                out.append(f"{error.rjust(error_col_width)} {count:>2} {perc*100:.1f}%")
+            out.append("")
         
         print("\n".join(out))
         self.label['text'] = "\n".join(out)
@@ -1042,9 +1043,12 @@ class MonkeyImages(tk.Frame,):
             print('Reward Duration: {}'.format(reward_duration))
             if log_failure_reason[0]:
                 print(log_failure_reason[0])
-            self.print_histogram()
-            if self.info_view is not None:
-                self.info_view.update_info(self.get_end_info(), self.event_log)
+            try:
+                self.print_histogram()
+                if self.info_view is not None:
+                    self.info_view.update_info(self.get_end_info(), self.event_log)
+            except:
+                traceback.print_exc()
             
             if reward_duration is None: # pull failed
                 # EV21 Pull failure
