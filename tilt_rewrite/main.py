@@ -19,6 +19,7 @@ from pprint import pprint
 from copy import deepcopy
 import json
 from pathlib import Path
+from copy import copy
 
 import hjson
 
@@ -447,9 +448,15 @@ def load_config(path: Path, labels_path: Optional[Path]) -> Config:
     return config
 
 def parse_args_config():
+    config_parser = argparse.ArgumentParser(add_help=False)
+    config_parser.add_argument('--config')
+    config_args = config_parser.parse_known_args()
+    
+    config_path = config_args[0].config
+    
     parser = argparse.ArgumentParser(description='')
     
-    parser.add_argument('config',
+    parser.add_argument('--config', required=True,
         help='config file')
     parser.add_argument('--labels', required=False,
         help='labels file')
@@ -494,7 +501,24 @@ def parse_args_config():
     parser.add_argument('--dbg-motor-control', action='store_true',
         help=argparse.SUPPRESS)
     
-    args = parser.parse_args()
+    if config_path is not None:
+        raw_args = copy(sys.argv[1:])
+        with open(config_path) as f:
+            config_data = hjson.load(f)
+        
+        if '-' in config_data:
+            raw_args.extend(config_data['-'])
+            del config_data['-']
+        
+        for k, v in config_data.items():
+            if k.startswith('-'):
+                raw_args.append(f"{k}")
+                if v is not None:
+                    raw_args.append(str(v))
+    else:
+        raw_args = None
+    
+    args = parser.parse_args(args=raw_args)
     
     return args
 

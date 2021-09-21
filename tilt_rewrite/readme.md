@@ -1,6 +1,9 @@
 
 # Setup
 
+Install dependencies  
+`pip install -r requirements.txt`
+
 If using live graph view  
 `pip install pyside6`  
 if installation fails use  
@@ -10,9 +13,9 @@ if installation fails use
 
 Example command line calls
 ```bash
-python main.py example_config.hjson --template-out x.json
-python main.py example_config.hjson --template-out x_2.json --template-in x.json
-python main.py example_config.hjson --template-out x_2.json --template-in x.json --loadcell-out grf_data.csv
+python main.py --config example_config.hjson --template-out x.json
+python main.py --config example_config.hjson --template-out x_2.json --template-in x.json
+python main.py --config example_config.hjson --template-out x_2.json --template-in x.json --loadcell-out grf_data.csv
 ```
 
 ## Usage example
@@ -23,7 +26,7 @@ Make a copy of example_config.hjson, ensure `mode` is set to open_loop. Set `num
 
 Run the script (how python in envoked will vary depending on system configuration)
 ```
-python main.py your_config.hjson --loadcell-out grf_data.csv
+python main.py --config your_config.hjson --loadcell-out grf_data.csv
 ```
 This will read setting from `your_config.hjson` and write recorded grf data to `grf_data.csv`. Note that if `grf_data.csv` already exists it will be overwritten.
 
@@ -36,7 +39,7 @@ Make a copy of example_config.hjson, set `mode` to closed_loop, `baseline` to tr
 
 Run the script (how python in envoked will vary depending on system configuration)
 ```
-python main.py your_config.hjson --template-out template_a.json --loadcell-out grf_data.csv
+python main.py --config your_config.hjson --template-out template_a.json --loadcell-out grf_data.csv
 ```
 This will read settings from `your_config.hjson` and write recorded grf data to `grf_data.csv`. Note that if `grf_data.csv` already exists it will be overwritten. PSTH template data and a record of the run will be written to `template_a.json`.
 
@@ -51,7 +54,7 @@ Make a copy of the config used for the initial run and change `baseline` to fals
 
 Run the script (how python in envoked will vary depending on system configuration)
 ```
-python main.py your_other_config.hjson --template-in template_a.json --template-out template_b.json --loadcell-out grf_data.csv
+python main.py --config your_other_config.hjson --template-in template_a.json --template-out template_b.json --loadcell-out grf_data.csv
 ```
 This will read settings from `your_other_config.hjson` and write recorded grf data to `grf_data.csv`. Note that if `grf_data.csv` already exists it will be overwritten. PSTH templates are loaded from `template_a.json`. PSTH template data and a record of the run will be written to `template_b.json`.
 
@@ -62,7 +65,7 @@ The program will perform tilts and attempt to classify the tilt type based on te
 
 Add the `--live` parameter to enable the live view.
 ```
-python main.py your_config.hjson --monitor --live
+python main.py --config your_config.hjson --monitor --live
 ```
 
 ### Calibrated live view
@@ -88,7 +91,7 @@ The python dependencies for grf_python will need to be installed.
 
 Run the program
 ```
-python main.py your_config.hjson --monitor --live-cal --live-bias ./your_bias_file
+python main.py --config your_config.hjson --monitor --live-cal --live-bias ./your_bias_file
 ```
 
 ---
@@ -173,7 +176,7 @@ path to write ground reaction force data csv to
 
 path to an hjson labels file. `channels` will be loaded from the labels file instead of the config file
 
-`config`
+`--config`
 
 path to hjson config file, see config keys section
 
@@ -262,6 +265,12 @@ for i in 0..num_tilts:
 ## monitor
 
 waits for enter to be pressed (so recording/live view can be used)
+
+# Config file
+
+Keys that begin with `--` will be added to the passed command line parameters. The `_` key can be set to a list of strings which will be added to the command line arguments.
+
+Other keys are used as listed below.
 
 # Config keys
 
