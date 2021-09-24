@@ -1,3 +1,12 @@
 # Behavioral-Control-Programs
 
-Running in python 3.7.  The PlexonSDK requires 32-bit python, so I have to run it here in a 32-bit virtual environment.
+# Repo Layout
+
+
+tilt_rewrite - tilt task control software  
+tilt_docs - documentation for the tilt task hardware and software  
+Tilt_project_hardware_control/SI Programmer Scripts - motor controller scripts for tilt task  
+Primate_Joystick_Pull - NHP behavior task  
+touchscreen_co - primate touchsrceen tasks  
+
+Tilt_project_hardware_control - old tilt task control software  
