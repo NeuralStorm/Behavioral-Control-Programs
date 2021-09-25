@@ -9,7 +9,11 @@ from kivy.vector import Vector
 from kivy.clock import Clock
 from random import randint
 from kivy.config import Config
-import serial, time, pickle, datetime
+try:
+    import serial
+except ImportError:
+    pass
+import time, pickle, datetime
 from numpy import binary_repr
 import struct
 from sys import platform
@@ -23,21 +27,30 @@ elif platform == 'win32':
     fixed_window_size = (1800, 1000)
     pix_per_cm = 85.
     import winsound
+elif platform == 'linux':
+    fixed_window_size = (1800, 1000)
+    pix_per_cm = 85.
 
 Config.set('graphics', 'width', str(fixed_window_size[0]))
 Config.set('graphics', 'height', str(fixed_window_size[1]))
 
 import time
 import numpy as np
-import tables
+try:
+    import tables
+except ImportError:
+    h5 = False
+else:
+    h5 = True
 
-class Data(tables.IsDescription):
-    state = tables.StringCol(24)   # 24-character String
-    cursor = tables.Float32Col(shape=(10, 2))
-    cursor_ids = tables.Float32Col(shape = (10, ))
-    target_pos = tables.Float32Col(shape=(2, ))
-    cap_touch = tables.Float32Col()
-    time = tables.Float32Col()
+if h5:
+    class Data(tables.IsDescription):
+        state = tables.StringCol(24)   # 24-character String
+        cursor = tables.Float32Col(shape=(10, 2))
+        cursor_ids = tables.Float32Col(shape = (10, ))
+        target_pos = tables.Float32Col(shape=(2, ))
+        cap_touch = tables.Float32Col()
+        time = tables.Float32Col()
 
 class COGame(Widget):
     center = ObjectProperty(None)
@@ -60,6 +73,9 @@ class COGame(Widget):
     elif platform == 'win32':
         exit_pos = np.array([7, 4])
         indicator_pos = np.array([8, 5])
+    elif platform == 'linux':
+        exit_pos = np.array([14, 8])
+        indicator_pos = np.array([16, 10])
     exit_rad = 1.
     exit_hold = 2 #seconds
 
@@ -422,6 +438,7 @@ class COGame(Widget):
         print(self.reward_for_targtouch)
         print(self.reward_for_anytouch)
 
+        # self.testing = True
         #try:
         if self.testing:
             pass
@@ -450,6 +467,7 @@ class COGame(Widget):
             print ('')
             print ('')
             print('Data saving PATH: ', p)
+            # input()
             print ('')
             print ('')
             self.filename = p+ animal_name+'_'+datetime.datetime.now().strftime('%Y%m%d_%H%M')
@@ -457,10 +475,14 @@ class COGame(Widget):
             if self.in_cage:
                 self.filename = self.filename+'_cage'
 
+            from pprint import pprint
+            pprint({(k, v) for k, v in d.items() if k != 'target_list'})
+            
             pickle.dump(d, open(self.filename+'_params.pkl', 'wb'))
-            self.h5file = tables.open_file(self.filename + '_data.hdf', mode='w', title = 'NHP data')
-            self.h5_table = self.h5file.create_table('/', 'task', Data, '')
-            self.h5_table_row = self.h5_table.row
+            if h5:
+                self.h5file = tables.open_file(self.filename + '_data.hdf', mode='w', title = 'NHP data')
+                self.h5_table = self.h5file.create_table('/', 'task', Data, '')
+                self.h5_table_row = self.h5_table.row
             self.h5_table_row_cnt = 0
 
             # Note in python 3 to open pkl files: 
@@ -587,23 +609,26 @@ class COGame(Widget):
                 self.write_to_h5file()
 
     def write_to_h5file(self):
-        self.h5_table_row['state']= self.state; 
+        if h5:
+            self.h5_table_row['state']= self.state; 
         cursor = np.zeros((10, 2))
         cursor[:] = np.nan
         for ic, curs_id in enumerate(self.cursor_ids):
             cursor[ic, :] = self.cursor[curs_id]
 
-        self.h5_table_row['cursor'] = cursor
+        if h5:
+            self.h5_table_row['cursor'] = cursor
 
         cursor_id = np.zeros((10, ))
         cursor_id[:] = np.nan
         cursor_id[:len(self.cursor_ids)] = self.cursor_ids
-        self.h5_table_row['cursor_ids'] = cursor_id
+        if h5:
+            self.h5_table_row['cursor_ids'] = cursor_id
 
-        self.h5_table_row['target_pos'] = self.periph_target_position
-        self.h5_table_row['time'] = time.time() - self.t0
-        self.h5_table_row['cap_touch'] = self.rhtouch_sensor
-        self.h5_table_row.append()
+            self.h5_table_row['target_pos'] = self.periph_target_position
+            self.h5_table_row['time'] = time.time() - self.t0
+            self.h5_table_row['cap_touch'] = self.rhtouch_sensor
+            self.h5_table_row.append()
 
         # Write DIO 
         try:
@@ -1056,6 +1081,9 @@ class COApp(App):
             from win32api import GetSystemMetrics
             screenx = GetSystemMetrics(0)
             screeny = GetSystemMetrics(1)
+        elif platform == 'linux':
+            screenx = 1800
+            screeny = 1000
 
         Window.size = (1800, 1000)
         Window.left = (screenx - 1800)/2
