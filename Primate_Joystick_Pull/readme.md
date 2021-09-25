@@ -47,6 +47,11 @@ The first reward duration where `low < pull duration < high` and `cue` is not se
 * `reward_min`: minimum reward duration at `low` or `high`
 * `reward_max`: maximum reward duration at `mid`
 
+`trapezoid`: Reward duration scales linearly up to `mid` then is constant
+
+* `reward_min`: minimum reward duration at `low`
+* `reward_max`: maximum reward duration above `mid`
+
 ---
 ### `images`
 

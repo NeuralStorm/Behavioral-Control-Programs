@@ -587,6 +587,9 @@ class MonkeyImages(tk.Frame,):
             if rwd['type'] == 'linear':
                 for x in ['reward_max', 'reward_min']:
                     rwd[x] = float(rwd[x])
+            elif rwd['type'] == 'trapezoid':
+                for x in ['reward_max', 'reward_min']:
+                    rwd[x] = float(rwd[x])
             elif rwd['type'] == 'flat':
                 rwd['reward_duration'] = float(rwd['reward_duration'])
             else:
@@ -599,7 +602,7 @@ class MonkeyImages(tk.Frame,):
         # pprint(rw_thr)
         
         # ensure that there are reward thresholds for all images or a threshold for all cues
-        if all('cue' in x for x in rw_thr):
+        if all(x['cue'] is not None for x in rw_thr):
             for img in self.selectable_images:
                 assert any(x['cue'] == img for x in rw_thr), f"cue {img} has no reward threshold"
         
@@ -1241,15 +1244,18 @@ class MonkeyImages(tk.Frame,):
             
             if rwd['type'] == 'flat':
                 return rwd['reward_duration']
-            elif rwd['type'] == 'linear':
+            elif rwd['type'] in ['linear', 'trapezoid']:
                 if duration >= rwd['low'] and duration <= rwd['high']:
                     # get distance from optimal time
                     dist = abs(duration - rwd['mid'])
                     # get distance from closest edge of range
                     dist = (rwd['mid'] - rwd['low']) - dist
-                    # get percent of distance from edge of range
+                    # get percent of distance from edge of range 0-1
                     if duration >= rwd['mid']:
-                        perc = dist / (rwd['high'] - rwd['mid'])
+                        if rwd['type'] == 'trapezoid':
+                            perc = 1
+                        else:
+                            perc = dist / (rwd['high'] - rwd['mid'])
                     else:
                         perc = dist / (rwd['mid'] - rwd['low'])
                     # get reward duration from percent
