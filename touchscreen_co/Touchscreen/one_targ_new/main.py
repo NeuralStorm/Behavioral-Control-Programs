@@ -17,6 +17,7 @@ import time, pickle, datetime
 from numpy import binary_repr
 import struct
 from sys import platform
+import sys
 
 
 Config.set('graphics', 'resizable', False)
@@ -153,6 +154,8 @@ class COGame(Widget):
     def init(self, animal_names_dict=None, rew_in=None, task_in=None,
         test=None, hold=None, targ_structure=None,
         autoquit=None, rew_var=None, targ_timeout = None, nudge_x=None, nudge_y=None):
+
+        self.plexon = 'test' not in sys.argv
 
         self.rew_cnt = 0
         self.small_rew_cnt = 0
@@ -488,9 +491,36 @@ class COGame(Widget):
             # Note in python 3 to open pkl files: 
             #with open('xxxx_params.pkl', 'rb') as f:
             #    data_params = pickle.load(f)
+            
+            self.plex_do = None
+            self.plex_do_device_number = 1
+            self.reward_nidaq_bit = 17 # DO Channel
+            if self.plexon:
+                self._init_plex_do()
         # except:
         #     pass
-
+    
+    def _init_plex_do(self):
+        from pyplexdo import PyPlexDO
+        
+        ## Setup for Plexon DO
+        compatible_devices = ['PXI-6224', 'PXI-6259']
+        self.plex_do = PyPlexDO()
+        doinfo = self.plex_do.get_digital_output_info()
+        for k in range(doinfo.num_devices):
+            if self.plex_do.get_device_string(doinfo.device_numbers[k]) in compatible_devices:
+                device_number = doinfo.device_numbers[k]
+        if device_number == None:
+            print("No compatible devices found. Exiting.")
+            sys.exit(1)
+        else:
+            print("{} found as device {}".format(self.plex_do.get_device_string(device_number), device_number))
+        res = self.plex_do.init_device(device_number)
+        if res != 0:
+            print("Couldn't initialize device. Exiting.")
+            sys.exit(1)
+        self.plex_do.clear_all_bits(device_number)
+    
     def gen_rewards(self, perc_trials_rew, perc_trials_2x, reward_for_grasp):
         mini_block = int(2*(np.round(1./self.percent_of_trials_rewarded)))
         rew = []
@@ -838,6 +868,11 @@ class COGame(Widget):
 
                 if not self.skip_juice:
                     if self.reward_generator[self.trial_counter] > 0:
+                        if self.plexon:
+                            self.plex_do.set_bit(self.plex_do_device_number, self.reward_nidaq_bit)
+                            time.sleep(.25 + self.reward_delay_time)
+                            self.plex_do.clear_bit(self.plex_do_device_number, self.reward_nidaq_bit)
+                        
                         self.reward_port.open()
                         #rew_str = [ord(r) for r in 'inf 50 ml/min '+str(self.reward_for_targtouch[1])+' sec\n']
                         rew_str = [ord(r) for r in 'inf 50 ml/min '+str(self.reward_generator[self.trial_counter])+' sec\n']
