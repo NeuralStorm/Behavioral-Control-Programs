@@ -460,7 +460,7 @@ class MonkeyImages(tk.Frame,):
         self.auto_water_reward_enabled = True
         
         if test_config:
-            self.ConfigFilename = 'csvconfig_EXAMPLE_Joystick.csv'
+            self.ConfigFilename = 'dev_config.csv'
         else:
             root = tk.Tk()
             self.ConfigFilename =  filedialog.askopenfilename(initialdir = "/",title = "Select file",filetypes = (("all files","*.*"), ("csv files","*.csv")))
