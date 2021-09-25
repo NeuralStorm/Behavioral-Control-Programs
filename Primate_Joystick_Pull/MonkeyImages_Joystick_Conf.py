@@ -39,6 +39,7 @@ import tkinter as tk
 from tkinter import filedialog
 from tkinter.font import Font
 from PIL import Image, ImageTk
+import pyscreenshot as ImageGrab
 import csv
 import json
 import os
@@ -99,6 +100,59 @@ def recolor(img, color, *, two_tone=False):
     
     return img
 
+def _screenshot_region(x: int, y: int, w: int, h: int) -> Image:
+    # x //= 2
+    # y //= 2
+    
+    bbox = (x, y, x+w, y+h)
+    
+    # img = ImageGrab.grab(bbox=bbox, backend='grim')
+    img = ImageGrab.grab(bbox=bbox)
+    return img
+
+def screenshot_widgets(widgets, path):
+    if not widgets:
+        return
+    
+    # for widget in widgets:
+    #     print('-')
+    #     print(' ', widget.winfo_rooty())
+    #     print(' ', widget.winfo_y())
+    
+    x_min = min(x.winfo_rootx() for x in widgets)
+    x_max = max(x.winfo_rootx() + x.winfo_width() for x in widgets)
+    y_min = min(x.winfo_rooty() for x in widgets)
+    y_max = max(x.winfo_rooty() + x.winfo_height() for x in widgets)
+    
+    # print(x_min, x_max, y_min, y_max)
+    
+    img = _screenshot_region(x_min, y_min, x_max-x_min, y_max-y_min)
+    img.save(path, 'PNG')
+
+def screenshot_widget(widget, path):
+    # x = widget.winfo_rootx() + widget.winfo_x()
+    # y = widget.winfo_rooty() + widget.winfo_y()
+    # x //= 2
+    # y //= 2
+    x = widget.winfo_rootx()
+    y = widget.winfo_rooty()
+    
+    w = widget.winfo_width()
+    h = widget.winfo_height()
+    # x_ = x + widget.winfo_width()
+    # y_ = y + widget.winfo_height()
+    
+    # bbox = (x, y, x_, y_)
+    # print(bbox)
+    # (4916, 3910, 5760, 4254)
+    # 2604,1890 572x401
+    
+    img = _screenshot_region(x, y, w, h)
+    # img = ImageGrab.grab(bbox=bbox, backend='grim')
+    
+    # img = ImageGrab.grab(backend='grim')
+    img.save(path, 'PNG')
+
 class RegisteredCallback:
     def __init__(self, cb, _clear_callback):
         self._cb = cb
@@ -145,16 +199,23 @@ class Waiter:
         self.time_waited = self.trial_t() - start_time
 
 class InfoView:
-    def __init__(self, root):
+    def __init__(self, root, *, monkey_images=None):
+        self.monkey_images = monkey_images
         _orig_root = root
         self.window = tk.Toplevel(root)
         root = self.window
+        root.geometry('800x600')
+        root.bind('<Key>', self.key_handler)
         
         font = Font(family='consolas', size=15)
         self.label = tk.Label(root, text = '-', justify=tk.LEFT, font=font)
         self.label.pack(side=tk.TOP, anchor=tk.NW)
         
         self.rows = []
+    
+    def key_handler(self, event):
+        if self.monkey_images is not None:
+            self.monkey_images.KeyPress(event)
     
     @staticmethod
     def gen_histogram(event_log, *, h_range):
@@ -233,7 +294,7 @@ class InfoView:
             frame.pack(side = tk.TOP, anchor='nw', fill='x')
             font = Font(size=15)
             label = tk.Label(frame, text = f"{start:.2f}-{end:.2f}", justify=tk.LEFT, font=font,
-                width=10, bg='red')
+                width=10, bg='#F0B000')
             label.pack(side=tk.LEFT, anchor=tk.NW, expand=False)
             
             canvas = tk.Canvas(frame,
@@ -675,7 +736,7 @@ class MonkeyImages(tk.Frame,):
         self.root.bind('<Key>', lambda a : self.KeyPress(a))
         
         if show_info_view:
-            self.info_view = InfoView(self.root)
+            self.info_view = InfoView(self.root, monkey_images=self)
         else:
             self.info_view = None
         
@@ -1250,6 +1311,10 @@ class MonkeyImages(tk.Frame,):
             self.Stop()
         elif key == 'z':
             self.manual_water_dispense()
+        elif key == 'p':
+            screenshot_widget(self.root, 'test.png')
+            screenshot_widget(self.info_view.window, 'test2.png')
+            screenshot_widgets(self.info_view.rows, 'test3.png')
         elif key == '`':
             self.Stop()
             self.root.quit()
@@ -1397,8 +1462,10 @@ class MonkeyImages(tk.Frame,):
             gen_time = str(time.monotonic())
             csv_path = partial_dir / f"{base}_{gen_time}.csv"
             event_log_path = partial_dir / f"{base}_{gen_time}_events.json"
+            histo_path = partial_dir / f"{base}_{gen_time}_histogram.png"
         else:
             csv_path, event_log_path = self.get_log_file_paths()
+            histo_path = Path(self.save_path) / f"{self.log_file_name_base}_histogram.png"
         
         out = {
             'events': self.event_log,
@@ -1463,6 +1530,8 @@ class MonkeyImages(tk.Frame,):
             writer.writerow(['error', 'count', 'percent'])
             for e, ei in end_info['errors'].items():
                 writer.writerow([e, ei['count'], ei['percent']])
+        
+        screenshot_widgets([*self.info_view.rows, self.info_view.label], histo_path)
     
     def print_histogram(self):
         events = [e for e in self.event_log if e['name'] == 'task_completed']
