@@ -1,2 +1,4 @@
 *.json
 *.hjson
+*.csv
+notes*.md

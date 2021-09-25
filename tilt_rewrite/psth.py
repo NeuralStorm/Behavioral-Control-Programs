@@ -315,3 +315,91 @@ class PSTH: ###Initiate PSTH with desired parameters, creates unit_dict which ha
         # print('population total response:', self.pop_total_response)
         # print('psth templates', self.psth_templates)
         return self.psth_templates, self.pop_total_response
+
+def main():
+    import sys
+    with open(sys.argv[1]) as f:
+        data = json.load(f)
+    
+    template_in = sys.argv[2]
+    try:
+        baseline = data['baseline']
+    except KeyError:
+        arg = sys.argv[3]
+        if arg == 'baseline':
+            baseline = True
+        elif arg == 'nonbaseline':
+            baseline = False
+        else:
+            raise ValueError()
+    
+    pre_time = 0.0
+    post_time = 0.200
+    bin_size = 0.020
+    event_num_mapping = {
+        1: 1, 2: 2, 3: 3, 4: 4,
+        9: 1, 11: 2, 12: 3, 14: 4,
+    }
+    psth = PSTH(
+        data['ChannelDict'],
+        pre_time, post_time, bin_size,
+        event_num_mapping=event_num_mapping,
+    )
+    if template_in:
+        assert not baseline
+        psth.loadtemplate(template_in)
+    
+    correct = 0
+    total = 0
+    # correct values from actual run
+    actual_correct = 0
+    mismatched_perdictions = 0
+    
+    for tilt in data['tilts']:
+        print("tilt", tilt['i'])
+        found_event = False
+        collected_ts = False
+        for event in tilt['events']:
+            if event['type'] == 'spike':
+                relevent = psth.build_unit(event['channel'], event['unit'], event['time'])
+                if relevent:
+                    collected_ts = True
+            elif event['type'] == 'tilt':
+                if event['channel'] == 257 and not found_event:
+                    psth.event(event['time'], event['unit'])
+                    found_event = True
+        
+        got_response = found_event and collected_ts
+        assert tilt['got_response'] == got_response
+        
+        if got_response:
+            psth.psth(True, baseline)
+            if not baseline:
+                psth.psth(False, baseline)
+        
+        if not baseline:
+            if got_response:
+                decode_result = psth.decode()
+                predicted_tilt_type = psth.decoder_list[-1]
+                print("  decode_result", decode_result, predicted_tilt_type)
+                print("  actl", tilt['tilt_type'])
+                actual_prediction = tilt['predicted_tilt_type']
+                print("  pred", predicted_tilt_type, actual_prediction)
+                # assert predicted_tilt_type == actual_prediction
+                
+                total += 1
+                if predicted_tilt_type == tilt['tilt_type']:
+                    correct += 1
+                if actual_prediction == tilt['tilt_type']:
+                    actual_correct += 1
+                if actual_prediction != predicted_tilt_type:
+                    mismatched_perdictions += 1
+            else:
+                print("  no spikes")
+    
+    print(f"rerun  {correct}/{total} {correct/total*100:.2f}%")
+    print(f"actual {actual_correct}/{total} {actual_correct/total*100:.2f}%")
+    print(f"mismatched {mismatched_perdictions}")
+
+if __name__ == '__main__':
+    main()

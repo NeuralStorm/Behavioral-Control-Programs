@@ -449,7 +449,8 @@ def record_data(*,
     # samples per second
     # SAMPLE_RATE = 1250
     SAMPLE_RATE = clock_rate
-    SAMPLE_BATCH_SIZE = SAMPLE_RATE
+    # SAMPLE_BATCH_SIZE = SAMPLE_RATE
+    SAMPLE_BATCH_SIZE = 1000
     
     csv_headers = [x['csv'] for x in HEADERS]
     # csv_path = './loadcell_tilt.csv'
