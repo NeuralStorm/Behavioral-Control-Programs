@@ -46,7 +46,7 @@ import os
 import os.path
 from pathlib import Path
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 import random
 import sys
 from contextlib import ExitStack
@@ -1521,11 +1521,20 @@ class MonkeyImages(tk.Frame,):
                     entry['go_cue_delay'],
                 ])
             
+            def get_time_in_game():
+                for e in self.event_log:
+                    if e['name'] == 'game_start':
+                        delta = time.monotonic() - e['time_m']
+                        delta = timedelta(seconds=delta)
+                        return str(delta)
+                return None
+            
             end_info = self.get_end_info()
             dur = end_info['action_duration']
             writer.writerow([
                 'count', end_info['count'],
                 'percent_correct', end_info['percent_correct'],
+                'time_in_game', get_time_in_game(),
             ])
             writer.writerow([
                 'min', dur['min'],
