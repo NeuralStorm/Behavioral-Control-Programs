@@ -1480,7 +1480,7 @@ class MonkeyImages(tk.Frame,):
         with open(event_log_path, 'w') as f:
             json.dump(out, f, indent=2)
         
-        with open(csv_path, 'w') as f:
+        with open(csv_path, 'w', newline='\n') as f:
             writer = csv.writer(f)
             
             writer.writerow([
