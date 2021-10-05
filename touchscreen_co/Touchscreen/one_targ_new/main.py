@@ -450,7 +450,7 @@ class COGame(Widget):
             import os
             path = os.getcwd()
             path = path.split('\\')
-            path_data = [p for p in path if np.logical_and('Touch' not in p, 'Targ' not in p)]
+            path_data = [p for p in path if np.logical_and('Touch' not in p, 'targ' not in p)]
             path_root = ''
             for ip in path_data:
                 path_root += ip+'/'
