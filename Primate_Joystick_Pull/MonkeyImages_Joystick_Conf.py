@@ -226,14 +226,14 @@ class InfoView:
             step = 0.5
             
             ws = start # window start
-            we = step # window end
+            we = None # window end
             while ws < end:
-                yield ws, we
                 ws = we
-                if we < 1.999999999:
-                    we = ws + 0.2
+                if ws < 0.4999999999:
+                    we = ws + 0.1
                 else:
                     we = ws + step
+                yield ws, we
         bins = {
             k: []
             for k in get_bin_ranges()
