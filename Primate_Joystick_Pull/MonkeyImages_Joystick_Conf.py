@@ -226,7 +226,7 @@ class InfoView:
             step = 0.5
             
             ws = start # window start
-            we = None # window end
+            we = start # window end
             while ws < end:
                 ws = we
                 if ws < 0.4999999999:
