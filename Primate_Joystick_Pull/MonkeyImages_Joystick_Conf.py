@@ -22,7 +22,7 @@
 # EV31: DS 4 (Not Currently Used)
 # EV32: GC 4 (Not Currently Used)
 
-from typing import List, Tuple, Optional, Literal
+from typing import List, Tuple, Optional, Literal, Dict, Any
 
 try:
     from pyopxclient import PyOPXClientAPI, OPX_ERROR_NOERROR, SPIKE_TYPE, CONTINUOUS_TYPE, EVENT_TYPE, OTHER_TYPE
@@ -314,9 +314,267 @@ class InfoView:
             
             self.rows.append(frame)
 
+class GameConfig:
+    def __init__(self, *,
+        test_config: bool,
+    ):
+        if test_config:
+            self.ConfigFilename = 'dev_config.csv'
+        else:
+            root = tk.Tk()
+            self.ConfigFilename = filedialog.askopenfilename(initialdir = "/",title = "Select file",filetypes = (("all files","*.*"), ("csv files","*.csv")))
+            root.withdraw()
+            del root
+        
+        print (self.ConfigFilename)
+        
+        def load_csv():
+            data = []
+            with open(self.ConfigFilename, newline='') as csvfile:
+                spamreader = csv.reader(csvfile) #, delimiter=' ', quotechar='|')
+                for row in spamreader:
+                    #data = list(spamreader)
+                    data.append(row)
+            csvreaderdict = {}
+            for row in data:
+                k = row[0].strip()
+                vs = [v.strip() for v in row[1:]]
+                # remove empty cells after the key and first value column
+                vs[1:] = [v for v in vs[1:] if v]
+                if not k or k.startswith('#'):
+                    continue
+                csvreaderdict[k] = vs
+            return csvreaderdict
+        
+        config_dict = load_csv()
+        # PARAMETERS META DATA
+        self.study_id: str = config_dict['Study ID'][0]       # 3 letter study code
+        self.session_id: str = config_dict['Session ID'][0] # Type of Session
+        self.animal_id: str = config_dict['Animal ID'][0]   # 3 digit number
+        self.start_time: str = time.strftime('%Y%m%d_%H%M%S')
+        
+        self.TaskType: str = config_dict['Task Type'][0]
+        
+        self.save_path: Path = Path(config_dict['Task Data Save Dir'][0])
+        self.log_file_name_base: str = f"{self.study_id}_{self.animal_id}_{self.session_id}_{self.start_time}_{self.TaskType}"
+        
+        self.discrim_delay_range: Tuple[float, float] = (
+            float(config_dict['Pre Discriminatory Stimulus Min delta t1'][0]),
+            float(config_dict['Pre Discriminatory Stimulus Max delta t1'][0]),
+        )
+        self.go_cue_delay_range: Tuple[float, float] = (
+            float(config_dict['Pre Go Cue Min delta t2'][0]),
+            float(config_dict['Pre Go Cue Max delta t2'][0]),
+        )
+        
+        self.MaxTimeAfterSound: int = int(config_dict['Maximum Time After Sound'][0])
+        self.InterTrialTime: float = float(config_dict['Inter Trial Time'][0])
+        self.manual_reward_time: float = float(config_dict['manual_reward_time'][0])
+        self.TimeOut: float = float(config_dict['Time Out'][0])
+        self.EnableTimeOut: bool = bool(self.TimeOut)
+        self.EnableBlooperNoise: bool = config_dict['Enable Blooper Noise'][0] == 'TRUE'
+        
+        self.task_type: Literal['homezone_exit', 'joystick_pull']
+        num_events: int = int(config_dict['Number of Events'][0])
+        if num_events == 0:
+            self.task_type = 'homezone_exit'
+        else:
+            self.task_type = 'joystick_pull'
+        
+        pspd = config_dict.get('post_succesful_pull_delay')
+        if pspd in [[''], []]:
+            pspd = None
+        if pspd is not None:
+            pspd = float(pspd[0])
+        self.post_succesful_pull_delay: Optional[float] = pspd
+        
+        jc = config_dict.get('joystick_channel')
+        if jc in [[''], [], None]:
+            jc = [3]
+        jc = int(jc[0])
+        self.joystick_channel: int = jc
+        
+        num_trials = config_dict.get('no_trials')
+        if num_trials == ['true']:
+            num_trials = [0]
+        elif num_trials in [[''], [], ['0']]:
+            num_trials = None
+        if num_trials is not None:
+            num_trials = int(num_trials[0])
+        self.max_trials: Optional[int] = num_trials
+        
+        self.load_images(config_dict['images'])
+        self.selectable_images: Dict[str, Dict[str, Any]]
+        self.images: List[str]
+        
+        self.load_thresholds(config_dict['reward_thresholds'])
+        self.reward_thresholds: List[Dict[str, Any]]
+    
+    def load_images(self, config_images):
+        # config_images = config_dict['images']
+        def build_image_entry(i, name):
+            name = name.strip()
+            assert '.' not in name, f"{name}"
+            
+            obj = {}
+            
+            for color in ['white', 'red', 'green']:
+                img = Image.open(f"./images_gen/{color}/{name}.png")
+                width = img.size[0]
+                height = img.size[1]
+                obj[color] = img
+            
+            obj[None] = obj['green']
+            
+            return name, {
+                'width': width,
+                'height': height,
+                'img': obj,
+                'nidaq_event_index': i+1,
+            }
+        
+        images = dict(
+            build_image_entry(i, x)
+            for i, x in enumerate(config_images)
+        )
+        
+        self.selectable_images = list(images)
+        
+        img = Image.open('./images_gen/prepare.png')
+        
+        images['yPrepare'] = {
+            'width': img.size[0],
+            'height': img.size[1],
+            'img': {None: img},
+        }
+        
+        red = Image.open('./images_gen/box_red.png')
+        green = Image.open('./images_gen/box_green.png')
+        white = Image.open('./images_gen/box_white.png')
+        
+        images['box'] = {
+            'width': green.size[0],
+            'height': green.size[1],
+            'img': {
+                'red': red,
+                'green': green,
+                'white': white,
+                None: green,
+            }
+        }
+        
+        for image in images.values():
+            image['tk'] = {
+                k: ImageTk.PhotoImage(img)
+                for k, img in image['img'].items()
+            }
+        
+        self.images = images
+    
+    def parse_threshold(self, s):
+        s = s.strip()
+        s = s.split('\'')
+        s = [x.split('=') for x in s]
+        rwd = {k.strip(): v.strip() for k, v in s}
+        
+        if 'cue' in rwd:
+            assert rwd['cue'] in self.selectable_images, f"unknown cue {rwd['cue']}"
+        else:
+            rwd['cue'] = None
+        
+        for x in ['low', 'mid', 'high']:
+            if x in rwd:
+                rwd[x] = float(rwd[x])
+        
+        if 'mid' not in rwd:
+            rwd['mid'] = rwd['low'] + (rwd['high'] - rwd['low']) / 2
+        elif 'low' not in rwd:
+            rwd['low'] = rwd['mid'] - (rwd['high'] - rwd['mid'])
+        elif 'high' not in rwd:
+            rwd['high'] = rwd['mid'] + (rwd['mid'] - rwd['low'])
+        
+        assert rwd['low'] < rwd['mid'] < rwd['high']
+        
+        if rwd['type'] == 'linear':
+            for x in ['reward_max', 'reward_min']:
+                rwd[x] = float(rwd[x])
+        elif rwd['type'] == 'trapezoid':
+            for x in ['reward_max', 'reward_min']:
+                rwd[x] = float(rwd[x])
+        elif rwd['type'] == 'flat':
+            rwd['reward_duration'] = float(rwd['reward_duration'])
+        else:
+            raise ValueError(f"invalid reward type {rwd['type']}")
+        
+        return rwd
+    
+    def load_thresholds(self, raw_thresholds):
+        
+        rw_thr = [self.parse_threshold(x) for x in raw_thresholds]
+        
+        # ensure that there are reward thresholds for all images or a threshold for all cues
+        if all(x['cue'] is not None for x in rw_thr):
+            for img in self.selectable_images:
+                assert any(x['cue'] == img for x in rw_thr), f"cue {img} has no reward threshold"
+        
+        self.reward_thresholds = rw_thr
+
+class GameFrame(tk.Frame):
+    def __init__(self, parent, *,
+        layout_debug: bool,
+        hide_buttons: bool,
+    ):
+        self.parent = parent
+        tk.Frame.__init__(self, parent)
+        
+        self._hide_buttons = hide_buttons
+        
+        self._layout_debug = layout_debug
+        bgc = self._bgc
+        
+        ###Adjust width and height to fit monitor### bd is for if you want a border
+        self.frame1 = tk.Frame(parent,
+            # width = canvas_x, height = canvas_y,
+            bd = 0, bg=bgc('yellow'),
+            highlightthickness=0,)
+        self.frame1.pack(side = tk.BOTTOM, expand=True, fill=tk.BOTH)
+        self.cv1 = tk.Canvas(self.frame1,
+            # width = canvas_x, height = canvas_y,
+            background = bgc('#F0B000'), bd = 0, relief = tk.FLAT,
+            highlightthickness=0,)
+        self.cv1.pack(side = tk.BOTTOM, expand=True, fill=tk.BOTH)
+        
+        btn_frame = tk.Frame(parent,
+            # width = canvas_x, height = canvas_y,
+            bd = 0, bg=bgc('green'),
+            highlightthickness=0)
+        btn_frame.pack(side = tk.TOP, expand=False, fill=tk.BOTH)
+        self._button_frame = btn_frame
+    
+    def _bgc(self, color: str) -> str:
+        return color if self._layout_debug else 'black'
+    
+    def add_button(self, text, cmd):
+        if self._hide_buttons:
+            return
+        b = tk.Button(
+            # self.root, text = text,
+            self._button_frame, text = text,
+            height = 5,
+            # width = 6,
+            command = cmd,
+            background = self._bgc('lightgreen'), foreground='grey',
+            bd=1,
+            relief = tk.FLAT,
+            highlightthickness=1,
+            highlightcolor='grey',
+            highlightbackground='grey',
+        )
+        b.pack(side = tk.LEFT)
+
 ##############################################################################################
 ###M onkey Images Class set up for Tkinter GUI
-class MonkeyImages(tk.Frame,):
+class MonkeyImages:
     def __init__(self, parent):
         test_config = 'test' in sys.argv or 'tc' in sys.argv
         no_wait_for_start = 'nw' in sys.argv
@@ -459,214 +717,10 @@ class MonkeyImages(tk.Frame,):
         
         self.auto_water_reward_enabled = True
         
-        if test_config:
-            self.ConfigFilename = 'dev_config.csv'
-        else:
-            root = tk.Tk()
-            self.ConfigFilename =  filedialog.askopenfilename(initialdir = "/",title = "Select file",filetypes = (("all files","*.*"), ("csv files","*.csv")))
-            root.withdraw()
-            del root
-        
-        print (self.ConfigFilename)
-        csvreaderdict = {}
-        data = []
-        with open(self.ConfigFilename, newline='') as csvfile:
-            spamreader = csv.reader(csvfile) #, delimiter=' ', quotechar='|')
-            for row in spamreader:
-                #data = list(spamreader)
-                data.append(row)
-        csvfile.close()
-        
-        for row in data:
-            k = row[0].strip()
-            vs = [v.strip() for v in row[1:]]
-            # remove empty cells after the key and first value column
-            vs[1:] = [v for v in vs[1:] if v]
-            if not k or k.startswith('#'):
-                continue
-            csvreaderdict[k] = vs
-        
-        config_dict = csvreaderdict
-        # PARAMETERS META DATA
-        self.study_id = config_dict['Study ID'][0]       # 3 letter study code
-        self.session_id = csvreaderdict['Session ID'][0] # Type of Session
-        self.animal_id = csvreaderdict['Animal ID'][0]   # 3 digit number
-        self.start_time = time.strftime('%Y%m%d_%H%M%S')
-        
-        #self.TaskType = 'Joystick'
-        #self.TaskType = 'HomezoneExit'
-        self.TaskType = csvreaderdict['Task Type'][0]
-        
-        if 'images' in config_dict:
-            config_images = config_dict['images']
-            def build_image_entry(i, name):
-                name = name.strip()
-                assert '.' not in name, f"{name}"
-                
-                obj = {}
-                
-                for color in ['white', 'red', 'green']:
-                    img = Image.open(f"./images_gen/{color}/{name}.png")
-                    width = img.size[0]
-                    height = img.size[1]
-                    obj[color] = img
-                
-                obj[None] = obj['green']
-                
-                return name, {
-                    'width': width,
-                    'height': height,
-                    'img': obj,
-                    'nidaq_event_index': i+1,
-                }
-            
-            images = dict(
-                build_image_entry(i, x)
-                for i, x in enumerate(config_images)
-            )
-            
-            self.selectable_images = list(images)
-            
-            img = Image.open('./images_gen/prepare.png')
-            
-            images['yPrepare'] = {
-                'width': img.size[0],
-                'height': img.size[1],
-                'img': {None: img},
-            }
-            
-            red = Image.open('./images_gen/box_red.png')
-            green = Image.open('./images_gen/box_green.png')
-            white = Image.open('./images_gen/box_white.png')
-            
-            images['box'] = {
-                'width': green.size[0],
-                'height': green.size[1],
-                'img': {
-                    'red': red,
-                    'green': green,
-                    'white': white,
-                    None: green,
-                }
-            }
-            
-            for image in images.values():
-                image['tk'] = {
-                    k: ImageTk.PhotoImage(img)
-                    for k, img in image['img'].items()
-                }
-            
-            self.images = images
-        else:
-            assert False, "config images is now required"
-        
-        def parse_threshold(s):
-            s = s.strip()
-            s = s.split('\'')
-            s = [x.split('=') for x in s]
-            rwd = {k.strip(): v.strip() for k, v in s}
-            
-            if 'cue' in rwd:
-                assert rwd['cue'] in self.selectable_images, f"unknown cue {rwd['cue']}"
-            else:
-                rwd['cue'] = None
-            
-            for x in ['low', 'mid', 'high']:
-                if x in rwd:
-                    rwd[x] = float(rwd[x])
-            
-            if 'mid' not in rwd:
-                rwd['mid'] = rwd['low'] + (rwd['high'] - rwd['low']) / 2
-            elif 'low' not in rwd:
-                rwd['low'] = rwd['mid'] - (rwd['high'] - rwd['mid'])
-            elif 'high' not in rwd:
-                rwd['high'] = rwd['mid'] + (rwd['mid'] - rwd['low'])
-            
-            assert rwd['low'] < rwd['mid'] < rwd['high']
-            
-            if rwd['type'] == 'linear':
-                for x in ['reward_max', 'reward_min']:
-                    rwd[x] = float(rwd[x])
-            elif rwd['type'] == 'trapezoid':
-                for x in ['reward_max', 'reward_min']:
-                    rwd[x] = float(rwd[x])
-            elif rwd['type'] == 'flat':
-                rwd['reward_duration'] = float(rwd['reward_duration'])
-            else:
-                raise ValueError(f"invalid reward type {rwd['type']}")
-            
-            return rwd
-        
-        rw_thr = config_dict['reward_thresholds']
-        rw_thr = [parse_threshold(x) for x in rw_thr]
-        # pprint(rw_thr)
-        
-        # ensure that there are reward thresholds for all images or a threshold for all cues
-        if all(x['cue'] is not None for x in rw_thr):
-            for img in self.selectable_images:
-                assert any(x['cue'] == img for x in rw_thr), f"cue {img} has no reward threshold"
-        
-        self.reward_thresholds = rw_thr
-        
-        self.save_path = Path(csvreaderdict['Task Data Save Dir'][0])
-        self.log_file_name_base = f"{self.study_id}_{self.animal_id}_{self.session_id}_{self.start_time}_{self.TaskType}"
-        self.ensure_log_file_creatable()
-        
-        self.discrim_delay_range = (
-            float(config_dict['Pre Discriminatory Stimulus Min delta t1'][0]),
-            float(config_dict['Pre Discriminatory Stimulus Max delta t1'][0]),
-        )
-        self.go_cue_delay_range = (
-            float(config_dict['Pre Go Cue Min delta t2'][0]),
-            float(config_dict['Pre Go Cue Max delta t2'][0]),
-        )
-        
-        self.MaxTimeAfterSound = int(csvreaderdict['Maximum Time After Sound'][0])
-        self.NumEvents = int(csvreaderdict['Number of Events'][0])
-        
-        if self.NumEvents == 0:
-            self.NumEvents = 1
-            self.task_type = 'homezone_exit'
-        else:
-            self.task_type = 'joystick_pull'
-        
-        self.InterTrialTime = float(csvreaderdict['Inter Trial Time'][0])
-        
-        self.manual_reward_time = float(csvreaderdict['manual_reward_time'][0])
-        self.TimeOut = float(csvreaderdict['Time Out'][0])
-        self.EnableTimeOut = bool(self.TimeOut)
-        self.EnableBlooperNoise = (csvreaderdict['Enable Blooper Noise'][0] == 'TRUE')
-        
-        pspd = config_dict.get('post_succesful_pull_delay')
-        if pspd in [[''], []]:
-            pspd = None
-        if pspd is not None:
-            pspd = float(pspd[0])
-        self.post_succesful_pull_delay: Optional[float] = pspd
-        
-        ############# Initializing vars
-        # self.DurationList()                                 # Creates dict of lists to encapsulate press durations. Will be used for Adaptive Reward Control
-        # self.counter = 0 # Counter Values: Alphabetic from TestImages folder
-        # Blank(white screen), disc stim 1, disc stim 2, disc stim 3, disc stim go 1, disc stim go 2, disc stim go 3, black(timeout), Prepare(to put hand in position), Monkey image
-        # self.current_counter = 0 
-        # self.excluded_events = [] #Might want this for excluded events
-        
         self.reward_nidaq_bit = 17 # DO Channel
         
-        jc = config_dict.get('joystick_channel')
-        if jc in [[''], [], None]:
-            jc = [3]
-        jc = int(jc[0])
-        self.joystick_channel = jc
-        
-        num_trials = config_dict.get('no_trials')
-        if num_trials == ['true']:
-            num_trials = [0]
-        elif num_trials in [[''], [], ['0']]:
-            num_trials = None
-        if num_trials is not None:
-            num_trials = int(num_trials[0])
-        self.max_trials = num_trials
+        self.config = GameConfig(test_config=test_config)
+        self.ensure_log_file_creatable()
         
         self.Area1_right_pres = False   # Home Area
         # self.Area2_right_pres = False   # Joystick Area
@@ -675,51 +729,13 @@ class MonkeyImages(tk.Frame,):
         self.ImageReward = True        # Default Image Reward set to True
         
         print("ready for plexon:" , self.plexon)
-        tk.Frame.__init__(self, parent)
         self.root = parent
         self.root.wm_title("MonkeyImages")
-
-
-        # hide_buttons = False
-        # layout_debug = False
-        def bgc(color):
-            return color if layout_debug else 'black'
         
-        ###Adjust width and height to fit monitor### bd is for if you want a border
-        self.frame1 = tk.Frame(self.root,
-            # width = canvas_x, height = canvas_y,
-            bd = 0, bg=bgc('yellow'),
-            highlightthickness=0,)
-        self.frame1.pack(side = tk.BOTTOM, expand=True, fill=tk.BOTH)
-        self.cv1 = tk.Canvas(self.frame1,
-            # width = canvas_x, height = canvas_y,
-            background = bgc('#F0B000'), bd = 0, relief = tk.FLAT,
-            highlightthickness=0,)
-        self.cv1.pack(side = tk.BOTTOM, expand=True, fill=tk.BOTH)
+        game_frame = GameFrame(self.root, layout_debug=layout_debug, hide_buttons=hide_buttons)
+        self.game_frame = game_frame
         
-        btn_frame = tk.Frame(self.root,
-            # width = canvas_x, height = canvas_y,
-            bd = 0, bg=bgc('green'),
-            highlightthickness=0)
-        btn_frame.pack(side = tk.TOP, expand=False, fill=tk.BOTH)
-        
-        def btn(text, cmd):
-            if hide_buttons:
-                return
-            b = tk.Button(
-                # self.root, text = text,
-                btn_frame, text = text,
-                height = 5,
-                # width = 6,
-                command = cmd,
-                background = bgc('lightgreen'), foreground='grey',
-                bd=1,
-                relief = tk.FLAT,
-                highlightthickness=1,
-                highlightcolor='grey',
-                highlightbackground='grey',
-            )
-            b.pack(side = tk.LEFT)
+        btn = game_frame.add_button
         
         btn("Start-'a'", self.Start)
         btn("Pause-'s'", self.Pause)
@@ -817,7 +833,7 @@ class MonkeyImages(tk.Frame,):
         self.new_loop_iter = self.new_loop_gen()
         self.normalized_time = 0
         next(self.new_loop_iter)
-        self.after(self.cb_delay_ms, self.progress_new_loop)
+        self.game_frame.after(self.cb_delay_ms, self.progress_new_loop)
     
     def progress_new_loop(self):
         if self.stopped:
@@ -835,7 +851,7 @@ class MonkeyImages(tk.Frame,):
         if not self.paused:
             next(self.new_loop_iter)
         
-        self.after(self.cb_delay_ms, self.progress_new_loop)
+        self.game_frame.after(self.cb_delay_ms, self.progress_new_loop)
     
     def new_loop_upkeep(self):
         # self.gathering_data_omni()
@@ -845,18 +861,18 @@ class MonkeyImages(tk.Frame,):
     def new_loop_gen(self):
         completed_trials = 0
         while True:
-            if self.max_trials is not None and completed_trials >= self.max_trials:
+            if self.config.max_trials is not None and completed_trials >= self.config.max_trials:
                 yield
                 continue
             yield from self.run_trial()
             completed_trials += 1
-            if self.max_trials is not None:
-                print(f"trial {completed_trials}/{self.max_trials} complete")
+            if self.config.max_trials is not None:
+                print(f"trial {completed_trials}/{self.config.max_trials} complete")
     
     def run_trial(self):
         with ExitStack() as trial_stack:
-            discrim_delay = random.uniform(*self.discrim_delay_range)
-            go_cue_delay = random.uniform(*self.go_cue_delay_range)
+            discrim_delay = random.uniform(*self.config.discrim_delay_range)
+            go_cue_delay = random.uniform(*self.config.go_cue_delay_range)
             
             # print(self.normalized_time)
             
@@ -884,7 +900,7 @@ class MonkeyImages(tk.Frame,):
             self.log_event('trial_start', tags=['game_flow'], info={
                 'discrim_delay': discrim_delay,
                 'go_cue_delay': go_cue_delay,
-                'task_type': self.task_type,
+                'task_type': self.config.task_type,
             })
             
             # if winsound is not None:
@@ -917,7 +933,7 @@ class MonkeyImages(tk.Frame,):
                             self.show_image('yPrepare')
                             prep_shown = True
                     
-                    if trial_t() > self.InterTrialTime and in_zone():
+                    if trial_t() > self.config.InterTrialTime and in_zone():
                         break
                     yield
             else:
@@ -945,7 +961,7 @@ class MonkeyImages(tk.Frame,):
                 
                 in_zone_cbs = register_in_zone_cb()
                 while True:
-                    if trial_t() > self.InterTrialTime and in_zone():
+                    if trial_t() > self.config.InterTrialTime and in_zone():
                         break
                     yield
             
@@ -968,8 +984,8 @@ class MonkeyImages(tk.Frame,):
                 gc_hand_removed_early = True
             
             # choose image
-            selected_image_key = random.choice(list(self.selectable_images))
-            selected_image = self.images[selected_image_key]
+            selected_image_key = random.choice(list(self.config.selectable_images))
+            selected_image = self.config.images[selected_image_key]
             image_i = selected_image['nidaq_event_index']
             
             # EV25 , EV27, EV29, EV31
@@ -1037,7 +1053,7 @@ class MonkeyImages(tk.Frame,):
                 # cue_time = trial_t()
                 # wait up to MaxTimeAfterSound for the joystick to be pulled
                 while not self.joystick_pulled:
-                    if trial_t() - cue_time > self.MaxTimeAfterSound:
+                    if trial_t() - cue_time > self.config.MaxTimeAfterSound:
                         fail_r('joystick not pulled within MaxTimeAfterSound')
                         return None, 0, 0
                     yield
@@ -1069,7 +1085,7 @@ class MonkeyImages(tk.Frame,):
                 
                 # wait up to MaxTimeAfterSound for the hand to exit the homezone
                 while in_zone():
-                    if trial_t() - cue_time > self.MaxTimeAfterSound:
+                    if trial_t() - cue_time > self.config.MaxTimeAfterSound:
                         fail_r('hand not removed from home zone within MaxTimeAfterSound')
                         return None, 0, 0
                     yield
@@ -1084,7 +1100,7 @@ class MonkeyImages(tk.Frame,):
                 
                 return reward_duration, 0, exit_delay
             
-            task_type = self.task_type
+            task_type = self.config.task_type
             if task_type == 'joystick_pull':
                 reward_duration, remote_pull_duration, pull_duration = yield from get_pull_info()
                 action_duration = remote_pull_duration
@@ -1119,7 +1135,7 @@ class MonkeyImages(tk.Frame,):
                 if self.nidaq:
                     self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event5,None,None)
                     self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
-                if self.EnableBlooperNoise:
+                if self.config.EnableBlooperNoise:
                     if winsound is not None:
                         winsound.PlaySound(
                             str(Path('./TaskSounds/zapsplat_multimedia_game_sound_kids_fun_cheeky_layered_mallets_negative_66204.wav')),
@@ -1131,15 +1147,15 @@ class MonkeyImages(tk.Frame,):
                         'selected_image': selected_image_key,
                         'color': 'red',
                     })
-                if self.ImageReward or self.EnableBlooperNoise:
+                if self.ImageReward or self.config.EnableBlooperNoise:
                     # 1.20 is the duration of the sound effect
                     yield from wait(1.20)
-                if self.EnableTimeOut:
+                if self.config.EnableTimeOut:
                     self.log_event('time_out_shown', tags=['game_flow'], info={
-                        'duration': self.TimeOut,
+                        'duration': self.config.TimeOut,
                     })
                     self.clear_image()
-                    yield from wait(self.TimeOut)
+                    yield from wait(self.config.TimeOut)
             else: # pull suceeded
                 if self.ImageReward:
                     self.show_image(selected_image_key, variant='white', boxed=True)
@@ -1158,8 +1174,8 @@ class MonkeyImages(tk.Frame,):
                         winsound.SND_FILENAME + winsound.SND_ASYNC + winsound.SND_NOWAIT)
                 
                 if self.ImageReward:
-                    if self.post_succesful_pull_delay is not None:
-                        yield from wait(self.post_succesful_pull_delay)
+                    if self.config.post_succesful_pull_delay is not None:
+                        yield from wait(self.config.post_succesful_pull_delay)
                     else:
                         # 1.87 is the duration of the sound effect
                         yield from wait(1.87)
@@ -1200,7 +1216,7 @@ class MonkeyImages(tk.Frame,):
             self.save_log_files(partial=True)
     
     def manual_water_dispense(self):
-        self.log_event("manual_water_dispense", tags=[], info={'duration': self.manual_reward_time})
+        self.log_event("manual_water_dispense", tags=[], info={'duration': self.config.manual_reward_time})
         def gen():
             print("water on")
             if self.nidaq:
@@ -1210,7 +1226,7 @@ class MonkeyImages(tk.Frame,):
             if self.plexon:
                 self.plexdo.set_bit(self.device_number, self.reward_nidaq_bit)
             t = time.monotonic()
-            while time.monotonic() - t < self.manual_reward_time:
+            while time.monotonic() - t < self.config.manual_reward_time:
                 yield
             print("water off")
             if self.plexon:
@@ -1223,7 +1239,7 @@ class MonkeyImages(tk.Frame,):
             except StopIteration:
                 pass
             else:
-                self.after(self.cb_delay_ms, inner)
+                self.game_frame.after(self.cb_delay_ms, inner)
         
         inner()
     
@@ -1234,7 +1250,7 @@ class MonkeyImages(tk.Frame,):
     def ChooseReward(self, duration, cue) -> Optional[float]:
         
         # if self.reward_thresholds is not None:
-        for rwd in self.reward_thresholds:
+        for rwd in self.config.reward_thresholds:
             if duration >= rwd['low'] and duration <= rwd['high']:
                 pass
             else:
@@ -1368,9 +1384,9 @@ class MonkeyImages(tk.Frame,):
         if _clear:
             self.clear_image()
         
-        img = self.images[k]['tk'][variant]
+        img = self.config.images[k]['tk'][variant]
         
-        canvas_size = self.cv1.winfo_width(), self.cv1.winfo_height()
+        canvas_size = self.game_frame.cv1.winfo_width(), self.game_frame.cv1.winfo_height()
         # w = self.images[k]['width']
         # offset = (canvas_size[0] - w) / 2
         offset = (canvas_size[0]) / 2
@@ -1382,10 +1398,10 @@ class MonkeyImages(tk.Frame,):
         if boxed:
             self.show_image('box', variant=variant, _clear=False)
         
-        self.cv1.create_image(offset, y_offset, anchor = 'c', image = img)
+        self.game_frame.cv1.create_image(offset, y_offset, anchor = 'c', image = img)
     
     def clear_image(self):
-        self.cv1.delete("all")
+        self.game_frame.cv1.delete("all")
     
     def gathering_data_omni_new(self):
         self.client.opx_wait(1000)
@@ -1408,7 +1424,7 @@ class MonkeyImages(tk.Frame,):
                 samples = [s * voltage_scaler for s in samples]
                 val = samples[0]
                 
-                if chan == self.joystick_channel:
+                if chan == self.config.joystick_channel:
                     if self.joystick_last_state is None:
                         self.joystick_last_state = val
                     
@@ -1442,9 +1458,9 @@ class MonkeyImages(tk.Frame,):
                         self.joystick_zone_exit = ts
     
     def get_log_file_paths(self) -> Tuple[Path, Path]:
-        base = self.log_file_name_base
-        csv_path = Path(self.save_path) / f"{base}.csv"
-        event_log_path = Path(self.save_path) / f"{base}_events.json"
+        base = self.config.log_file_name_base
+        csv_path = Path(self.config.save_path) / f"{base}.csv"
+        event_log_path = Path(self.config.save_path) / f"{base}_events.json"
         
         return csv_path, event_log_path
     
@@ -1461,9 +1477,9 @@ class MonkeyImages(tk.Frame,):
             path.unlink()
     
     def save_log_files(self, *, partial: bool = False):
-        base = self.log_file_name_base
+        base = self.config.log_file_name_base
         if partial:
-            partial_dir = Path(self.save_path) / "partial"
+            partial_dir = Path(self.config.save_path) / "partial"
             partial_dir.mkdir(exist_ok=True)
             gen_time = str(time.monotonic())
             csv_path = partial_dir / f"{base}_{gen_time}.csv"
@@ -1471,7 +1487,7 @@ class MonkeyImages(tk.Frame,):
             histo_path = partial_dir / f"{base}_{gen_time}_histogram.png"
         else:
             csv_path, event_log_path = self.get_log_file_paths()
-            histo_path = Path(self.save_path) / f"{self.log_file_name_base}_histogram.png"
+            histo_path = Path(self.config.save_path) / f"{self.config.log_file_name_base}_histogram.png"
         
         out = {
             'events': self.event_log,
@@ -1499,10 +1515,10 @@ class MonkeyImages(tk.Frame,):
             for i, entry in enumerate(self.trial_log):
                 is_success = entry['reward_duration'] is not None
                 reason = entry['failure_reason'] or ''
-                if self.task_type == 'homezone_exit':
+                if self.config.task_type == 'homezone_exit':
                     time_in_homezone = entry['pull_duration']
                     pull_duration = 0
-                elif self.task_type == 'joystick_pull':
+                elif self.config.task_type == 'joystick_pull':
                     time_in_homezone = 0
                     pull_duration = entry['pull_duration']
                 else:
@@ -1554,7 +1570,7 @@ class MonkeyImages(tk.Frame,):
         def get_bin_ranges():
             start = 0
             # end = math.ceil(self.MaxTimeAfterSound)
-            end = max(rwd.get('high', 0) for rwd in self.reward_thresholds)
+            end = max(rwd.get('high', 0) for rwd in self.config.reward_thresholds)
             step = (end - start) / 10
             
             ws = start # window start
