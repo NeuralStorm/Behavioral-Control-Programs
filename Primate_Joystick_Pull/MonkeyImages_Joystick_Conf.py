@@ -316,21 +316,11 @@ class InfoView:
 
 class GameConfig:
     def __init__(self, *,
-        test_config: bool,
+        config_path: str,
     ):
-        if test_config:
-            self.ConfigFilename = 'dev_config.csv'
-        else:
-            root = tk.Tk()
-            self.ConfigFilename = filedialog.askopenfilename(initialdir = "/",title = "Select file",filetypes = (("all files","*.*"), ("csv files","*.csv")))
-            root.withdraw()
-            del root
-        
-        print (self.ConfigFilename)
-        
         def load_csv():
             data = []
-            with open(self.ConfigFilename, newline='') as csvfile:
+            with open(config_path, newline='') as csvfile:
                 spamreader = csv.reader(csvfile) #, delimiter=' ', quotechar='|')
                 for row in spamreader:
                     #data = list(spamreader)
@@ -347,6 +337,7 @@ class GameConfig:
             return csvreaderdict
         
         config_dict = load_csv()
+        self.raw_config = config_dict
         # PARAMETERS META DATA
         self.study_id: str = config_dict['Study ID'][0]       # 3 letter study code
         self.session_id: str = config_dict['Session ID'][0] # Type of Session
@@ -719,7 +710,18 @@ class MonkeyImages:
         
         self.reward_nidaq_bit = 17 # DO Channel
         
-        self.config = GameConfig(test_config=test_config)
+        # self._test_config = test_config
+        if test_config:
+            self.config_path = 'dev_config.csv'
+        else:
+            prompt_root = tk.Tk()
+            self.config_path = filedialog.askopenfilename(initialdir = "/",title = "Select file",filetypes = (("all files","*.*"), ("csv files","*.csv")))
+            prompt_root.withdraw()
+            del prompt_root
+        print(self.config_path)
+        
+        self.config: GameConfig
+        self.load_config() # set self.config
         self.ensure_log_file_creatable()
         
         self.Area1_right_pres = False   # Home Area
@@ -752,6 +754,8 @@ class MonkeyImages:
         btn("Water Reward\nOn", water_rw_cb(True))
         btn("Water Reward\nOff", water_rw_cb(False))
         
+        btn("Reload Config", self.load_config)
+        
         self.root.bind('<Key>', lambda a : self.KeyPress(a))
         
         if show_info_view:
@@ -783,6 +787,10 @@ class MonkeyImages:
         if self.plexon:
             self.plexdo.clear_bit(self.device_number, self.reward_nidaq_bit)
         self.save_log_files()
+    
+    def load_config(self):
+        self.config = GameConfig(config_path=self.config_path)
+        self.log_event('config_loaded', tags=[], info={'config': self.config.raw_config})
     
     def log_event(self, name: str, *, tags: List[str], info=None):
         if info is None:
