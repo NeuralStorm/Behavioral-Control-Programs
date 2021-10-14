@@ -26,7 +26,8 @@ if platform == 'darwin':
     pix_per_cm = 89.
 elif platform == 'win32':
     fixed_window_size = (1800, 1000)
-    pix_per_cm = 85.
+    # 12.7/3 is a correction factor based on tina's measurments on the lab computer
+    pix_per_cm = 85. * (12.7/3)
     import winsound
 elif platform == 'linux':
     fixed_window_size = (1800, 1000)
@@ -583,6 +584,19 @@ class COGame(Widget):
             Window.close()
 
     def update(self, ts):
+        """
+            set up in co.kv with
+            `Clock.schedule_interval(game.update, 1.0 / 60.0)`
+            each key in self.FSM (=state) (set in self.init) is a state the game to be in
+                each value is a dict mapping (describing a condition and resulting behaviour)
+                    a function (=fn) to check if the condition is currently met
+                        _start_{state} is called when a state is initially activated
+                        _end_{state} is called when switching out of state (unless the new state is "stop")
+                        _while_{state} is called repeatedly while a state is active
+                    mapped to
+                    a new state that is triggered when the condition is met
+                        if the new state is "stop" the program is stopped
+            """
         self.state_length = time.time() - self.state_start
         self.rew_cnt += 1
         self.small_rew_cnt += 1
@@ -870,7 +884,7 @@ class COGame(Widget):
                     if self.reward_generator[self.trial_counter] > 0:
                         if self.plexon:
                             self.plex_do.set_bit(self.plex_do_device_number, self.reward_nidaq_bit)
-                            time.sleep(.25 + self.reward_delay_time)
+                            time.sleep(self.reward_for_targtouch[1])
                             self.plex_do.clear_bit(self.plex_do_device_number, self.reward_nidaq_bit)
                         
                         self.reward_port.open()
@@ -894,6 +908,11 @@ class COGame(Widget):
                 ### To trigger reward make sure reward is > 0:
                 if np.logical_or(np.logical_and(self.reward_for_anytouch[0], self.reward_for_anytouch[1] > 0), 
                     np.logical_and(self.reward_for_center[0], self.reward_for_center[1] > 0)):
+
+                    if self.plexon:
+                        self.plex_do.set_bit(self.plex_do_device_number, self.reward_nidaq_bit)
+                        time.sleep(self.reward_for_anytouch[1])
+                        self.plex_do.clear_bit(self.plex_do_device_number, self.reward_nidaq_bit)
 
                     self.reward_port.open()
                     if self.reward_for_anytouch[0]:
