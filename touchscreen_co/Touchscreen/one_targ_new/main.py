@@ -26,8 +26,8 @@ if platform == 'darwin':
     pix_per_cm = 89.
 elif platform == 'win32':
     fixed_window_size = (1800, 1000)
-    # 12.7/3 is a correction factor based on tina's measurments on the lab computer
-    pix_per_cm = 85. * (12.7/3)
+    # 3/12.7 is a correction factor based on tina's measurments on the lab computer
+    pix_per_cm = 85. * (3/12.7)
     import winsound
 elif platform == 'linux':
     fixed_window_size = (1800, 1000)
