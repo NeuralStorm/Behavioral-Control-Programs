@@ -3,6 +3,7 @@
 
 <Manager>:
     id: screen_manager
+    _splash: splash
 
     Screen:
         name: 'home'
@@ -128,46 +129,10 @@
                     fontsize: 50
 
                 Label:
-                    text: ''
-                    fontsize: 50
-
-                Label:
                     text: 'Animal Names:'
                     color: 1, 1, 0, 1
                     fontsize: 50
-                    
-                Label: 
-                    text: 'Donut'
-                    fontsize: 28
-                    halign: 'center'                        
-                
-                CheckBox: 
-                    group: 'check'
-                    id: chk_h
-                    
-                Label: 
-                    text: 'Sandpiper'
-                    fontsize: 28
-                    halign: 'center'                        
-                
-                CheckBox: 
-                    group: 'check'
-                    id: chk_sand
-                
-                Label: 
-                    text: 'Sabotage'
-                    fontsize: 28
-                    halign: 'center' 
-                                         
-                
-                CheckBox: 
-                    group: 'check'
-                    id: chk_sabo
-                    active: True  
                    
-                Label:
-                    text: ''
-                    fontsize: 50
                 Label:
                     text: ''
                     fontsize: 50
@@ -825,6 +790,59 @@
                     text: ''
                     fontsize: 50
 
+            BoxLayout:
+                id: peripheral_target_shape
+                orientation: 'horizontal'
+                
+                Label: 
+                    text: 'Peripheral Target Shape: '
+                    color: 1, 1, 0, 1
+                
+                Label:
+                    text: 'circle'
+                CheckBox:
+                    id: p_targ_shape_circle
+                    group: 'p_targ_shape'
+                    active: True
+                
+                Label:
+                    text: 'square'
+                CheckBox:
+                    id: p_targ_shape_square
+                    group: 'p_targ_shape'
+                
+                Label:
+                    text: 'triangle'
+                CheckBox:
+                    id: p_targ_shape_triangle
+                    group: 'p_targ_shape'
+
+            BoxLayout:
+                id: peripheral_target_color
+                orientation: 'horizontal'
+                
+                Label: 
+                    text: 'Peripheral Target Color: '
+                    color: 1, 1, 0, 1
+                
+                Label:
+                    text: 'yellow'
+                CheckBox:
+                    id: p_targ_color_1_1_0_1
+                    group: 'p_targ_color'
+                    active: True
+                
+                Label:
+                    text: 'red'
+                CheckBox:
+                    id: p_targ_color_1_0_0_1
+                    group: 'p_targ_color'
+                
+                Label:
+                    text: 'green'
+                CheckBox:
+                    id: p_targ_color_0_1_0_1
+                    group: 'p_targ_color'
 
             Button:
                 text: 'Play Centerout Game'
@@ -834,41 +852,8 @@
                 text_size: self.size
                 on_release: 
                     root.current = 'splash_start'
-                    splash.init(
-                    dict(
-                    donu=chk_h.active, sand=chk_sand.active,sabo=chk_sabo.active
-                    ),
-                    dict(
-                    rew_manual=False, rew_anytouch=False,
-                    rew_center_pls_targ=rew_center_pls_targ_chk.active,
-                    rew_targ=rew_targ_chk.active, snd_only=False,
-                    small_rew=[
-                    small_rew_zero_sec.active, small_rew_pt1_sec.active,
-                    small_rew_pt3_sec.active, small_rew_pt5_sec.active
-                    ],
-                    big_rew=[
-                    big_rew_zero_sec.active, big_rew_pt3_sec.active,
-                    big_rew_pt5_sec.active, big_rew_pt7_sec.active
-                    ]
-                    ), 
-                    dict(
-                    targ_rad=[targ_rad_5.active, targ_rad_75.active, targ_rad_82.active, targ_rad_91.active, targ_rad_10.active, targ_rad_15.active, targ_rad_22.active, targ_rad_30.active]
-                    ),
-                    dict(test=[False, True, False]),
-                    dict(
-                    chold=[c_zero_sec.active, c_hund_sec.active, c_twohund_sec.active, c_threehund_sec.active, c_fourhund_sec.active, c_half_sec.active, c_60.active, c_big_rand.active],
-                    hold=[
-                    zero_sec.active, hund_sec.active, twohund_sec.active,
-                    threehund_sec.active, fourhund_sec.active, half_sec.active, t_60.active, big_rand.active
-                    ]
-                    ),
-                    dict(get_targets_rand=False, get_4targets=False, get_targets_co=True),
-                    dict(autoquit=[ten_trials.active, twenty_five_trials.active, fifty_trials.active, hundred_trials.active, no_trials.active]),
-                    dict(rew_var=[rew_all.active, rew_50.active, rew_30.active]),
-                    dict(tt=[tt_15_sec.active, tt_30_sec.active, tt_45_sec.active, tt_60_sec.active]),
-                    dict(nudge_x=[nudge_x_neg6.active, nudge_x_neg4.active, nudge_x_neg2.active, nudge_x_zero.active, nudge_x_pos2.active, nudge_x_pos4.active, nudge_x_pos6.active]),
-                    dict(nudge_y=[nudge_y_neg3.active, nudge_y_neg2.active, nudge_y_neg1.active, nudge_y_zero.active, nudge_y_pos1.active, nudge_y_pos2.active, nudge_y_pos3.active])
-                    )
+                    
+                    screen_manager.store_co_game_params()
 
             Label:
                 text: ''
@@ -933,9 +918,10 @@
                     background_color: (.2, .2, .2, 1.0)
 
                     on_release:
-                        root.current = 'game_screen'
-                        game.init(*splash.args)
-                        Clock.schedule_interval(game.update, 1.0 / 60.0)
+                        screen_manager.start_co_game()
+                        #root.current = 'game_screen'
+                        # game.init(*splash.args)
+                        # Clock.schedule_interval(game.update, 1.0 / 60.0)
                 
                 Label:
                     text: ''
@@ -1070,9 +1056,18 @@
 
 
 <Target>:
+    rect_color: (0, 0, 0, 0)
+    
     canvas:
         Color:
             rgba:self.color
         Ellipse: 
             pos:self.pos
+            on_touch_down: print('a')
             size:self.size
+        Color:
+            rgba: self.rect_color
+        Rectangle:
+            group: 'a'
+            pos: self.pos
+            size: self.size

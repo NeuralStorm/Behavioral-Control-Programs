@@ -5,10 +5,14 @@ from kivy.core.text import Label as CoreLabel
 from kivy.uix.widget import Widget
 from kivy.properties import NumericProperty, ReferenceListProperty, ObjectProperty, ListProperty, StringProperty
 from kivy.uix.screenmanager import ScreenManager, Screen
+from kivy.uix.label import Label
+from kivy.uix.checkbox import CheckBox
 from kivy.vector import Vector
 from kivy.clock import Clock
 from random import randint
 from kivy.config import Config
+from kivy.graphics import Color, Rectangle, Triangle, Ellipse
+from kivy.graphics.instructions import Callback
 try:
     import serial
 except ImportError:
@@ -73,10 +77,13 @@ class COGame(Widget):
         exit_pos = np.array([14, 8])
         indicator_pos = np.array([16, 10])
     elif platform == 'win32':
-        exit_pos = np.array([7, 4])
+        # exit_pos = np.array([7, 4])
+        # move off screen
+        exit_pos = np.array([100, 100])
         indicator_pos = np.array([8, 5])
     elif platform == 'linux':
-        exit_pos = np.array([14, 8])
+        # exit_pos = np.array([14, 8])
+        exit_pos = np.array([100, 100])
         indicator_pos = np.array([16, 10])
     exit_rad = 1.
     exit_hold = 2 #seconds
@@ -154,9 +161,20 @@ class COGame(Widget):
             
     def init(self, animal_names_dict=None, rew_in=None, task_in=None,
         test=None, hold=None, targ_structure=None,
-        autoquit=None, rew_var=None, targ_timeout = None, nudge_x=None, nudge_y=None):
+        autoquit=None, rew_var=None, targ_timeout = None, nudge_x=None, nudge_y=None,
+        peripheral_target=None,
+    ):
 
         self.plexon = 'test' not in sys.argv
+
+        assert peripheral_target is not None
+        self.peripheral_target_param = peripheral_target
+        if peripheral_target is not None:
+            p_targ = self.periph_target
+            # hide the initial shown circle
+            p_targ.color = (0,0,0,0)
+            self._hide_periph()
+            # shape, color = peripheral_target
 
         self.rew_cnt = 0
         self.small_rew_cnt = 0
@@ -522,6 +540,33 @@ class COGame(Widget):
             sys.exit(1)
         self.plex_do.clear_all_bits(device_number)
     
+    def _set_periph_color(self, color):
+        shape, _ = self.peripheral_target_param
+        p_targ = self.periph_target
+        if shape == 'circle':
+            p_targ.color = color
+        elif shape == 'square':
+            p_targ.rect_color = color
+        else:
+            raise ValueError()
+    
+    def _show_periph(self):
+        # self.periph_target.color = (1., 1., 0., 1.)
+        _, color = self.peripheral_target_param
+        self._set_periph_color(color)
+    
+    def _green_periph(self):
+        # self.periph_target.color = (0., 1., 0., 1.)
+        self._set_periph_color((0., 1., 0., 1.))
+    
+    def _red_periph(self):
+        # self.periph_target.color = (0., 1., 0., 1.)
+        self._set_periph_color((0., 1., 0., 1.))
+    
+    def _hide_periph(self):
+        # self.periph_target.color = (0., 0., 0., 0.)
+        self._set_periph_color((0., 0., 0., 0.))
+    
     def gen_rewards(self, perc_trials_rew, perc_trials_2x, reward_for_grasp):
         mini_block = int(2*(np.round(1./self.percent_of_trials_rewarded)))
         rew = []
@@ -585,8 +630,6 @@ class COGame(Widget):
 
     def update(self, ts):
         """
-            set up in co.kv with
-            `Clock.schedule_interval(game.update, 1.0 / 60.0)`
             each key in self.FSM (=state) (set in self.init) is a state the game to be in
                 each value is a dict mapping (describing a condition and resulting behaviour)
                     a function (=fn) to check if the condition is currently met
@@ -737,7 +780,8 @@ class COGame(Widget):
             self.tht = ((float(tht_max) - float(tht_min)) * np.random.random()) + float(tht_min)            
         
         self.center_target.color = (0., 0., 0., 0.)
-        self.periph_target.color = (0., 0., 0., 0.)
+        # self.periph_target.color = (0., 0., 0., 0.)
+        self._hide_periph()
         self.indicator_targ.color = (0., 0., 0., 0.)
         
     def end_ITI(self, **kwargs):
@@ -753,7 +797,8 @@ class COGame(Widget):
         self.first_target_attempt = True
 
         if np.logical_and(self.use_cap_sensor, not self.rhtouch_sensor):
-            self.periph_target.color = (1., 0., 0., 1.)
+            # self.periph_target.color = (1., 0., 0., 1.)
+            self._red_periph()
             self.center_target.color = (1., 0., 0., 1.)
             Window.clearcolor = (1., 0., 0., 1.)
 
@@ -785,7 +830,8 @@ class COGame(Widget):
         self.center_target.color = (1., 1., 0., 1.)
         self.exit_target1.color = (.15, .15, .15, 1)
         self.exit_target2.color = (.15, .15, .15, 1)
-        self.periph_target.color = (0., 0., 0., 0.) ### Make peripheral target alpha = 0 so doesn't obscure 
+        # self.periph_target.color = (0., 0., 0., 0.) ### Make peripheral target alpha = 0 so doesn't obscure 
+        self._hide_periph()
         self.indicator_targ.color = (.25, .25, .25, 1.)
 
     def _start_center_hold(self, **kwargs):
@@ -793,33 +839,39 @@ class COGame(Widget):
         self.indicator_targ.color = (0.75, .75, .75, 1.)
 
     def _start_targ_hold(self, **kwargs):
-        self.periph_target.color = (0., 1., 0., 1.)
+        # self.periph_target.color = (0., 1., 0., 1.)
+        self._green_periph()
         self.indicator_targ.color = (0.75, .75, .75, 1.)
 
     def _end_center_hold(self, **kwargs):
         self.center_target.color = (0., 0., 0., 1.)
 
     def _end_target_hold(self, **kwargs):
-        self.periph_target.color = (0., 0., 0., 0.)
+        self._hide_periph()
+        # self.periph_target.color = (0., 0., 0., 0.)
 
     def _start_touch_error(self, **kwargs):
         self.center_target.color = (0., 0., 0., 1.)
-        self.periph_target.color = (0., 0., 0., 1.)
+        # self.periph_target.color = (0., 0., 0., 1.)
+        self._hide_periph()
         self.repeat = True
 
     def _start_timeout_error(self, **kwargs):
         self.center_target.color = (0., 0., 0., 1.)
-        self.periph_target.color = (0., 0., 0., 1.)
+        # self.periph_target.color = (0., 0., 0., 1.)
+        self._hide_periph()
         #self.repeat = True
 
     def _start_hold_error(self, **kwargs):
         self.center_target.color = (0., 0., 0., 1.)
-        self.periph_target.color = (0., 0., 0., 1.)
+        # self.periph_target.color = (0., 0., 0., 1.)
+        self._hide_periph()
         self.repeat = True
 
     def _start_drag_error(self, **kwargs):
         self.center_target.color = (0., 0., 0., 1.)
-        self.periph_target.color = (0., 0., 0., 1.)
+        # self.periph_target.color = (0., 0., 0., 1.)
+        self._hide_periph()
         self.repeat = True
 
     def _start_target(self, **kwargs):
@@ -833,7 +885,8 @@ class COGame(Widget):
             print(self.target_index)
 
         self.periph_target.move(self.periph_target_position)
-        self.periph_target.color = (1., 1., 0., 1.)
+        # self.periph_target.color = (1., 1., 0., 1.)
+        self._show_periph()
         self.repeat = False
         self.exit_target1.color = (.15, .15, .15, 1)
         self.exit_target2.color = (.15, .15, .15, 1)
@@ -845,7 +898,8 @@ class COGame(Widget):
     def _start_reward(self, **kwargs):
         self.trial_counter += 1
         Window.clearcolor = (1., 1., 1., 1.)
-        self.periph_target.color = (1., 1., 1., 1.)
+        # self.periph_target.color = (1., 1., 1., 1.)
+        self._hide_periph()
         self.exit_target1.color = (1., 1., 1., 1.)
         self.exit_target2.color = (1., 1., 1., 1.)
         self.rew_cnt = 0
@@ -1124,7 +1178,143 @@ class Target(Widget):
         self.center = pos_pix_int
 
 class Manager(ScreenManager):
-    pass
+    _splash = ObjectProperty(None)
+    def __init__(self):
+        super(Manager, self).__init__()
+        print(self._splash)
+        self.params = None
+        
+        
+        monkey_list = self.ids['starting2']
+        self.monkey_checkboxes = {}
+        
+        def add_monkey(name: str, key, *, active=False):
+            label = Label(text=name, fontsize=28, halign='center')
+            check = CheckBox(group='check')
+            if active:
+                check.active = True
+            monkey_list.add_widget(label)
+            monkey_list.add_widget(check)
+            self.monkey_checkboxes[key] = check
+        
+        monkey_names = {
+            'Donut': 'donu', 'Sandpiper': 'sand', 'Sabotage': 'sabo',
+            'test': 'test', 'Frappe': 'Frappe', 'Walleye': 'Walleye',
+            'Steve': 'Steve', 'Erskine': 'Erskine',
+        }
+        first = True
+        for name, key in monkey_names.items():
+            add_monkey(name, key, active=first)
+            first = False
+    
+    def store_co_game_params(self):
+        # print(self._splash)
+        # print(self.ids)
+        def g(k):
+            """get an object by id"""
+            return self.ids[k]
+        
+        def get_prefixed_value(prefix):
+            """get an id postfix by finding the active checkbox with id prefix `prefix`"""
+            value = None
+            for wid, widget in self.ids.items():
+                if not wid.startswith(prefix):
+                    continue
+                if widget.active:
+                    value = wid.removeprefix(prefix)
+            assert value is not None
+            return value
+        
+        params = {}
+        params['animal_names_dict'] = {
+            k: check.active for k, check in self.monkey_checkboxes.items()
+        }
+        
+        small_reward_durations = ['zero', 'pt1', 'pt3', 'pt5']
+        big_reward_durations = ['zero', 'pt3', 'pt5', 'pt7']
+        params['rew_in'] = {
+            'rew_manual': False, 'rew_anytouch': False,
+            'rew_center_pls_targ': g('rew_center_pls_targ_chk').active,
+            'rew_targ': g('rew_targ_chk').active, 'snd_only': False,
+            'small_rew': [
+                g(f"small_rew_{x}_sec").active for x in small_reward_durations
+            ],
+            'big_rew': [
+                g(f"big_rew_{x}_sec").active for x in big_reward_durations
+            ],
+        }
+        
+        target_radii = [5, 75, 82, 91, 10, 15, 22, 30]
+        params['task_in'] = {
+            'targ_rad':[g(f"targ_rad_{x}").active for x in target_radii],
+        }
+        
+        params['test'] = {'test': [False, True, False]}
+        
+        holds = [
+            'zero_sec',
+            'hund_sec', 'twohund_sec', 'threehund_sec' ,'fourhund_sec',
+            'half_sec', '60', 'big_rand',
+        ]
+        params['hold'] = {
+            'chold': [g(f"c_{x}").active for x in holds],
+            'hold': [g('t_60' if x is '60' else x).active for x in holds],
+        }
+        
+        params['targ_structure'] = {
+            'get_targets_rand': False,
+            'get_4targets': False,
+            'get_targets_co': True,
+        }
+        
+        auto_quits = [
+            'ten_trials', 'twenty_five_trials', 'fifty_trials',
+            'hundred_trials', 'no_trials',
+        ]
+        params['autoquit'] = {
+            'autoquit': [g(x).active for x in auto_quits],
+        }
+        
+        rew_vars = ['rew_all', 'rew_50', 'rew_30']
+        params['rew_var'] = {
+            'rew_var': [g(x).active for x in rew_vars],
+        }
+        
+        targ_timeouts = ['tt_15_sec', 'tt_30_sec', 'tt_45_sec', 'tt_60_sec']
+        params['targ_timeout'] = {
+            'tt': [g(x).active for x in targ_timeouts],
+        }
+        
+        x_nudges = ['neg6', 'neg4', 'neg2', 'zero', 'pos2', 'pos4', 'pos6']
+        params['nudge_x'] = {
+            'nudge_x': [g(f"nudge_x_{x}").active for x in x_nudges],
+        }
+        
+        y_nudges = ['neg3', 'neg2', 'neg1', 'zero', 'pos1', 'pos2', 'pos3']
+        params['nudge_y'] = {
+            'nudge_y': [g(f"nudge_y_{x}").active for x in y_nudges],
+        }
+        
+        pt_shape = get_prefixed_value('p_targ_shape_')
+        pt_color = get_prefixed_value('p_targ_color_')
+        pt_color = pt_color.split('_')
+        
+        params['peripheral_target'] = (pt_shape, pt_color)
+        
+        from pprint import pp
+        pp(tuple(params.values()))
+        # pp(self._splash.args)
+        # print('same?', tuple(params.values()) == self._splash.args)
+        # assert tuple(params.values()) == self._splash.args
+        
+        self.params = params
+    
+    def start_co_game(self):
+        # print(self.current)
+        self.current = 'game_screen'
+        game = self.ids['game']
+        game.init(**self.params)
+        Clock.schedule_interval(game.update, 1.0 / 60.0)
 
 class COApp(App):
     def build(self, **kwargs):
