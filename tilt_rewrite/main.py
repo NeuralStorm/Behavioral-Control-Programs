@@ -713,6 +713,9 @@ def main():
     
     if record_stop_event is not None:
         print("waiting for recording to stop")
+        # wait before stopping recording to make sure there is enough time
+        # after a tilt to cover an analysis window
+        time.sleep(3)
         record_stop_event.stop_recording()
     
     check_recording()
