@@ -8,7 +8,7 @@ class MotorControl:
         else:
             import nidaqmx
             task = nidaqmx.Task()
-            task.do_channels.add_do_chan(f"/Dev4/port{port}/line0:7")
+            task.do_channels.add_do_chan(f"/Dev6/port{port}/line0:7")
             
             task.start()
             
