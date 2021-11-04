@@ -1057,6 +1057,8 @@
 
 <Target>:
     rect_color: (0, 0, 0, 0)
+    triangle_color: (0, 1, 1, 0)
+    triangle_points: [500, 500, 510, 510, 490, 510]
     
     canvas:
         Color:
@@ -1071,3 +1073,7 @@
             group: 'a'
             pos: self.pos
             size: self.size
+        Color:
+            rgba: self.triangle_color
+        Triangle:
+            points: self.triangle_points

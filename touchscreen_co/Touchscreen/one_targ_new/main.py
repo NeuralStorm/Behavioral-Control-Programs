@@ -36,6 +36,9 @@ elif platform == 'win32':
 elif platform == 'linux':
     fixed_window_size = (1800, 1000)
     pix_per_cm = 85.
+    if 'test' in sys.argv:
+        fixed_window_size = (500, 500)
+        pix_per_cm = 30.
 
 Config.set('graphics', 'width', str(fixed_window_size[0]))
 Config.set('graphics', 'height', str(fixed_window_size[1]))
@@ -359,6 +362,8 @@ class COGame(Widget):
         else:
             self.center_target_position[0] = self.center_target_position[0] + self.nudge_x
             self.center_target_position[1] = self.center_target_position[1] + self.nudge_y
+        if 'test' in sys.argv:
+            self.center_target_position = np.array([0., 0.])
         self.center_target.move(self.center_target_position)
         self.periph_target.set_size(2*self.periph_target_rad)
 
@@ -547,6 +552,8 @@ class COGame(Widget):
             p_targ.color = color
         elif shape == 'square':
             p_targ.rect_color = color
+        elif shape == 'triangle':
+            p_targ.triangle_color = color
         else:
             raise ValueError()
     
@@ -561,7 +568,7 @@ class COGame(Widget):
     
     def _red_periph(self):
         # self.periph_target.color = (0., 1., 0., 1.)
-        self._set_periph_color((0., 1., 0., 1.))
+        self._set_periph_color((1, 0, 0, 1))
     
     def _hide_periph(self):
         # self.periph_target.color = (0., 0., 0., 0.)
@@ -1042,11 +1049,12 @@ class COGame(Widget):
         return not stay_in
 
     def touch_target(self, **kwargs):
-        if self.drag_ok:
-            return self.check_if_cursors_in_targ(self.periph_target_position, self.periph_target_rad)
-        else:
-            return np.logical_and(self.check_if_cursors_in_targ(self.periph_target_position, self.periph_target_rad),
-                self.check_if_started_in_targ(self.periph_target_position, self.periph_target_rad))
+        return self.periph_target_touched()
+        # if self.drag_ok:
+        #     return self.check_if_cursors_in_targ(self.periph_target_position, self.periph_target_rad)
+        # else:
+        #     return np.logical_and(self.check_if_cursors_in_targ(self.periph_target_position, self.periph_target_rad),
+        #         self.check_if_started_in_targ(self.periph_target_position, self.periph_target_rad))
 
     def target_timeout(self, **kwargs):
         #return kwargs['ts'] > self.target_timeout_time
@@ -1058,12 +1066,14 @@ class COGame(Widget):
         return self.tht <= kwargs['ts']
 
     def early_leave_target_hold(self, **kwargs):
-        return not self.check_if_cursors_in_targ(self.periph_target_position, self.periph_target_rad)
+        # return not self.check_if_cursors_in_targ(self.periph_target_position, self.periph_target_rad)
+        return not self.periph_target_touched()
 
     def targ_drag_out(self, **kwargs):
         touch = self.touch
         self.touch = True
-        stay_in = self.check_if_cursors_in_targ(self.periph_target_position, self.periph_target_rad)
+        # stay_in = self.check_if_cursors_in_targ(self.periph_target_position, self.periph_target_rad)
+        stay_in = self.periph_target_touched()
         self.touch = touch
         return not stay_in
 
@@ -1096,7 +1106,10 @@ class COGame(Widget):
         else:
             offset = np.array([0., 0.])
             nudge_targ = np.array([0, 0, 1., 0])
-    
+        
+        if 'test' in sys.argv:
+            target_distance = 6
+        
         x = np.cos(angle)*target_distance
         y = np.sin(angle)*target_distance
         tmp = np.hstack((x[:, np.newaxis], y[:, np.newaxis]))
@@ -1141,7 +1154,9 @@ class COGame(Widget):
         if self.touch:
             for id_ in self.cursor_ids:
                 # If in target: 
+                # this probably finds euclidian distance and checks if it's less than targ_rad
                 if np.linalg.norm(np.array(self.cursor[id_]) - targ_center) < targ_rad:
+                    # this probably does the same thing as the identical line above it
                     if np.linalg.norm(np.array(self.cursor_start[id_]) - targ_center) < targ_rad:
                         startedInTarg = True
         return startedInTarg
@@ -1150,12 +1165,45 @@ class COGame(Widget):
         if self.touch:
             inTarg = False
             for id_ in self.cursor_ids:
+                # this probably finds euclidian distance and checks if it's less than targ_rad
                 if np.linalg.norm(np.array(self.cursor[id_]) - targ_center) < targ_rad:
                     inTarg = True
 
             return inTarg
         else:
             return False
+    
+    def periph_target_touched(self) -> bool:
+        """returns true if a touch is currently within the peripheral target"""
+        shape, _ = self.peripheral_target_param
+        for id_ in self.cursor_ids:
+            c_x, c_y = self.cursor[id_]
+            t_x, t_y = self.periph_target_position
+            hs = self.periph_target_rad # half size
+            if shape == 'circle':
+                d = ((t_x - c_x)**2 + (t_y - c_y)**2)**0.5
+                return d <= hs
+            elif shape == 'square':
+                return abs(c_x - t_x) <= hs and abs(c_y - t_y) <= hs
+            elif shape == 'triangle':
+                # if not in bounding rectangle return false
+                if not (abs(c_x - t_x) <= hs and abs(c_y - t_y) <= hs):
+                    return False
+                
+                # distance (y) from top of triangle
+                from_top = t_y - c_y + hs
+                # percent of width that is filled at y
+                perc = from_top / (hs*2)
+                # distance (x) touch can be from center while still being in triangle at y
+                ok_dx = perc * hs
+                if abs(t_x - c_x) > ok_dx:
+                    return False
+                
+                return True
+            else:
+                raise ValueError()
+        
+        return False
 
 class Splash(Widget):
     def init(self, *args):
@@ -1167,6 +1215,7 @@ class Splash(Widget):
 class Target(Widget):
     
     color = ListProperty([0., 0., 0., 1.])
+    triangle_points = ListProperty()
 
     def set_size(self, size):
         size_pix = [cm2pix(size), cm2pix(size)]
@@ -1176,6 +1225,15 @@ class Target(Widget):
         pos_pix = cm2pix(pos).astype(int)
         pos_pix_int = tuple((int(pos_pix[0]), int(pos_pix[1])))
         self.center = pos_pix_int
+        # print(pos, self.center)
+        x, y = self.center
+        hs = self.size[0] / 2 # half of size
+        self.triangle_points = [
+            x, y + hs,
+            x - hs, y - hs,
+            x + hs, y - hs,
+        ]
+        # self.center = 0, 0
 
 class Manager(ScreenManager):
     _splash = ObjectProperty(None)
@@ -1258,7 +1316,7 @@ class Manager(ScreenManager):
         ]
         params['hold'] = {
             'chold': [g(f"c_{x}").active for x in holds],
-            'hold': [g('t_60' if x is '60' else x).active for x in holds],
+            'hold': [g('t_60' if x == '60' else x).active for x in holds],
         }
         
         params['targ_structure'] = {
