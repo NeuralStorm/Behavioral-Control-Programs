@@ -14,19 +14,32 @@ class MotorControl:
             
             self.task = task
         
-        # variable name / number / sham number
+        """
+        tilt type is signaled using the first 3 bits of the array for each tilt type
+        the first 3 bits are connected to inputs 3, 4, 5 on the motor controller
+        e.g. the array [1,1,0,1,0,0,0,0] would have inputs 3 and 4 high and input 5 low
+        
+        the fourth bit is connected to input 6 (speculative)
+        
+        a tilt is started by setting bits 3,4,5 to one of a set of specific sequences defined
+        in the SI programmer script
+        
+        a tilt is stopped by bringing input 6 low (speculative)
+        """
+        
+        # variable name / number / sham number / label in SI5 file
         self.tilt_types = {
             'stop': [0,0,0,0,0,0,0,0],
-            # tilt1 / 1 / 9
+            # tilt1 / 1 / 9 / tilt6
             # Slow Counter Clockwise
             'a': [1,0,0,1,0,0,0,0],
-            # tilt3 / 2 / 11
+            # tilt3 / 2 / 11 / tilt4
             # Fast Counter Clockwise
             'b': [1,1,0,1,0,0,0,0],
-            # tilt4 / 3 / 12
+            # tilt4 / 3 / 12 / tilt3
             # Slow Clockwise
             'c': [0,0,1,1,0,0,0,0],
-            # tilt6 / 4 / 14
+            # tilt6 / 4 / 14 / tilt1
             # Fast Clockwise
             'd': [0,1,1,1,0,0,0,0],
             'reward': [0,0,1,1,0,0,0,0],
