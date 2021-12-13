@@ -630,6 +630,9 @@ def main():
             live_view_seconds=args.live_secs,
             output_meta=record_output_extra,
         )
+        # wait after starting recording to make sure there is enough time
+        # before a tilt to cover an analysis window
+        time.sleep(4)
     else:
         _recording_check_event['_'] = False
         record_stop_event = None
