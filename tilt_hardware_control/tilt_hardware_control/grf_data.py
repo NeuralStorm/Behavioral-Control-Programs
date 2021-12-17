@@ -54,110 +54,110 @@ GRAPHS: Dict[str, Dict[str, Any]] = {
 # cal indicates column name for calibration
 HEADERS: List[Dict[str, Any]] = [
     { # rhl_fx
-        'csv': "Dev6/ai18",
-        'cal': 'rhl_fx',
+        'csv': "sensor1_s1",
+        'cal': 'rhl_s1',
         'graph': 'force_x',
         'color': (255, 0, 0),
     },
     { # rhl_fy
-        'csv': "Dev6/ai19",
-        'cal': 'rhl_fy',
+        'csv': "sensor1_s2",
+        'cal': 'rhl_s2',
         'graph': 'force_y',
         'color': (255, 0, 0),
     },
     { # rhl_fz
-        'csv': "Dev6/ai20",
-        'cal': 'rhl_fz',
+        'csv': "sensor1_s3",
+        'cal': 'rhl_s3',
         'graph': 'force_z',
         'color': (255, 0, 0),
     },
     { # rhl_tx
-        'csv': "Dev6/ai21",
-        'cal': 'rhl_tx',
+        'csv': "sensor1_s4",
+        'cal': 'rhl_s4',
         'graph': 'torque_x',
         'color': (255, 0, 0),
     },
     { # rhl_ty
-        'csv': "Dev6/ai22",
-        'cal': 'rhl_ty',
+        'csv': "sensor1_s5",
+        'cal': 'rhl_s5',
         'graph': 'torque_y',
         'color': (255, 0, 0),
     },
     { # rhl_tz
-        'csv': "Dev6/ai23",
-        'cal': 'rhl_tz',
+        'csv': "sensor1_s6",
+        'cal': 'rhl_s6',
         'graph': 'torque_z',
         'color': (255, 0, 0),
     },
     { # lhl_fx
-        'csv': "Dev6/ai32",
-        'cal': 'lhl_fx',
+        'csv': "sensor2_s1",
+        'cal': 'lhl_s1',
         'graph': 'force_x',
         'color': (0, 255, 0),
     },
     { # lhl_fy
-        'csv': "Dev6/ai33",
-        'cal': 'lhl_fy',
+        'csv': "sensor2_s2",
+        'cal': 'lhl_s2',
         'graph': 'force_y',
         'color': (0, 255, 0),
     },
     { # lhl_fz
-        'csv': "Dev6/ai34",
-        'cal': 'lhl_fz',
+        'csv': "sensor2_s3",
+        'cal': 'lhl_s3',
         'graph': 'force_z',
         'color': (0, 255, 0),
     },
     { # lhl_tx
-        'csv': "Dev6/ai35",
-        'cal': 'lhl_tx',
+        'csv': "sensor2_s4",
+        'cal': 'lhl_s4',
         'graph': 'torque_x',
         'color': (0, 255, 0),
     },
     { # lhl_ty
-        'csv': "Dev6/ai36",
-        'cal': 'lhl_ty',
+        'csv': "sensor2_s5",
+        'cal': 'lhl_s5',
         'graph': 'torque_y',
         'color': (0, 255, 0),
     },
     { #lhl_tz
-        'csv': "Dev6/ai37",
-        'cal': 'lhl_tz',
+        'csv': "sensor2_s6",
+        'cal': 'lhl_s6',
         'graph': 'torque_z',
         'color': (0, 255, 0),
     },
     { # fl_fx
-        'csv': "Dev6/ai38",
-        'cal': 'fl_fx',
+        'csv': "sensor3_s1",
+        'cal': 'fl_s1',
         'graph': 'force_x',
         'color': (0, 0, 255),
     },
     { # fl_fy
-        'csv': "Dev6/ai39",
-        'cal': 'fl_fy',
+        'csv': "sensor3_s2",
+        'cal': 'fl_s2',
         'graph': 'force_y',
         'color': (0, 0, 255),
     },
     { # fl_fz
-        'csv': "Dev6/ai48",
-        'cal': 'fl_fz',
+        'csv': "sensor3_s3",
+        'cal': 'fl_s3',
         'graph': 'force_z',
         'color': (0, 0, 255),
     },
     { # fl_tx
-        'csv': "Dev6/ai49",
-        'cal': 'fl_tx',
+        'csv': "sensor3_s4",
+        'cal': 'fl_s4',
         'graph': 'torque_x',
         'color': (0, 0, 255),
     },
     { # fl_ty
-        'csv': "Dev6/ai50",
-        'cal': 'fl_ty',
+        'csv': "sensor3_s5",
+        'cal': 'fl_s5',
         'graph': 'torque_y',
         'color': (0, 0, 255),
     },
     { # fl_tz
-        'csv': "Dev6/ai51",
-        'cal': 'fl_tz',
+        'csv': "sensor3_s6",
+        'cal': 'fl_s6',
         'graph': 'torque_z',
         'color': (0, 0, 255),
     },
@@ -308,17 +308,17 @@ def _live_view(
             bias_column_mapping = [
                 (h['csv'], h['cal'])
                 for h in HEADERS
-                if 'cal' in h and h['csv'].startswith('Dev6/')
+                if 'cal' in h and h['csv'].startswith('sensor')
             ]
-            bias_column_mapping_ = [
-                ('Dev6/ai18', 'rhl_fx'), ('Dev6/ai19', 'rhl_fy'), ('Dev6/ai20', 'rhl_fz'),
-                ('Dev6/ai21', 'rhl_tx'), ('Dev6/ai22', 'rhl_ty'), ('Dev6/ai23', 'rhl_tz'),
-                ('Dev6/ai32', 'lhl_fx'), ('Dev6/ai33', 'lhl_fy'), ('Dev6/ai34', 'lhl_fz'),
-                ('Dev6/ai35', 'lhl_tx'), ('Dev6/ai36', 'lhl_ty'), ('Dev6/ai37', 'lhl_tz'),
-                ('Dev6/ai38', 'fl_fx'), ('Dev6/ai39', 'fl_fy'), ('Dev6/ai48', 'fl_fz'),
-                ('Dev6/ai49', 'fl_tx'), ('Dev6/ai50', 'fl_ty'), ('Dev6/ai51', 'fl_tz'),
-            ]
-            assert bias_column_mapping == bias_column_mapping_
+            # bias_column_mapping_ = [
+            #     ('Dev6/ai18', 'rhl_fx'), ('Dev6/ai19', 'rhl_fy'), ('Dev6/ai20', 'rhl_fz'),
+            #     ('Dev6/ai21', 'rhl_tx'), ('Dev6/ai22', 'rhl_ty'), ('Dev6/ai23', 'rhl_tz'),
+            #     ('Dev6/ai32', 'lhl_fx'), ('Dev6/ai33', 'lhl_fy'), ('Dev6/ai34', 'lhl_fz'),
+            #     ('Dev6/ai35', 'lhl_tx'), ('Dev6/ai36', 'lhl_ty'), ('Dev6/ai37', 'lhl_tz'),
+            #     ('Dev6/ai38', 'fl_fx'), ('Dev6/ai39', 'fl_fy'), ('Dev6/ai48', 'fl_fz'),
+            #     ('Dev6/ai49', 'fl_tx'), ('Dev6/ai50', 'fl_ty'), ('Dev6/ai51', 'fl_tz'),
+            # ]
+            # assert bias_column_mapping == bias_column_mapping_
             
             bias = load_bias(bias_path, column_mapping=bias_column_mapping)
             
