@@ -33,7 +33,7 @@ Once properly run, the program should follow the instructions listed in the conf
 
 The program is divided into a number of modular components that each handle a different part of the greater pipeline, and which can each be run either on their own or through a batch process.
 
-A. **Open Loop**
+**Open Loop**
     1. Create list of tilt types.
     2. Wait for start pulse.
     3. For each tilt:
@@ -41,7 +41,7 @@ A. **Open Loop**
         2. If rewards are enabled, dispense water.
         3. Wait for a random amount of time that falls within the delay range.
 
-B. **Closed Loop** (Baseline = True, Sham = False)
+**Closed Loop** (Baseline = True, Sham = False)
     1. Create list of tilt types.
     2. Wait for start pulse.
     3. For each tilt:
@@ -53,7 +53,7 @@ B. **Closed Loop** (Baseline = True, Sham = False)
         4. Finish the tilt.
         5. Wait for a random amount of time that falls within the delay range.
 
-C. **Closed Loop** (Baseline = False, Sham = False)
+**Closed Loop** (Baseline = False, Sham = False)
     1. Create list of tilt types.
     2. For each tilt:
         1. Clear any pending Plexon events.
@@ -67,7 +67,7 @@ C. **Closed Loop** (Baseline = False, Sham = False)
         4. Finish the tilt.
         5. Wait for a random amount of time that falls within the delay range.
 
-D. **Closed Loop** (Baseline = False, Sham = True)
+**Closed Loop** (Baseline = False, Sham = True)
     1. Create list of tilt types from template.
     2. For each tilt:
         1. Clear any pending Plexon events.
@@ -81,8 +81,6 @@ D. **Closed Loop** (Baseline = False, Sham = True)
         4. Finish the tilt.
         5. Wait for a random amount of time that falls within the delay range.
 
-?. **Monitor**
-    1. Waits for `Enter` to be pressed.
 
 ## <a name="Usage-Guide">Usage Guide</a>
 
