@@ -1,134 +1,108 @@
+# Tilt Hardware Control
 
-# Setup
+## Important Note
 
-Install dependencies  
-`pip install -r requirements.txt`
+The Moxon Neurorobotics Laboratory maintains a [Codebase Master Document](https://ucdavis.box.com/s/icsjygmi2bkcv1275xskigibiewahd3p) that introduces users to key concepts that are helpful for properly understanding, installing, and using this program. It is highly recommended that new users and lab members review the document in its entirety before proceeding.
 
-If using live graph view  
-`pip install pyside6`  
-if installation fails use  
-`pip install pyside2==5.15.2`  
 
-# Usage
+## Content Guide
 
-Example command line calls
-```bash
-python main.py --config example_config.hjson --template-out x.json
-python main.py --config example_config.hjson --template-out x_2.json --template-in x.json
-python main.py --config example_config.hjson --template-out x_2.json --template-in x.json --loadcell-out grf_data.csv
-```
+- **[Summary](#Summary)**: Explanation of program purpose, its required inputs, and its expected outputs.
+- **[Pipeline](#Pipeline)**: Ordered list of what the program does when.
+- **[Usage Guide](#Usage-Guide)**: How to use the program.
+    - **[Installation](#Installation)**: How to install the program.
+    - **[Procedural Notes](#procedural-notes)**: Guidance on procedural standards.
+    - **[Config File](#Config-File)**: Explanation of the config file and its contents.
+    - **[Command Line](#command-line)**: Breakdown of the command line and its arguments.
+- **[Examples](#Examples)**: How to use the program.
+    - **[Open Loop](#open-loop)**
+    - **[Closed Loop](#closed-loop)**
 
-## Usage example
+## <a name="Summary">Summary</a>
 
-### Open loop
+This program contains scripts for any experiments and tests that require programming any of the motors controlling the rodent tilt platform.
 
-Make a copy of example_config.hjson, ensure `mode` is set to open_loop. Set `num_tilts` and `delay_range` to the desired values. `baseline`, `sham`, `reward` and `channels` can be ignored or removed from the config file.
+MONA accepts the following files, **which must be provided by the user**:
+|Terminology          |Contents                                                |Accepted File Formats|
+|---------------------|--------------------------------------------------------|---------------------|
+|Config file          |Contains modifiable parameters and arguments.           |`.hjson`    |
 
-Run the script (how python in envoked will vary depending on system configuration)
-```
-python main.py --config your_config.hjson --loadcell-out grf_data.csv
-```
-This will read setting from `your_config.hjson` and write recorded grf data to `grf_data.csv`. Note that if `grf_data.csv` already exists it will be overwritten.
+Once properly run, the program should follow the instructions listed in the configuration file. If requested, it should also return a template `.json` file.
 
-The program will run through the specified number of tilts then exit.
+## <a name="Pipeline">Pipeline</a>
 
----
-### Closed loop, initial run
+The program is divided into a number of modular components that each handle a different part of the greater pipeline, and which can each be run either on their own or through a batch process.
 
-Make a copy of example_config.hjson, set `mode` to closed_loop, `baseline` to true and `sham` to false. Set `num_tilts`, `delay_range`, and `channels` to the desired values. `reward` is not used.
+A. **Open Loop**
+    1. Create list of tilt types.
+    2. Wait for start pulse.
+    3. For each tilt:
+        1. Perform the tilt.
+        2. If rewards are enabled, dispense water.
+        3. Wait for a random amount of time that falls within the delay range.
 
-Run the script (how python in envoked will vary depending on system configuration)
-```
-python main.py --config your_config.hjson --template-out template_a.json --loadcell-out grf_data.csv
-```
-This will read settings from `your_config.hjson` and write recorded grf data to `grf_data.csv`. Note that if `grf_data.csv` already exists it will be overwritten. PSTH template data and a record of the run will be written to `template_a.json`.
+B. **Closed Loop** (Baseline = True, Sham = False)
+    1. Create list of tilt types.
+    2. Wait for start pulse.
+    3. For each tilt:
+        1. Clear any pending Plexon events.
+        2. Begin the tilt.
+        3. For each event received from the Plexon machine:
+            1. Add the it to the PSTH
+            2. If the event is a spike and the time since the tilt > post time, break this Plexon loop.
+        4. Finish the tilt.
+        5. Wait for a random amount of time that falls within the delay range.
 
-Make sure to use enter and not ctrl-c if you need to pause the program.
+C. **Closed Loop** (Baseline = False, Sham = False)
+    1. Create list of tilt types.
+    2. For each tilt:
+        1. Clear any pending Plexon events.
+        2. Begin the tilt.
+        3. For each event received from the Plexon machine:
+            1. Add the it to the PSTH
+            2. If the event is a spike and the time since the tilt > post time, break this Plexon loop.
+        3. Classify the tilt.
+            a. If the classification was correct and the reward is enabled, dispense water.
+            b. If the classification was incorrect, perform a punishment tilt.
+        4. Finish the tilt.
+        5. Wait for a random amount of time that falls within the delay range.
 
-The program will perform tilts and record the psth templates.
+D. **Closed Loop** (Baseline = False, Sham = True)
+    1. Create list of tilt types from template.
+    2. For each tilt:
+        1. Clear any pending Plexon events.
+        2. Begin the tilt.
+        3. For each event received from the Plexon machine:
+            1. Add the it to the PSTH
+            2. If the event is a spike and the time since the tilt > post time, break this Plexon loop.
+        3. Classify the tilt.
+            a. If the classification was correct and the reward is enabled, dispense water.
+            b. If the classification was incorrect, perform a punishment tilt.
+        4. Finish the tilt.
+        5. Wait for a random amount of time that falls within the delay range.
 
----
-### Closed loop, after initial run
+?. **Monitor**
+    1. Waits for `Enter` to be pressed.
 
-Make a copy of the config used for the initial run and change `baseline` to false.
+## <a name="Usage-Guide">Usage Guide</a>
 
-Run the script (how python in envoked will vary depending on system configuration)
-```
-python main.py --config your_other_config.hjson --template-in template_a.json --template-out template_b.json --loadcell-out grf_data.csv
-```
-This will read settings from `your_other_config.hjson` and write recorded grf data to `grf_data.csv`. Note that if `grf_data.csv` already exists it will be overwritten. PSTH templates are loaded from `template_a.json`. PSTH template data and a record of the run will be written to `template_b.json`.
 
-The program will perform tilts and attempt to classify the tilt type based on templates from `template_a.json` and perform punish/reward actions based on if the classification was correct. It will also record a new set of templates.
+### <a name="Installation">Installation</a>
 
----
-### Live view
+To install this program, follow the steps outlined in the Git tutorial within the [Codebase Master Document](https://ucdavis.box.com/s/icsjygmi2bkcv1275xskigibiewahd3p). If you're using live graph view, please be sure to use `pip install pyside6`. Opt for `pip install pyside2==5.15.2` if the installation fails.
 
-Add the `--live` parameter to enable the live view.
-```
-python main.py --config your_config.hjson --monitor --live
-```
 
-### Calibrated live view
+### <a name="procedural-notes">Procedural Notes</a>
 
-The path `/grf_python` will need to be substituted with the location of grf_python on your system ([Behavior-Analysis-Programs](https://github.com/moxon-lab-codebase/Behavior-Analysis-Programs), tested with commit `5f005e1a5530fd36f4ea0879e8453bc01a65871b`)
-
-The environment variable `grf_python_path` must be set to the location of grf python.
-e.g.  
-`fish`
-```
-set -gx grf_python_path /grf_python
-```
-`bash`
-```
-export grf_python_path=/grf_python
-```
-`windows`
-```
-set grf_python_path=/grf_python
-```
-
-The python dependencies for grf_python will need to be installed.
-
-Run the program
-```
-python main.py --config your_config.hjson --monitor --live-cal --live-bias ./your_bias_file
-```
-
----
-## Pausing
-
-### open loop
-
-ctrl-c can be pressed to immediatly stop the current tilt. enter will resume the program, ctrl-c again will exit the program
-
-### closed loop
-
-pressing enter will pause the program at the end of the current tilt. pressing enter will resume the program, pressing q then enter will exit the program
-
-## Notes on clocks
-
-Plexon outputs a 40khz clock signal. This is downsampled by a hardware downsampler to 1250hz and sent to Dev6/PFI6.
-
-Using plexon's clock signal instead of the internal nidaq clock means, given one known shared event (such as the start pulse), all the neural and grf data can be correlated in time. Without using a shared clock the two clocks will experience a different amount of drift and diverge over time.
-
-clock_source should always be set to external in normal use.
-
-## Ground reaction forces recording
-
-Grf data is recorded concurrently with the rest of the program.
-
-The grf data csv has the following columns
-
-```
-rhl_fx = right hindlimb force in the x axis
-lhl_ty = left hindlimb torque in the y axis
-fl_fz = forelimb force in the z axis
-```
-
-Note: The analysis pipeline and these docs currently refers to the side with two sensors as the hindlimbs but they could be the forelimbs if the animal is placed on the platform facing the other direction.
-
-```
-Dev6/ai18: rhl_fx
+- **Internal versus External Clocks**
+    The plexon machine natively outputs a 40 kHz clock signal, which is downsampled to 1250 Hz using hardware solutions and then sent to the `Dev6/PFI6` channel. Using this clock signal allows the neural and behavioral data to by synced across time for any given shared event (such as, say, a start pulse).
+    
+    Opting for the internal nidaq clock complicates this matter and risks unsynced data, which can cause downstream issues when neural and behavioral data need to be reconciled with one another. For this reason, `clock_source` should generally be set to `external` during normal use.
+    
+- **Recordings of Ground Reaction Forces**
+    The Ground Reaction Force data recording runs concurrently with the rest of the program. Keeping in mind the naming conventions `rhl`/`lhl`/`fl` = `right hind limb`/`left hind limb`/`front limb` and`fx`/`ty`/`fz` = `Force along the X axis`/`Torque along the Y axis`/`Force along the Z axis`, the GRF output `.csv` will contain the following columns and their associated meanings:
+    
+    ```Dev6/ai18: rhl_fx
 Dev6/ai19: rhl_fy
 Dev6/ai20: rhl_fz
 Dev6/ai21: rhl_tx
@@ -149,168 +123,84 @@ Dev6/ai51: fl_tz
 Strobe: ttl pulse indicating start of tilt
 Start: ttl pulse indicating start of plexon recording
 Inclinometer: Inclinometer
-Timestamp: Timestamp (generated based on 
+Timestamp: Timestamp```
+
+### <a name="Config File">Config File</a>
+
+The configuration file defines a number of parameters that control the program's behavior. The keys found within can be qualified with a `--` prefix (e.g. `--delay_range (2,6)`) to be added to the command line. The `_` key can also be set to a list of strings which are also added to the command line.
+
+Beyond those, these are the configuration keys the program will expect:
+|Parameter|Description|Format|
+|----------------------|-------------|:-------:|
+|`mode`|Defines which mode the program runs in.|`open_loop`/`closed_loop`/`monitor`|
+|`clock_source`|Controls which clock the program ought to use. [^clockn]|`internal`/`external`|
+|`clock_rate`|Rate at which samples are collected, in hertz. [^raten]|`Int`|
+|`num_tilts`|# of tilts to perform, must be divisible by 4.|`Int`|
+|`delay_range`|The range of possible delays between tilts, in seconds.|`(Float, Float)`|
+|`baseline`|Defines the program's handling of templates. [^bslnex]|`True`/`False|
+|`sham`|Defines the program's handling of repetitions. [^shamex]|`True`/`False`|
+|`reward`|Toggles rewards.|`True`/`False`|
+|`channels`|Maps Plexon units to event types where they should be used in PSTH generation.|`Dict[Int, List[Int]]`
+
+[^clockn]: If set to `internal`, the program will use the *internal* nidaq clock. If set to `external`, the program will set the clock to the `Dev6/PFI6` channel, which should itself be connected to the downsampled Plexon clock.
+[^raten]: If `clock_source` is set to external, `clock_rate` should generally be set to 1250.
+[^bslnex]: `baseline` is only used when `mode` is set to `closed_loop`. If `baseline` is set to `False`, the input template provided by the user will be used to classify tilts. If it is set to `True`, the template will be generated without performing classification.
+[^shamex]: If `sham` is set to `True`, the tilts from the input template will be repeated. If `baseline` is also false, the rewards and punishment tilts will also be repeated, though rewards will only be enabled if `reward` is set to `True`.
+
+### <a name="command-line">Command Line</a>
+
+The program is run by calling `python main.py`, with the following arguments being passable:
+
+|Argument|Description|Required?|
+|----------------------|-------------|:-------:|
+|`--help`|Lists all arguments.|❎|
+|`--template-in`|Denotes the path to a template file created by a previous run of this program.|✅[^onop]
+|`--template-out`|Denotes the path in which a template file should be saved.|❎[^oncl]
+|`--loadcell-out`|Denotes the path in which the GRF data csv should be saved.|✅
+|`--labels`|Denotes the path to a user-provided `.hjson` labels file.|❎[^onlab]
+|`--config`|Denotes the path to a user-provided `.hjson` config file.|✅
+|`--live`|Toggles live view.|❎
+
+[^onop]: Only required in open loop, non-baseline runs.
+[^oncl]: Optional in close loop run, not used otherwise.
+[^onlab]: If specified, `channels` will be loaded from the labels file rather than the config file.
+
+A complete, functional command line call would thus look like this:
 ```
-
-# Arguments
-
-Some arguments aren't listed in the readme. Run the program with `--help` for a fill list of arguments.
-
-`--template-in`
-
-path to a template file created by a previous run of the program
-
-required in open loop non baseline, otherwise unused
-
-`--template-out`
-
-path to write template file to
-
-optional in closed loop, otherwise unused
-
-`--loadcell-out`
-
-path to write ground reaction force data csv to
-
-`--labels`
-
-path to an hjson labels file. `channels` will be loaded from the labels file instead of the config file
-
-`--config`
-
-path to hjson config file, see config keys section
-
-# Program flow
-
-## open loop
-
-```
-create a list of tilt types
-wait for start pulse
-for i in 0..num_tilts:
-    perform tilt i
-    if reward enabled:
-        dispense water
-    wait for a random time within delay range
-```
-
-## closed loop baseline
-
-```
-create a list of tilt types
-wait for start pulse
-for i in 0..num_tilts:
-    clear pending plexon events
-    start tilt i
-    loop a:
-        for `event` recieved from plexon:
-            if event is a tilt:
-                add event to psth
-            if event is a spike:
-                add spike to psth
-                if time since tilt > post time:
-                    break a
-    finish tilt
-    wait for a random time within delay range
-```
-
-## closed loop (baseline = false, sham = false)
+python main.py --config example_config.hjson --template-out x.json
 
 ```
-create a list of tilt types
-for i in 0..num_tilts:
-    clear pending plexon events
-    start tilt i
-    loop a:
-        for `event` recieved from plexon:
-            if event is a tilt:
-                add event to psth
-            if event is a spike:
-                add spike to psth
-                if time since tilt > post time:
-                    break a
-    classify tilt
-    if classification was correct and reward is enabled:
-        dispense water
-    if classification was incorrect:
-        perform punish tilt
-    finish tilt
-    wait for a random time within delay range
+Which would cause the program to follow the instructions laid out in `example_config.hjson` and save the template to `x.json`.
+
+## <a name="Examples">Examples</a>
+
+
+### <a name="open-loop">Open Loop</a>
+
+To quickly run an open loop experiment, create a copy of `example_config.hjson` and edit the file such that `mode` is set to `open_loop`. Ensure that `num_tilts` and `delay_range` to appropriate values. `baseline`, `sham`, `reward`, and `channels` cann all be ignored, as the program does not make use of these keys when set to open loop mode.
+
+The program would then be run using this command line call:
+```
+python main.py --config your_config.hjson --loadcell-out grf_data.csv
 ```
 
-## closed loop sham (baseline = false)
+The program will then read `your_config.hjson`, read in the settings listed within, and then write any GRF data recorded to `grf_data.csv`. **Note that this file will be overwritten if left in the same directory during subsequent runs.** The program will proceed through the specified number of tilts (users can press CTRL + C to pause and unpause the current tilt) and then exit.
 
+
+### <a name="closed-loop">Closed Loop</a>
+
+To quickly run a closed loop experiment, create a copy of `example_config.hjson` and edit the file such that `mode` is set to `closed_loop`. Since this is the first closed loop run of the program, set `baseline` to `True` and `sham` to `False`. Users should set `num_tilts`, `delay_range`, and `channels` to appropriate values. `reward` will not be used.
+
+The program would then be run using this command line call:
 ```
-load list of tilt types from template
-for i in 0..num_tilts:
-    clear pending plexon events
-    start tilt i
-    loop a:
-        for `event` recieved from plexon:
-            if event is a tilt:
-                add event to psth
-            if event is a spike:
-                add spike to psth
-                if time since tilt > post time:
-                    break a
-    classify tilt
-    if classification recorded for tilt i in the template was correct and reward is enabled:
-        dispense water
-    if classification recorded for tilt i in the template was incorrect:
-        perform punish tilt
-    finish tilt
-    wait for a random time within delay range
+python main.py --config your_config.hjson --template-out template_a.json --loadcell-out grf_data.csv
 ```
 
-## monitor
+The program will then read `your_config.hjson`, read in the settings listed within, and then write any GRF data recorded to `grf_data.csv`. **Note that this file will be overwritten if left in the same directory during subsequent runs.** PSTH template data and a recording of the run will be written to `template_a.json`. The program will proceed through the specified number of tilts (users can press Enter to pause and unpause the program at the end of the current tilt) and then exit (users can also press Q to exit prematurely).
 
-waits for enter to be pressed (so recording/live view can be used)
+Now that the program has been run in closed loop mode and the run saved to a template file, we can edit the config file to set `baseline` to `False` and use this command line call:
+```
+python main.py --config your_other_config.hjson --template-in template_a.json --template-out template_b.json --loadcell-out grf_data.csv
+```
 
-# Config file
-
-Keys that begin with `--` will be added to the passed command line parameters. The `_` key can be set to a list of strings which will be added to the command line arguments.
-
-Other keys are used as listed below.
-
-# Config keys
-
-`mode`: Literal['open_loop', 'closed_loop', 'monitor']
-
-see program flow section
-
-`clock_source`: Literal['external', 'internal']
-
-should normally be set to external
-
-internal uses the internal nidaq clock. externel sets the clock to Dev6/PFI6
-
-Dev6/PFI6 should be connected to the downsampled plexon clock
-
-`clock_rate`: int
-
-The rate at which to collect samples in hertz.
-If clock_source is external this should probably be 1250.
-
-`num_tilts`: int
-
-Number of tilts to perform. This number must be divisible by 4. The tilts will be split evenly between tilt types 1, 2, 3 and 4.
-
-`delay_range`: Tuple[float, float]
-
-Range of delays between tilts is seconds.
-
-`baseline`: Optional[bool]
-
-Only used when mode == closed loop. If false an input template will be used to classify tilts. If true a template will be generated without performing classification.
-
-`sham`: Optional[bool]
-
-If true the tilts from the input template will be repeated. If baseline is false the rewards and punish tilts will be repeated. reward must be true for rewards to be enabled.
-
-`reward`: Optional[bool]
-
-If true a water reward will be given after succesful decoding. If false no water reward will be given.
-
-`channels`: Dict[int, List[int]]
-
-Maps plexon units to event types where that unit should be used in psth generation.
+The program will again read `your_config.hjson`, again write any GRF data recorded to `grf_data.csv`, but this time, the PSTH templates will be loaded from `template_a.json`. The program will then perform all of the tilts and attempt to classify the tilt type based on the templates from `template_a.json`, as well as perform punish/reward actions based on whether the classifications were correct. The program will also record a new set of templates and save it to `template_b.json`.
