@@ -26,6 +26,7 @@ MONA accepts the following files, **which must be provided by the user**:
 |Terminology          |Contents                                                |Accepted File Formats|
 |---------------------|--------------------------------------------------------|---------------------|
 |Config file          |Contains modifiable parameters and arguments.           |`.hjson`    |
+|Label file          |Alternative file through which to provide channels.           |`.hjson`    |
 
 Once properly run, the program should follow the instructions listed in the configuration file. If requested, it should also return a template `.json` file.
 
@@ -48,7 +49,7 @@ The program is divided into a number of modular components that each handle a di
     1. Clear any pending Plexon events.
     2. Begin the tilt.
     3. For each event received from the Plexon machine:
-        1. Add the it to the PSTH
+        1. Add it to the PSTH
         2. If the event is a spike and the time since the tilt > post time, break this Plexon loop.
     4. Finish the tilt.
     5. Wait for a random amount of time that falls within the delay range.
@@ -59,7 +60,7 @@ The program is divided into a number of modular components that each handle a di
     1. Clear any pending Plexon events.
     2. Begin the tilt.
     3. For each event received from the Plexon machine:
-        1. Add the it to the PSTH
+        1. Add it to the PSTH
         2. If the event is a spike and the time since the tilt > post time, break this Plexon loop.
     3. Classify the tilt.
         a. If the classification was correct and the reward is enabled, dispense water.
@@ -73,7 +74,7 @@ The program is divided into a number of modular components that each handle a di
     1. Clear any pending Plexon events.
     2. Begin the tilt.
     3. For each event received from the Plexon machine:
-        1. Add the it to the PSTH
+        1. Add it to the PSTH
         2. If the event is a spike and the time since the tilt > post time, break this Plexon loop.
     3. Classify the tilt.
         1. If the classification was correct and the reward is enabled, dispense water. If the classification was incorrect, perform a punishment tilt.
@@ -99,7 +100,8 @@ To install this program, follow the steps outlined in the Git tutorial within th
 - **Recordings of Ground Reaction Forces**
     The Ground Reaction Force data recording runs concurrently with the rest of the program. Keeping in mind the naming conventions `rhl`/`lhl`/`fl` = `right hind limb`/`left hind limb`/`front limb` and`fx`/`ty`/`fz` = `Force along the X axis`/`Torque along the Y axis`/`Force along the Z axis`, the GRF output `.csv` will contain the following columns and their associated meanings:
     
-    ```Dev6/ai18: rhl_fx
+    ```
+Dev6/ai18: rhl_fx
 Dev6/ai19: rhl_fy
 Dev6/ai20: rhl_fz
 Dev6/ai21: rhl_tx
@@ -120,7 +122,8 @@ Dev6/ai51: fl_tz
 Strobe: ttl pulse indicating start of tilt
 Start: ttl pulse indicating start of plexon recording
 Inclinometer: Inclinometer
-Timestamp: Timestamp```
+Timestamp: Timestamp
+```
 
 ### <a name="Config File">Config File</a>
 
@@ -165,7 +168,6 @@ The program is run by calling `python main.py`, with the following arguments bei
 A complete, functional command line call would thus look like this:
 ```
 python main.py --config example_config.hjson --template-out x.json
-
 ```
 Which would cause the program to follow the instructions laid out in `example_config.hjson` and save the template to `x.json`.
 
