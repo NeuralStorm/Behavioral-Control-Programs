@@ -141,7 +141,7 @@ Beyond those, these are the configuration keys the program will expect:
 |`clock_rate`|Rate at which samples are collected, in hertz. [^raten]|`Int`|
 |`num_tilts`|# of tilts to perform, must be divisible by 4.|`Int`|
 |`delay_range`|The range of possible delays between tilts, in seconds.|`(Float, Float)`|
-|`baseline`|Defines the program's handling of templates. [^bslnex]|`True`/`False|
+|`baseline`|Defines the program's handling of templates. [^bslnex]|`True`/`False`|
 |`sham`|Defines the program's handling of repetitions. [^shamex]|`True`/`False`|
 |`reward`|Toggles rewards.|`True`/`False`|
 |`channels`|Maps Plexon units to event types where they should be used in PSTH generation.|`Dict[Int, List[Int]]`
