@@ -20,7 +20,7 @@ The Moxon Neurorobotics Laboratory maintains a [Codebase Master Document](https:
 
 ## <a name="Summary">Summary</a>
 
-This program contains scripts for any experiments and tests that require programming any of the motors controlling the rodent tilt platform.
+This program contains scripts for any experiments and tests that require programming any of the motors controlling the rodent tilt platform. It features a number of modes that operate differently and which are dependent on a number of different keys in the config file.
 
 MONA accepts the following files, **which must be provided by the user**:
 |Terminology          |Contents                                                |Accepted File Formats|
@@ -28,7 +28,11 @@ MONA accepts the following files, **which must be provided by the user**:
 |Config file          |Contains modifiable parameters and arguments.           |`.hjson`    |
 |Label file          |Alternative file through which to provide channels.           |`.hjson`    |
 
-Once properly run, the program should follow the instructions listed in the configuration file. If requested, it should also return a template `.json` file.
+Once properly run, the program should follow the instructions listed in the configuration file and produce the following files:
+|Terminology          |Contents                                                |Accepted File Formats|
+|---------------------|--------------------------------------------------------|---------------------|
+|GRF Data File          |Contains [Ground Reaction Force](https://en.wikipedia.org/wiki/Ground_reaction_force) data.           |`.csv`    |
+|Template File          |Contains PSTH template data. Optional output, see below.           |`.hjson`    |
 
 ## <a name="Pipeline">Pipeline</a>
 
