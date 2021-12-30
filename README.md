@@ -1,11 +1,15 @@
-# Behavioral-Control-Programs
-
-# Repo Layout
+# Behavioral Control Programs
 
 
-tilt_hardware_control/tilt_rewrite - tilt task control software  
-tilt_hardware_control/tilt_docs - documentation for the tilt task hardware and software  
-tilt_hardware_control/si_programmer_scripts - motor controller scripts for tilt task  
-Primate_Joystick_Pull - NHP behavior task  
-touchscreen_co - primate touchsrceen tasks  
-touchscreen_co/Touchscreen/one_targ_new - the touchscreen task in active development  
+## Important Note
+
+The Moxon Neurorobotics Laboratory maintains a [Codebase Master Document](https://ucdavis.box.com/s/icsjygmi2bkcv1275xskigibiewahd3p) that introduces users to key concepts that are helpful for properly understanding, installing, and using these programs. It is highly recommended that new users and lab members review the document in its entirety before proceeding.
+
+
+## Contents
+
+|Directory|Contents|
+|:-|:-|
+|/tilt_hardware_control/|Software and documentation relating to the rodent tilt task.
+|/Primate_JoyStick_Pull/|Software and documentation relating to the NHP behavior task.
+|/touchscreen_co/|Software relating to the touchscreen task. (Work in Progress)
