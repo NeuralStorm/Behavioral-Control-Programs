@@ -15,8 +15,8 @@ The Moxon Neurorobotics Laboratory maintains a [Codebase Master Document](https:
     - **[Config File](#Config-File)**: Explanation of the config file and its contents.
     - **[Command Line](#command-line)**: Breakdown of the command line and its arguments.
 - **[Examples](#Examples)**: How to use the program.
-    - **[Open Loop](#open-loop)**
-    - **[Closed Loop](#closed-loop)**
+    - **[Open Loop](#open-loop)**: How to run the program in open loop mode.
+    - **[Closed Loop](#closed-loop)**: How to run the program in closed loop mode.
 
 ## <a name="Summary">Summary</a>
 
@@ -166,7 +166,7 @@ The program is run by calling `python main.py`, with the following arguments bei
 |`--live`|Toggles live view.|❎
 
 [^onop]: Only required in open loop, non-baseline runs.
-[^oncl]: Optional in close loop run, not used otherwise.
+[^oncl]: Optional in closed loop run, not used otherwise.
 [^onlab]: If specified, `channels` will be loaded from the labels file rather than the config file.
 
 A complete, functional command line call would thus look like this:
