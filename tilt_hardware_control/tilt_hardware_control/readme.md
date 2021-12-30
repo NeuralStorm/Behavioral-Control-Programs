@@ -101,29 +101,29 @@ To install this program, follow the steps outlined in the Git tutorial within th
     The Ground Reaction Force data recording runs concurrently with the rest of the program. Keeping in mind the naming conventions `rhl`/`lhl`/`fl` = `right hind limb`/`left hind limb`/`front limb` and`fx`/`ty`/`fz` = `Force along the X axis`/`Torque along the Y axis`/`Force along the Z axis`, the GRF output `.csv` will contain the following columns and their associated meanings:
     
     ```
-Dev6/ai18: rhl_fx
-Dev6/ai19: rhl_fy
-Dev6/ai20: rhl_fz
-Dev6/ai21: rhl_tx
-Dev6/ai22: rhl_ty
-Dev6/ai23: rhl_tz
-Dev6/ai32: lhl_fx
-Dev6/ai33: lhl_fy
-Dev6/ai34: lhl_fz
-Dev6/ai35: lhl_tx
-Dev6/ai36: lhl_ty
-Dev6/ai37: lhl_tz
-Dev6/ai38: fl_fx
-Dev6/ai39: fl_fy
-Dev6/ai48: fl_fz
-Dev6/ai49: fl_tx
-Dev6/ai50: fl_ty
-Dev6/ai51: fl_tz
-Strobe: ttl pulse indicating start of tilt
-Start: ttl pulse indicating start of plexon recording
-Inclinometer: Inclinometer
-Timestamp: Timestamp
-```
+    Dev6/ai18: rhl_fx
+    Dev6/ai19: rhl_fy
+    Dev6/ai20: rhl_fz
+    Dev6/ai21: rhl_tx
+    Dev6/ai22: rhl_ty
+    Dev6/ai23: rhl_tz
+    Dev6/ai32: lhl_fx
+    Dev6/ai33: lhl_fy
+    Dev6/ai34: lhl_fz
+    Dev6/ai35: lhl_tx
+    Dev6/ai36: lhl_ty
+    Dev6/ai37: lhl_tz
+    Dev6/ai38: fl_fx
+    Dev6/ai39: fl_fy
+    Dev6/ai48: fl_fz
+    Dev6/ai49: fl_tx
+    Dev6/ai50: fl_ty
+    Dev6/ai51: fl_tz
+    Strobe: ttl pulse indicating start of tilt
+    Start: ttl pulse indicating start of plexon recording
+    Inclinometer: Inclinometer
+    Timestamp: Timestamp
+    ```
 
 ### <a name="Config File">Config File</a>
 
