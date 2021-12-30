@@ -34,52 +34,51 @@ Once properly run, the program should follow the instructions listed in the conf
 The program is divided into a number of modular components that each handle a different part of the greater pipeline, and which can each be run either on their own or through a batch process.
 
 **Open Loop**
-    1. Create list of tilt types.
-    2. Wait for start pulse.
-    3. For each tilt:
-        1. Perform the tilt.
-        2. If rewards are enabled, dispense water.
-        3. Wait for a random amount of time that falls within the delay range.
+1. Create list of tilt types.
+2. Wait for start pulse.
+3. For each tilt:
+    1. Perform the tilt.
+    2. If rewards are enabled, dispense water.
+    3. Wait for a random amount of time that falls within the delay range.
 
 **Closed Loop** (Baseline = True, Sham = False)
-    1. Create list of tilt types.
-    2. Wait for start pulse.
-    3. For each tilt:
-        1. Clear any pending Plexon events.
-        2. Begin the tilt.
-        3. For each event received from the Plexon machine:
-            1. Add the it to the PSTH
-            2. If the event is a spike and the time since the tilt > post time, break this Plexon loop.
-        4. Finish the tilt.
-        5. Wait for a random amount of time that falls within the delay range.
+1. Create list of tilt types.
+2. Wait for start pulse.
+3. For each tilt:
+    1. Clear any pending Plexon events.
+    2. Begin the tilt.
+    3. For each event received from the Plexon machine:
+        1. Add the it to the PSTH
+        2. If the event is a spike and the time since the tilt > post time, break this Plexon loop.
+    4. Finish the tilt.
+    5. Wait for a random amount of time that falls within the delay range.
 
 **Closed Loop** (Baseline = False, Sham = False)
-    1. Create list of tilt types.
-    2. For each tilt:
-        1. Clear any pending Plexon events.
-        2. Begin the tilt.
-        3. For each event received from the Plexon machine:
-            1. Add the it to the PSTH
-            2. If the event is a spike and the time since the tilt > post time, break this Plexon loop.
-        3. Classify the tilt.
-            a. If the classification was correct and the reward is enabled, dispense water.
-            b. If the classification was incorrect, perform a punishment tilt.
-        4. Finish the tilt.
-        5. Wait for a random amount of time that falls within the delay range.
+1. Create list of tilt types.
+2. For each tilt:
+    1. Clear any pending Plexon events.
+    2. Begin the tilt.
+    3. For each event received from the Plexon machine:
+        1. Add the it to the PSTH
+        2. If the event is a spike and the time since the tilt > post time, break this Plexon loop.
+    3. Classify the tilt.
+        a. If the classification was correct and the reward is enabled, dispense water.
+        b. If the classification was incorrect, perform a punishment tilt.
+    4. Finish the tilt.
+    5. Wait for a random amount of time that falls within the delay range.
 
 **Closed Loop** (Baseline = False, Sham = True)
-    1. Create list of tilt types from template.
-    2. For each tilt:
-        1. Clear any pending Plexon events.
-        2. Begin the tilt.
-        3. For each event received from the Plexon machine:
-            1. Add the it to the PSTH
-            2. If the event is a spike and the time since the tilt > post time, break this Plexon loop.
-        3. Classify the tilt.
-            a. If the classification was correct and the reward is enabled, dispense water.
-            b. If the classification was incorrect, perform a punishment tilt.
-        4. Finish the tilt.
-        5. Wait for a random amount of time that falls within the delay range.
+1. Create list of tilt types from template.
+2. For each tilt:
+    1. Clear any pending Plexon events.
+    2. Begin the tilt.
+    3. For each event received from the Plexon machine:
+        1. Add the it to the PSTH
+        2. If the event is a spike and the time since the tilt > post time, break this Plexon loop.
+    3. Classify the tilt.
+        1. If the classification was correct and the reward is enabled, dispense water. If the classification was incorrect, perform a punishment tilt.
+    4. Finish the tilt.
+    5. Wait for a random amount of time that falls within the delay range.
 
 
 ## <a name="Usage-Guide">Usage Guide</a>
