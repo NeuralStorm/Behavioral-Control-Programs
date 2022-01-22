@@ -60,6 +60,7 @@ from collections import defaultdict, Counter
 import sys, traceback
 from pprint import pprint
 import numpy
+from copy import copy
 
 # This will be filled in later. Better to store these once rather than have to call the functions
 # to get this information on every returned data block
@@ -1722,6 +1723,18 @@ def gen_images():
             cimg = recolor(img, color)
             p = cdir / f"{name}.png"
             cimg.save(p, 'PNG')
+    
+    yellow_colors = copy(colors)
+    yellow_colors[0] = (green_dir, (200, 200, 0))
+    
+    image_p = src / "bStar.png"
+    name = image_p.stem
+    img = Image.open(image_p)
+    img.thumbnail(CANVAS_SIZE)
+    for cdir, color in yellow_colors:
+        cimg = recolor(img, color)
+        p = cdir / f"{name}_yellow.png"
+        cimg.save(p, 'PNG')
 
 def main():
     try:
