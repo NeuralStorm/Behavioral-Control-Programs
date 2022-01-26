@@ -395,14 +395,23 @@ class GameConfig:
             num_trials = int(num_trials[0])
         self.max_trials: Optional[int] = num_trials
         
-        self.load_images(config_dict['images'])
-        self.selectable_images: Dict[str, Dict[str, Any]]
-        self.images: List[str]
+        image_ratios = config_dict.get('image_ratios')
+        if image_ratios is not None:
+            if len(image_ratios) == 0:
+                image_ratios = None
+            else:
+                image_ratios = [int(x.strip()) for x in image_ratios]
+        
+        self.load_images(config_dict['images'], image_ratios)
+        self.selectable_images: List[str]
+        # image selection list has keys duplicated based on image_ratios
+        self.image_selection_list: List[str]
+        self.images: Dict[str, Dict[str, Any]]
         
         self.load_thresholds(config_dict['reward_thresholds'])
         self.reward_thresholds: List[Dict[str, Any]]
     
-    def load_images(self, config_images):
+    def load_images(self, config_images: List[str], image_ratios: Optional[List[int]]):
         # config_images = config_dict['images']
         def build_image_entry(i, name):
             name = name.strip()
@@ -431,6 +440,15 @@ class GameConfig:
         )
         
         self.selectable_images = list(images)
+        if image_ratios is None:
+            self.image_selection_list = self.selectable_images
+        else:
+            assert len(image_ratios) == len(self.selectable_images)
+            sel_list: List[str] = []
+            for count, key in zip(image_ratios, self.selectable_images):
+                sel_list.extend(key for _ in range(count))
+            assert len(sel_list) == sum(image_ratios)
+            self.image_selection_list = sel_list
         
         img = Image.open('./images_gen/prepare.png')
         
@@ -993,7 +1011,7 @@ class MonkeyImages:
                 gc_hand_removed_early = True
             
             # choose image
-            selected_image_key = random.choice(list(self.config.selectable_images))
+            selected_image_key = random.choice(list(self.config.image_selection_list))
             selected_image = self.config.images[selected_image_key]
             image_i = selected_image['nidaq_event_index']
             

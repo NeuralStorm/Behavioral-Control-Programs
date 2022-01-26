@@ -4,6 +4,7 @@ Animal ID,1
 #Number of Events,3
 Number of Events,0
 #images, bOval, bRectangle, bStar
+#image_ratios,10,1,1
 images, bOval
 Task Type,Joystick
 Task Data Save Dir,./output
