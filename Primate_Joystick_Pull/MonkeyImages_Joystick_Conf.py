@@ -1239,6 +1239,7 @@ class MonkeyImages:
                 self.task.WriteDigitalLines(1, 1, 10.0, PyDAQmx.DAQmx_Val_GroupByChannel, self.begin, None, None)
             
             log_entry = {
+                'discrim': selected_image_key, # str
                 'reward_duration': reward_duration, # Optional[float]
                 'pull_duration': pull_duration, # float
                 'discrim_delay': discrim_delay,
@@ -1537,6 +1538,7 @@ class MonkeyImages:
             
             writer.writerow([
                 'trial',
+                'discrim',
                 'success',
                 'failure reason',
                 'time in homezone',
@@ -1562,6 +1564,7 @@ class MonkeyImages:
                 
                 writer.writerow([
                     i+1,
+                    entry['discrim'],
                     is_success,
                     reason,
                     time_in_homezone,
@@ -1572,6 +1575,7 @@ class MonkeyImages:
                     entry['discrim_delay'],
                     entry['go_cue_delay'],
                 ])
+            writer.writerow([])
             
             def get_time_in_game():
                 for e in self.event_log:
