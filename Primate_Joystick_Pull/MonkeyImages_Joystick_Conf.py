@@ -61,6 +61,7 @@ import sys, traceback
 from pprint import pprint
 import numpy
 from copy import copy
+from itertools import groupby
 
 # This will be filled in later. Better to store these once rather than have to call the functions
 # to get this information on every returned data block
@@ -76,6 +77,9 @@ max_block_output = 1
 # To avoid overwhelming the console output, set the maximum number of continuous
 # samples or waveform samples to output
 max_samples_output = 1
+
+def sgroup(data, key):
+    return groupby(sorted(data, key=key), key=key)
 
 # img: output of pillow Image
 # color: (r, g, b)
@@ -262,6 +266,10 @@ class InfoView:
         out.append("duration")
         out.append(f"  min-max: {ad['min']:.3f}-{ad['max']:.3f}")
         out.append(f"  mean: {ad['mean']:.3f} stdev: {ad['stdev']:.3f}")
+        for discrim, dad in end_info['discrim_action_duration'].items():
+            out.append(f"  {discrim} pulls/count: {dad['pull_count']}/{dad['count']}")
+            out.append(f"    min-max: {dad['min']:.3f}-{dad['max']:.3f}")
+            out.append(f"    mean: {dad['mean']:.3f} stdev: {dad['stdev']:.3f}")
         
         out.append(f"trials: {end_info['count']}")
         out.append("")
@@ -1144,6 +1152,7 @@ class MonkeyImages:
                 'action_duration': action_duration,
                 'success': reward_duration is not None,
                 'failure_reason': log_failure_reason[0],
+                'discrim': selected_image_key,
             })
             
             print('Press Duration: {:.4f} (remote: {:.4f})'.format(action_duration, pull_duration))
@@ -1585,6 +1594,16 @@ class MonkeyImages:
                 'mean', dur['mean'],
                 'stdev', dur['stdev'],
             ])
+            
+            writer.writerow([])
+            writer.writerow(['discrim', 'pulls', 'count', 'min', 'max', 'mean', 'stdev'])
+            for discrim, dad in end_info['discrim_action_duration'].items():
+                writer.writerow([
+                    discrim, dad['pull_count'], dad['count'],
+                    dad['min'], dad['max'], dad['mean'], dad['stdev'],
+                ])
+            
+            writer.writerow([])
             writer.writerow(['error', 'count', 'percent'])
             for e, ei in end_info['errors'].items():
                 writer.writerow([e, ei['count'], ei['percent']])
@@ -1663,6 +1682,24 @@ class MonkeyImages:
         pull_durations = [e['info']['action_duration'] for e in events]
         pull_durations = [x for x in pull_durations if x != 0]
         
+        def get_discrim_durations():
+            for discrim, d_events in sgroup(events, lambda x: x['info']['discrim']):
+                pull_durations = [
+                    e['info']['action_duration']
+                    for e in d_events
+                ]
+                count = len(pull_durations)
+                pull_durations = [x for x in pull_durations if x != 0]
+                out = {
+                    'count': count, # number of times discrim appeared
+                    'pull_count': len(pull_durations), # number of pulls in response to discrim
+                    'min': min(pull_durations, default=0),
+                    'max': max(pull_durations, default=0),
+                    'mean': statistics.mean(pull_durations) if pull_durations else 0,
+                    'stdev': statistics.pstdev(pull_durations) if pull_durations else 0,
+                }
+                yield discrim, out
+        
         info = {
             'count': n,
             'percent_correct': perc(correct_n),
@@ -1672,6 +1709,7 @@ class MonkeyImages:
                 'mean': statistics.mean(pull_durations) if pull_durations else 0,
                 'stdev': statistics.pstdev(pull_durations) if pull_durations else 0,
             },
+            'discrim_action_duration': dict(get_discrim_durations()),
             'errors': error_info,
         }
         
