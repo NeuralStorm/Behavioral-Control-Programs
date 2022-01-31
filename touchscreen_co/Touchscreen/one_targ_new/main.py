@@ -1279,7 +1279,11 @@ class Manager(ScreenManager):
                 if not wid.startswith(prefix):
                     continue
                 if widget.active:
-                    value = wid.removeprefix(prefix)
+                    # value = wid.removeprefix(prefix)
+                    if wid.startswith(prefix):
+                        value = wid[len(prefix):]
+                    else:
+                        value = wid
             assert value is not None
             return value
         
