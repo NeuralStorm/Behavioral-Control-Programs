@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "primate_joystick_pull"
+version = "0.1.0"
+description = ""
+authors = ["Ryan <yarnnd@gmail.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.8"
+numpy = "1.19.4"
+Pillow = "8.0.1"
+pyscreenshot = "3.0"
+
+[tool.poetry.dev-dependencies]
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
