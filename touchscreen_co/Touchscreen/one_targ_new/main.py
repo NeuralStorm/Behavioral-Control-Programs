@@ -165,7 +165,7 @@ class COGame(Widget):
     def init(self, animal_names_dict=None, rew_in=None, task_in=None,
         test=None, hold=None, targ_structure=None,
         autoquit=None, rew_var=None, targ_timeout = None, nudge_x=None, nudge_y=None,
-        peripheral_target=None,
+        peripheral_target=None, corner_non_cage_target_distance=None
     ):
 
         self.plexon = 'test' not in sys.argv
@@ -379,6 +379,9 @@ class COGame(Widget):
         self.exit_target1.color = (.15, .15, .15, 1)
         self.exit_target2.color = (.15, .15, .15, 1)
 
+        self.corner_dist = corner_non_cage_target_distance
+        assert self.corner_dist is not None
+        
         self.target_list = generatorz(self.target_distance, self.nudge_dist, self.generator_kwarg)
         self.target_list[:, 0] = self.target_list[:, 0] + self.nudge_x
         self.target_list[:, 1] = self.target_list[:, 1] + self.nudge_y
@@ -1088,6 +1091,8 @@ class COGame(Widget):
         else:
             return False
 
+    # get_targets functions are called as generatorz()
+    # currently hard coded to use get_targets_co with gen_kwarg == 'corners'
     def get_4targets(self, target_distance=4, nudge=0., gen_kwarg=None):
         return self.get_targets_co(target_distance=target_distance, nudge=0.)
 
@@ -1095,7 +1100,8 @@ class COGame(Widget):
         # Targets in CM: 
         if gen_kwarg ==  'corners':
             angle = np.linspace(0, 2*np.pi, 5)[:-1] + (np.pi/4.)
-            target_distance = 6.
+            # target_distance = 6.
+            target_distance = self.corner_dist
         else:
             angle = np.linspace(0, 2*np.pi, ntargets+1)[:-1]
 
@@ -1108,7 +1114,8 @@ class COGame(Widget):
             nudge_targ = np.array([0, 0, 1., 0])
         
         if 'test' in sys.argv:
-            target_distance = 6
+            pass
+            # target_distance = 6
         
         x = np.cos(angle)*target_distance
         y = np.sin(angle)*target_distance
@@ -1362,6 +1369,10 @@ class Manager(ScreenManager):
         pt_color = pt_color.split('_')
         
         params['peripheral_target'] = (pt_shape, pt_color)
+        
+        raw_targ_dist = get_prefixed_value('c_nc_targ_dist_')
+        targ_dist = int(raw_targ_dist)
+        params['corner_non_cage_target_distance'] = int(targ_dist)
         
         from pprint import pp
         pp(tuple(params.values()))
