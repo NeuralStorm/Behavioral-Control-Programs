@@ -152,9 +152,9 @@ Inclinometer: Inclinometer
 Timestamp: Timestamp (generated based on 
 ```
 
-# Arguments
+# Command line parameters
 
-Some arguments aren't listed in the readme. Run the program with `--help` for a fill list of arguments.
+Some parameters aren't listed in the readme. Run the program with `--help` for a fill list of parameters.
 
 `--template-in`
 
@@ -172,13 +172,21 @@ optional in closed loop, otherwise unused
 
 path to write ground reaction force data csv to
 
-`--labels`
-
-path to an hjson labels file. `channels` will be loaded from the labels file instead of the config file
-
 `--config`
 
-path to hjson config file, see config keys section
+path to hjson config file, see config parameters section
+
+`--labels`  
+path to labels config file, see label parameters section
+
+`--overwrite`  
+overwrite exsting output files, if not specified the program will stop if the output file already exists
+
+`--no-start-pulse`  
+disable waiting for the plexon start pulse before performing tilts
+
+`--live`  
+show live graphs of analog recordings
 
 # Program flow
 
@@ -268,11 +276,11 @@ waits for enter to be pressed (so recording/live view can be used)
 
 # Config file
 
-Keys that begin with `--` will be added to the passed command line parameters. The `_` key can be set to a list of strings which will be added to the command line arguments.
+Config parameters that begin with `--` will be added to the passed command line parameters. The `_` parameter can be set to a list of strings which will be added to the command line parameters.
 
-Other keys are used as listed below.
+Other parameters are used as listed below.
 
-# Config keys
+# Config parameters
 
 `mode`: Literal['open_loop', 'closed_loop', 'monitor']
 
@@ -311,6 +319,10 @@ If true the tilts from the input template will be repeated. If baseline is false
 
 If true a water reward will be given after succesful decoding. If false no water reward will be given.
 
+# Labels file
+
+# Label parameters
+
 `channels`: Dict[int, List[int]]
 
-Maps plexon units to event types where that unit should be used in psth generation.
+Assigns event types to plexon units (a unit is a single neuron, channels are an electrode) where that unit should be used in psth generation.
