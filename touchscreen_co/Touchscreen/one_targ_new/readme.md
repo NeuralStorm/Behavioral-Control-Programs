@@ -7,6 +7,26 @@ or the game will break on windows (any system with backslash as the default path
 * On systems that allow it (mac, linux) the path the repo is placed at should not contain
 backslashes
 
+* the program targets python 3.8
+
+# Setup
+
+copy `./example_config.hjson` to `./config.hjson`
+
+run `pip install -r requirements.txt`
+
+# Running
+
+modify `./config.hjson` as needed
+
+run `python main.py`  
+without hardware `python main.py --test`
+
+# Poetry (alternative to pip/python commands above)
+
+`poetry update`  
+`poetry run python main.py -- --test`
+
 # Other Things
 
 ### Output file save location (maybe)  

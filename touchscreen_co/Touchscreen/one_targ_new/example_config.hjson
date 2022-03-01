@@ -1,0 +1,42 @@
+{
+
+target_timeout: 60
+
+center_target_reward: 0.1
+peripheral_target_reward: 0.7
+
+target_radius: 2.25
+
+animal_name: "donu"
+
+# can be set to ".4-.6" to replicate old "Rand: .4-.6" behavour
+center_hold_time: 0.1
+target_hold_time: 0.1
+
+# can be set to a very large number to prevent automatic exit
+autoquit_after: 10
+
+# value between 0 and 1
+reward_variability: 1
+reward_double_chance: 0
+
+nudge_x: 0
+nudge_y: 0
+
+# can be circle, square, triangle
+peripheral_target_shape: circle
+# rgba value
+# yellow 1_1_0_1
+# red    1_0_0_1
+# green  0_1_0_1
+peripheral_target_color: 1_1_0_1
+
+corner_non_cage_target_distance: 6
+
+# when true gives a big reward for a perpheral target and small reward for a center target
+# when false always gives a big reward
+# big reward = center_target_reward setting, small reward = peripheral_target_reward
+# (based on config gui)
+reward_setup: true
+
+}
