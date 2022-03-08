@@ -195,6 +195,7 @@ class COGame(Widget):
 
 
         self.target_timeout_time = targ_timeout['tt']
+        self.ch_timeout = targ_timeout['ch_timeout']
 
         small_rew = rew_in['small_rew']
         big_rew = rew_in['big_rew']
@@ -1332,6 +1333,7 @@ class Manager(ScreenManager):
         
         params['targ_timeout'] = {
             'tt': raw['target_timeout'],
+            'ch_timeout': raw['ch_timeout'],
         }
         
         params['nudge_x'] = {

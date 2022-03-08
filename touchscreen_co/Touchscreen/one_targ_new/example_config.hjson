@@ -1,6 +1,9 @@
 {
 
+// time after a succesful hold of the center target is completed before the trial is failed
 target_timeout: 60
+// time after the center target appears before the trial is failed
+ch_timeout: 60
 
 center_target_reward: 0.1
 peripheral_target_reward: 0.7
