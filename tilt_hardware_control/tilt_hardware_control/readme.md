@@ -15,7 +15,6 @@ Example command line calls
 ```bash
 python main.py --config example_config.hjson --template-out x.json
 python main.py --config example_config.hjson --template-out x_2.json --template-in x.json
-python main.py --config example_config.hjson --template-out x_2.json --template-in x.json --loadcell-out grf_data.csv
 ```
 
 ## Usage example
@@ -24,24 +23,24 @@ python main.py --config example_config.hjson --template-out x_2.json --template-
 
 Make a copy of example_config.hjson, ensure `mode` is set to open_loop. Set `num_tilts` and `delay_range` to the desired values. `baseline`, `sham`, `reward` and `channels` can be ignored or removed from the config file.
 
-Run the script (how python in envoked will vary depending on system configuration)
+Run the script
 ```
-python main.py --config your_config.hjson --loadcell-out grf_data.csv
+python main.py --config your_config.hjson
 ```
-This will read setting from `your_config.hjson` and write recorded grf data to `grf_data.csv`. Note that if `grf_data.csv` already exists it will be overwritten.
+This will read setting from `your_config.hjson` and write recorded grf data to `loadcell_tilt.csv`.
 
-The program will run through the specified number of tilts then exit.
+The program will run through the specified number of tilts then wait for the user to press enter before exiting.
 
 ---
 ### Closed loop, initial run
 
 Make a copy of example_config.hjson, set `mode` to closed_loop, `baseline` to true and `sham` to false. Set `num_tilts`, `delay_range`, and `channels` to the desired values. `reward` is not used.
 
-Run the script (how python in envoked will vary depending on system configuration)
+Run the script
 ```
-python main.py --config your_config.hjson --template-out template_a.json --loadcell-out grf_data.csv
+python main.py --config your_config.hjson --template-out template_a.json
 ```
-This will read settings from `your_config.hjson` and write recorded grf data to `grf_data.csv`. Note that if `grf_data.csv` already exists it will be overwritten. PSTH template data and a record of the run will be written to `template_a.json`.
+This will read settings from `your_config.hjson` and write recorded grf data to `loadcell_tilt.csv`. PSTH template data and a record of the run will be written to `template_a.json`.
 
 Make sure to use enter and not ctrl-c if you need to pause the program.
 
@@ -52,11 +51,11 @@ The program will perform tilts and record the psth templates.
 
 Make a copy of the config used for the initial run and change `baseline` to false.
 
-Run the script (how python in envoked will vary depending on system configuration)
+Run the script
 ```
-python main.py --config your_other_config.hjson --template-in template_a.json --template-out template_b.json --loadcell-out grf_data.csv
+python main.py --config your_other_config.hjson --template-in template_a.json --template-out template_b.json
 ```
-This will read settings from `your_other_config.hjson` and write recorded grf data to `grf_data.csv`. Note that if `grf_data.csv` already exists it will be overwritten. PSTH templates are loaded from `template_a.json`. PSTH template data and a record of the run will be written to `template_b.json`.
+This will read settings from `your_other_config.hjson` and write recorded grf data to `loadcell_tilt.csv`. PSTH templates are loaded from `template_a.json`. PSTH template data and a record of the run will be written to `template_b.json`.
 
 The program will perform tilts and attempt to classify the tilt type based on templates from `template_a.json` and perform punish/reward actions based on if the classification was correct. It will also record a new set of templates.
 
@@ -149,7 +148,7 @@ Dev6/ai51: fl_tz
 Strobe: ttl pulse indicating start of tilt
 Start: ttl pulse indicating start of plexon recording
 Inclinometer: Inclinometer
-Timestamp: Timestamp (generated based on 
+Timestamp: Timestamp (incremented by 1/sample rate for each row)
 ```
 
 # Command line parameters
@@ -200,6 +199,7 @@ for i in 0..num_tilts:
     if reward enabled:
         dispense water
     wait for a random time within delay range
+waits for the user to press enter
 ```
 
 ## closed loop baseline
@@ -220,6 +220,7 @@ for i in 0..num_tilts:
                     break a
     finish tilt
     wait for a random time within delay range
+waits for the user to press enter
 ```
 
 ## closed loop (baseline = false, sham = false)
@@ -244,6 +245,7 @@ for i in 0..num_tilts:
         perform punish tilt
     finish tilt
     wait for a random time within delay range
+waits for the user to press enter
 ```
 
 ## closed loop sham (baseline = false)
@@ -268,11 +270,16 @@ for i in 0..num_tilts:
         perform punish tilt
     finish tilt
     wait for a random time within delay range
+waits for the user to press enter
 ```
 
 ## monitor
 
 waits for enter to be pressed (so recording/live view can be used)
+
+## bias
+
+records data for a fixed amount of time then exits
 
 # Config file
 
@@ -282,7 +289,7 @@ Other parameters are used as listed below.
 
 # Config parameters
 
-`mode`: Literal['open_loop', 'closed_loop', 'monitor']
+`mode`: Literal['open_loop', 'closed_loop', 'monitor', 'bias']
 
 see program flow section
 
@@ -303,6 +310,10 @@ If clock_source is external this should probably be 1250.
 
 Number of tilts to perform. This number must be divisible by 4. The tilts will be split evenly between tilt types 1, 2, 3 and 4.
 
+`tilt_sequence`: Optional[List[int]]
+
+A fixed sequence of tilts to use instead of generating a randomized sequence. If specified `num_tilts` will be ignored.
+
 `delay_range`: Tuple[float, float]
 
 Range of delays between tilts is seconds.
@@ -311,7 +322,7 @@ Range of delays between tilts is seconds.
 
 Only used when mode == closed loop. If false an input template will be used to classify tilts. If true a template will be generated without performing classification.
 
-`sham`: Optional[bool]
+`yoked`: Optional[bool]
 
 If true the tilts from the input template will be repeated. If baseline is false the rewards and punish tilts will be repeated. reward must be true for rewards to be enabled.
 
@@ -325,4 +336,4 @@ If true a water reward will be given after succesful decoding. If false no water
 
 `channels`: Dict[int, List[int]]
 
-Assigns event types to plexon units (a unit is a single neuron, channels are an electrode) where that unit should be used in psth generation.
+Selects a set of plexon units to be used in the psth template. The parameters of the dict are plexon channels and the values are plexon units within that channel.
