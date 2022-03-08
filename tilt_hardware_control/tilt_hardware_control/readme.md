@@ -151,42 +151,6 @@ Inclinometer: Inclinometer
 Timestamp: Timestamp (incremented by 1/sample rate for each row)
 ```
 
-# Command line parameters
-
-Some parameters aren't listed in the readme. Run the program with `--help` for a fill list of parameters.
-
-`--template-in`
-
-path to a template file created by a previous run of the program
-
-required in open loop non baseline, otherwise unused
-
-`--template-out`
-
-path to write template file to
-
-optional in closed loop, otherwise unused
-
-`--loadcell-out`
-
-path to write ground reaction force data csv to
-
-`--config`
-
-path to hjson config file, see config parameters section
-
-`--labels`  
-path to labels config file, see label parameters section
-
-`--overwrite`  
-overwrite exsting output files, if not specified the program will stop if the output file already exists
-
-`--no-start-pulse`  
-disable waiting for the plexon start pulse before performing tilts
-
-`--live`  
-show live graphs of analog recordings
-
 # Program flow
 
 ## open loop
@@ -280,6 +244,42 @@ waits for enter to be pressed (so recording/live view can be used)
 ## bias
 
 records data for a fixed amount of time then exits
+
+# Command line parameters
+
+Some parameters aren't listed in the readme. Run the program with `--help` for a fill list of parameters.
+
+`--template-in`
+
+path to a template file created by a previous run of the program
+
+required in open loop non baseline, otherwise unused
+
+`--template-out`
+
+path to write template file to
+
+optional in closed loop, otherwise unused
+
+`--loadcell-out`
+
+path to write ground reaction force data csv to
+
+`--config`
+
+path to hjson config file, see config parameters section
+
+`--labels`  
+path to labels config file, see label parameters section
+
+`--overwrite`  
+overwrite exsting output files, if not specified the program will stop if the output file already exists
+
+`--no-start-pulse`  
+disable waiting for the plexon start pulse before performing tilts
+
+`--live`  
+show live graphs of analog recordings
 
 # Config file
 
