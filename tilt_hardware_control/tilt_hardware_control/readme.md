@@ -17,7 +17,7 @@ python main.py --config example_config.hjson --template-out x.json
 python main.py --config example_config.hjson --template-out x_2.json --template-in x.json
 ```
 
-## Usage example
+## Usage examples
 
 ### Open loop
 
@@ -153,7 +153,9 @@ Timestamp: Timestamp (incremented by 1/sample rate for each row)
 
 # Program flow
 
-## open loop
+The program has multiple modes, set with the `mode` config parameter. The behaviour of the different modes is listed below. Recording of analog data is handled the same way for all modes except bias (live view can not be used).
+
+## open_loop
 
 ```
 create a list of tilt types
@@ -166,7 +168,7 @@ for i in 0..num_tilts:
 waits for the user to press enter
 ```
 
-## closed loop baseline
+## closed_loop (baseline = true, yoked = false)
 
 ```
 create a list of tilt types
@@ -187,7 +189,7 @@ for i in 0..num_tilts:
 waits for the user to press enter
 ```
 
-## closed loop (baseline = false, sham = false)
+## closed_loop (baseline = false, yoked = false)
 
 ```
 create a list of tilt types
@@ -212,7 +214,7 @@ for i in 0..num_tilts:
 waits for the user to press enter
 ```
 
-## closed loop sham (baseline = false)
+## closed_loop (baseline = false, yoked = true)
 
 ```
 load list of tilt types from template
@@ -239,7 +241,7 @@ waits for the user to press enter
 
 ## monitor
 
-waits for enter to be pressed (so recording/live view can be used)
+waits for enter to be pressed (so recording/live view can be used without tilting)
 
 ## bias
 
@@ -249,24 +251,20 @@ records data for a fixed amount of time then exits
 
 Some parameters aren't listed in the readme. Run the program with `--help` for a fill list of parameters.
 
-`--template-in`
-
+`--template-in`  
 path to a template file created by a previous run of the program
 
 required in open loop non baseline, otherwise unused
 
-`--template-out`
-
+`--template-out`  
 path to write template file to
 
 optional in closed loop, otherwise unused
 
-`--loadcell-out`
-
+`--loadcell-out`  
 path to write ground reaction force data csv to
 
-`--config`
-
+`--config`  
 path to hjson config file, see config parameters section
 
 `--labels`  
@@ -289,51 +287,41 @@ Other parameters are used as listed below.
 
 # Config parameters
 
-`mode`: Literal['open_loop', 'closed_loop', 'monitor', 'bias']
-
+`mode`: Literal['open_loop', 'closed_loop', 'monitor', 'bias']  
 see program flow section
 
-`clock_source`: Literal['external', 'internal']
-
+`clock_source`: Literal['external', 'internal']  
 should normally be set to external
 
 internal uses the internal nidaq clock. externel sets the clock to Dev6/PFI6
 
 Dev6/PFI6 should be connected to the downsampled plexon clock
 
-`clock_rate`: int
-
+`clock_rate`: int  
 The rate at which to collect samples in hertz.
 If clock_source is external this should probably be 1250.
 
-`num_tilts`: int
-
+`num_tilts`: int  
 Number of tilts to perform. This number must be divisible by 4. The tilts will be split evenly between tilt types 1, 2, 3 and 4.
 
-`tilt_sequence`: Optional[List[int]]
-
+`tilt_sequence`: Optional[List[int]]  
 A fixed sequence of tilts to use instead of generating a randomized sequence. If specified `num_tilts` will be ignored.
 
-`delay_range`: Tuple[float, float]
-
+`delay_range`: Tuple[float, float]  
 Range of delays between tilts is seconds.
 
-`baseline`: Optional[bool]
-
+`baseline`: Optional[bool]  
 Only used when mode == closed loop. If false an input template will be used to classify tilts. If true a template will be generated without performing classification.
 
-`yoked`: Optional[bool]
-
+`yoked`: Optional[bool]  
 If true the tilts from the input template will be repeated. If baseline is false the rewards and punish tilts will be repeated. reward must be true for rewards to be enabled.
 
-`reward`: Optional[bool]
-
+`reward`: Optional[bool]  
 If true a water reward will be given after succesful decoding. If false no water reward will be given.
 
 # Labels file
 
 # Label parameters
 
-`channels`: Dict[int, List[int]]
-
+`channels`: Dict[int, List[int]]  
 Selects a set of plexon units to be used in the psth template. The parameters of the dict are plexon channels and the values are plexon units within that channel.
