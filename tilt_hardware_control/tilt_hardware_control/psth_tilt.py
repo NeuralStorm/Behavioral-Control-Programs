@@ -19,6 +19,12 @@ class SpikeWaitTimeout(Exception):
     # def __str__(self):
     #     return super().__repr__() + str(self.tilt_rec)
 
+class OpxEvent:
+    Channel: int
+    Unit: int
+    Type: int
+    TimeStamp: float
+
 class PsthTiltPlatform(AbstractContextManager):
     def __init__(self, *, 
             baseline_recording: bool,
@@ -27,6 +33,7 @@ class PsthTiltPlatform(AbstractContextManager):
             template_in_path,
             channel_dict,
             mock: bool = False,
+            pyopx: bool = True,
             reward_enabled: bool,
             ):
         
@@ -44,10 +51,44 @@ class PsthTiltPlatform(AbstractContextManager):
         self.motor_interrupt = MotorControl(port = 1, mock = mock)
         self.motor_interrupt.tilt('stop')
         
+        self.pyopx = pyopx
         if mock:
             self.PL_SingleWFType = 0
             self.PL_ExtEventType = 1
             self.plex_client = None
+        elif self.pyopx:
+            from pyopxclient import PyOPXClientAPI, OPX_ERROR_NOERROR, SPIKE_TYPE, CONTINUOUS_TYPE, EVENT_TYPE, OTHER_TYPE
+            dll_path = Path(__file__).parent / 'bin'
+            self.opx_client = PyOPXClientAPI(opxclient_dll_path=dll_path)
+            self.opx_client.connect()
+            if not self.opx_client.connected:
+                msg = "Client isn't connected. Error code: {}".format(self.opx_client.last_result)
+                raise RuntimeError(msg)
+            
+            def _get_opx_config():
+                client = self.opx_client
+                
+                spike_source_nums = set()
+                event_source_nums = set()
+                
+                global_parameters = client.get_global_parameters()
+                for src_num in global_parameters.source_ids:
+                    src_info = client.get_source_info(src_num)
+                    source_name, source_type, num_chans, linear_start_chan = src_info
+                    
+                    if source_type == SPIKE_TYPE:
+                        spike_source_nums.add(src_num)
+                    elif source_type == EVENT_TYPE:
+                        event_source_nums.add(src_num)
+                
+                return {
+                    'spike_source_nums': spike_source_nums,
+                    'event_source_nums': event_source_nums,
+                }
+            
+            self.opx_config = _get_opx_config()
+            self.PL_SingleWFType = 0
+            self.PL_ExtEventType = 1
         else:
             from pyplexclientts import PyPlexClientTSAPI, PL_SingleWFType, PL_ExtEventType
             dll_path = Path(__file__).parent / 'bin'
@@ -109,7 +150,10 @@ class PsthTiltPlatform(AbstractContextManager):
         self.motor.close()
         self.motor_interrupt.close()
         if not self.mock:
-            self.plex_client.close_client()
+            if self.pyopx:
+                self.opx_client.disconnect()
+            else:
+                self.plex_client.close_client()
         
         if save_template:
             self.psth.psthtemplate()
@@ -125,6 +169,7 @@ class PsthTiltPlatform(AbstractContextManager):
             
             class MockEvent:
                 Channel: int
+                Unit: int
                 Type: int
                 TimeStamp: float
             
@@ -148,6 +193,28 @@ class PsthTiltPlatform(AbstractContextManager):
                 return [e]
             else:
                 assert False
+        elif self.pyopx:
+            self.opx_client.opx_wait(50)
+            new_data = self.opx_client.get_new_data()
+            
+            out = []
+            for i, num in enumerate(new_data.source_num_or_type):
+                if num in self.opx_config['spike_source_nums']:
+                    e = OpxEvent()
+                    e.Type = self.PL_SingleWFType
+                    e.Channel = new_data.channel[i]
+                    e.Unit = new_data.unit[i]
+                    e.TimeStamp = new_data.timestamp[i]
+                    out.append(e)
+                elif num in self.opx_config['event_source_nums']:
+                    e = OpxEvent()
+                    e.Type = self.PL_ExtEventType
+                    e.Channel = new_data.channel[i]
+                    e.Unit = new_data.unit[i]
+                    e.TimeStamp = new_data.timestamp[i]
+                    out.append(e)
+            
+            return out
         else:
             res = self.plex_client.get_ts()
             return res

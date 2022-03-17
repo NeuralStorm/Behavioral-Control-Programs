@@ -287,6 +287,8 @@ Other parameters are used as listed below.
 
 # Config parameters
 
+parameters marked with * are required in closed loop mode but do not need to be specified in other modes
+
 `mode`: Literal['open_loop', 'closed_loop', 'monitor', 'bias']  
 see program flow section
 
@@ -310,14 +312,22 @@ A fixed sequence of tilts to use instead of generating a randomized sequence. If
 `delay_range`: Tuple[float, float]  
 Range of delays between tilts is seconds.
 
-`baseline`: Optional[bool]  
+`baseline`*: Optional[bool]  
 Only used when mode == closed loop. If false an input template will be used to classify tilts. If true a template will be generated without performing classification.
 
-`yoked`: Optional[bool]  
+`yoked`*: Optional[bool]  
 If true the tilts from the input template will be repeated. If baseline is false the rewards and punish tilts will be repeated. reward must be true for rewards to be enabled.
 
-`reward`: Optional[bool]  
+`reward`*: Optional[bool]  
 If true a water reward will be given after succesful decoding. If false no water reward will be given.
+
+`plexon_lib`*: Optional[Literal['plex', 'opx']]  
+'plex' uses the `pyplexclientts` library  
+'opx' uses the `pyopxclient` library
+
+'opx' should be used with newer plexon systems, 'plex' with older systems
+
+defaults to 'opx'
 
 # Labels file
 

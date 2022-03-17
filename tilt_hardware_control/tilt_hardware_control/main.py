@@ -392,8 +392,10 @@ class Config:
     
     # None if mode == open_loop
     baseline: Optional[bool]
-    sham: Optional[bool]
+    yoked: Optional[bool]
     reward: Optional[bool]
+    
+    plexon_lib: Optional[Literal['plex', 'opx']]
     
     # full deserialized json from the config file
     raw: Any
@@ -436,9 +438,11 @@ def load_config(path: Path, labels_path: Optional[Path]) -> Config:
         config.baseline = data['baseline']
         config.yoked = data['yoked']
         config.reward = data['reward']
+        config.plexon_lib = data.get('plexon_lib', 'opx')
         assert type(config.baseline) == bool
         assert type(config.yoked) == bool
         assert type(config.reward) == bool
+        assert type(config.plexon_lib) in ['plex', 'opx']
         
         if labels_path is not None:
             with open(labels_path) as f:
@@ -708,6 +712,7 @@ def main():
             template_in_path = args.template_in,
             channel_dict = config.channels,
             mock = mock,
+            pyopx = config.plexon_lib == 'opx',
             reward_enabled = config.reward,
         ) as platform:
             if args.no_spike_wait:
