@@ -21,13 +21,18 @@ class MotorControl:
         
         the fourth bit is connected to input 6 (speculative)
         
+        the inputs are marked as X3, X4, X5 and X6 in the manual and
+        pinout and as simply 3, 4, 5 and 6 in the SI programmer software
+        
         a tilt is started by setting bits 3,4,5 to one of a set of specific sequences defined
         in the SI programmer script
         
         a tilt is stopped by bringing input 6 low (speculative)
+        
+        the start of tilt is signaled by output 2 (Y2) being brought high for 2ms
         """
         
-        # variable name / number / sham number / label in SI5 file
+        # variable name / number / strobe number / label in SI5 file
         self.tilt_types = {
             'stop': [0,0,0,0,0,0,0,0],
             # tilt1 / 1 / 9 / tilt6
