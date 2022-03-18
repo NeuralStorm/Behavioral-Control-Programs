@@ -14,6 +14,11 @@ pin numbers are prefixed based on the device/port, e.g. tim(5) is pin 5 on the p
 `conv` - voltage conversion board, see [the image of the conversion board](voltage_conversion_board/voltage_conversion_board_pinout.png) for pin numbers
 
 ---
+`downsample` - clock downsampling board
+
+port numbers correspond to the labels on the downsampling board
+
+---
 `nidaq` - SCB-68 breakout board on conenctor 0 of the NI 6225 nidaq connected to the tilt computer
 
 port numbers will have both the number labeled on the breakout board and the pin's name  
@@ -49,6 +54,9 @@ the following pins should all be connected together
 `conv(5)`  
 `conv(18)` (optional)  
 `conv(16)` (optional)  
+`downsample(In -)`
+`downsample(Pwr -)`
+`downsample(out -)`
 `motor(GND|19)`  
 `din(Ground|19)`  
 `tim(GND|15)`
@@ -59,6 +67,8 @@ the nidaq, plexon, f/t sensor amp and motor controller have external power sourc
 `conv(1)` 5v  
 `conv(2)` 12v  
 `conv(17)` 24v (shared with the V+ connector on the motor controller)
+
+`downsample(Pwr +)` - `nidaq(+5V|8)`
 
 ## tilt type
 
@@ -91,5 +101,6 @@ the inclinometer should be connected to `nidaq(AI 10|31)`
 
 ## plexon clock
 
-`tim(40 kHz|5)` - `nidaq(PFI 6|5)`
+`tim(40 kHz|5)` - `downsample(In +)`  
+`downsample(out +)` - `nidaq(PFI 6|5)`
 
