@@ -26,6 +26,10 @@ import argparse
 from pathlib import Path
 import hjson
 
+# errors will happen if more trials than MAX_TRIALS are done
+# this value is used to generate some fixed size lists used by the program
+# the max_trials config value is checked to ensure it's below or equal to this value
+MAX_TRIALS = 10000
 
 Config.set('graphics', 'resizable', False)
 if platform == 'darwin':
@@ -592,7 +596,7 @@ class COGame(Widget):
         rew = []
         trial_cnt_bonus = 0
 
-        for i in range(500):
+        for i in range(MAX_TRIALS):
             mini_block_array = np.zeros((mini_block))
             ix = np.random.permutation(mini_block)
             mini_block_array[ix[:2]] = reward_for_grasp[1]
@@ -650,7 +654,7 @@ class COGame(Widget):
 
     def update(self, ts):
         """
-            each key in self.FSM (=state) (set in self.init) is a state the game to be in
+            each key in self.FSM (=state) (set in self.init) is a state the game can be in
                 each value is a dict mapping (describing a condition and resulting behaviour)
                     a function (=fn) to check if the condition is currently met
                         _start_{state} is called when a state is initially activated
@@ -1138,7 +1142,7 @@ class COGame(Widget):
 
         tgs = []
         nudges = []
-        for blks in range(100):
+        for blks in range(MAX_TRIALS // 4 + 1):
             ix = np.random.permutation(tmp.shape[0])
             tgs.append(tmp[ix, :])
             nudges.append(nudge_targ[ix])
@@ -1322,6 +1326,7 @@ class Manager(ScreenManager):
             'get_targets_co': True,
         }
         
+        assert raw['autoquit_after'] <= MAX_TRIALS
         params['autoquit'] = {
             'autoquit': raw['autoquit_after'],
         }
