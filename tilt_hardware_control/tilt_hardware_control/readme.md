@@ -112,39 +112,37 @@ Using plexon's clock signal instead of the internal nidaq clock means, given one
 
 clock_source should always be set to external in normal use.
 
-## Ground reaction forces recording
+## Strain guage reading recording
 
-Grf data is recorded concurrently with the rest of the program.
+Strain guage data is recorded concurrently with the rest of the program.
 
-The grf data csv has the following columns
+Note: In some places the analysis pipeline refers to the side with two sensors as the hindlimbs but they could be the forelimbs if the animal is placed on the platform facing the other direction.  
+With the forelimbs on a single sensor the sensor numbers correspond to the following limbs.  
+sensor1: right hind limb  
+sensor2: left hind limb  
+sensor3: forelimbs
 
-```
-rhl_fx = right hindlimb force in the x axis
-lhl_ty = left hindlimb torque in the y axis
-fl_fz = forelimb force in the z axis
-```
-
-Note: The analysis pipeline and these docs currently refers to the side with two sensors as the hindlimbs but they could be the forelimbs if the animal is placed on the platform facing the other direction.
+The output csv contains the following columns.
 
 ```
-Dev6/ai18: rhl_fx
-Dev6/ai19: rhl_fy
-Dev6/ai20: rhl_fz
-Dev6/ai21: rhl_tx
-Dev6/ai22: rhl_ty
-Dev6/ai23: rhl_tz
-Dev6/ai32: lhl_fx
-Dev6/ai33: lhl_fy
-Dev6/ai34: lhl_fz
-Dev6/ai35: lhl_tx
-Dev6/ai36: lhl_ty
-Dev6/ai37: lhl_tz
-Dev6/ai38: fl_fx
-Dev6/ai39: fl_fy
-Dev6/ai48: fl_fz
-Dev6/ai49: fl_tx
-Dev6/ai50: fl_ty
-Dev6/ai51: fl_tz
+sensor1_s1
+sensor1_s2
+sensor1_s3
+sensor1_s4
+sensor1_s5
+sensor1_s6
+sensor2_s1
+sensor2_s2
+sensor2_s3
+sensor2_s4
+sensor2_s5
+sensor2_s6
+sensor3_s1
+sensor3_s2
+sensor3_s3
+sensor3_s4
+sensor3_s5
+sensor3_s6
 Strobe: ttl pulse indicating start of tilt
 Start: ttl pulse indicating start of plexon recording
 Inclinometer: Inclinometer
