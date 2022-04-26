@@ -107,7 +107,8 @@ class TiltPlatform(AbstractContextManager):
     
     def tilt(self, tilt_type, water=False):
         water_duration = 0.15
-        tilt_duration = 1.75
+        # tilt_duration = 1.75
+        tilt_duration = 1.5
         
         try:
             tilt_name = {1: 'a', 2: 'b', 3: 'c', 4: 'd'}[tilt_type]
