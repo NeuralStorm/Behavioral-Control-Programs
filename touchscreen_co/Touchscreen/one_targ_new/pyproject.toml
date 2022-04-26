@@ -9,6 +9,7 @@ python = "^3.8"
 
 "kivy" = { version = "2.0.0", extras = ["base"] }
 numpy = "1.19.4"
+hjson = "3.0.1"
 
 [tool.poetry.dev-dependencies]
 

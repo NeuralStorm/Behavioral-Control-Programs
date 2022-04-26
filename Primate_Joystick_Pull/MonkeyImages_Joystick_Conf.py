@@ -234,8 +234,12 @@ class InfoView:
             we = start # window end
             while ws < end:
                 ws = we
-                if ws < 1 - 0.00001:
+                if ws < 0.9 - 0.00001:
                     we = ws + 0.1
+                elif ws < 1.1 - 0.00001:
+                    we = ws + 0.2
+                elif ws < 1.5 - 0.00001:
+                    we = ws + 0.4
                 else:
                     we = ws + step
                 yield ws, we

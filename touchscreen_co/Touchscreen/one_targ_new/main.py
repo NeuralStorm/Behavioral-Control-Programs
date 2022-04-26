@@ -22,7 +22,14 @@ from numpy import binary_repr
 import struct
 from sys import platform
 import sys
+import argparse
+from pathlib import Path
+import hjson
 
+# errors will happen if more trials than MAX_TRIALS are done
+# this value is used to generate some fixed size lists used by the program
+# the max_trials config value is checked to ensure it's below or equal to this value
+MAX_TRIALS = 10000
 
 Config.set('graphics', 'resizable', False)
 if platform == 'darwin':
@@ -36,7 +43,7 @@ elif platform == 'win32':
 elif platform == 'linux':
     fixed_window_size = (1800, 1000)
     pix_per_cm = 85.
-    if 'test' in sys.argv:
+    if '--test' in sys.argv:
         fixed_window_size = (500, 500)
         pix_per_cm = 30.
 
@@ -168,7 +175,7 @@ class COGame(Widget):
         peripheral_target=None, corner_non_cage_target_distance=None
     ):
 
-        self.plexon = 'test' not in sys.argv
+        self.plexon = '--test' not in sys.argv
 
         assert peripheral_target is not None
         self.peripheral_target_param = peripheral_target
@@ -191,20 +198,11 @@ class COGame(Widget):
         self.rhtouch_sensor = 0.
 
 
-        targ_timeout_opts = [15, 30, 45, 60]
-        for i, val in enumerate(targ_timeout['tt']):
-            if val:
-                self.target_timeout_time = targ_timeout_opts[i]
+        self.target_timeout_time = targ_timeout['tt']
+        self.ch_timeout = targ_timeout['ch_timeout']
 
-        small_rew_opts = [0., .1, .3, .5]
-        for i, val in enumerate(rew_in['small_rew']):
-            if val:
-                small_rew = small_rew_opts[i]
-
-        big_rew_opts = [0., .3, .5, .7]
-        for i, val in enumerate(rew_in['big_rew']):
-            if val:
-                big_rew = big_rew_opts[i]
+        small_rew = rew_in['small_rew']
+        big_rew = rew_in['big_rew']
 
 
         if rew_in['rew_anytouch']:
@@ -228,11 +226,8 @@ class COGame(Widget):
         else:
             self.skip_juice = False
 
-        target_rad_opts = [.5, .75, .82, .91, 1.0, 1.5, 2.25, 3.0]
-        for i, val in enumerate(task_in['targ_rad']):
-            if val:
-                self.periph_target_rad = target_rad_opts[i]
-                self.center_target_rad = target_rad_opts[i]
+        self.periph_target_rad = task_in['targ_rad']
+        self.center_target_rad = task_in['targ_rad']
 
         for i, (nm, val) in enumerate(animal_names_dict.items()):
             if val:
@@ -251,34 +246,50 @@ class COGame(Widget):
         self.cht_type = None
         self.tht_type = None
 
-        for i, val in enumerate(hold['hold']):
-            if val:
-                if type(holdz[i]) is str:
-                    mx, mn = holdz[i].split('-')
-                    self.tht_type = holdz[i]
-                    self.tht =  (float(mn)+float(mx))*.5
-                else:
-                    self.tht = holdz[i]
+        def _parse_hold(x):
+            if type(x) is str:
+                mx, mn = x.split('-')
+                b = x
+                a = (float(mn)+float(mx))*.5
+            else:
+                b = None
+                a = x
+            
+            return a, b
+        
+        self.tht, self.tht_type = _parse_hold(hold['hold'])
+        self.cht, self.cht_type = _parse_hold(hold['chold'])
+        
+        # for i, val in enumerate(hold['hold']):
+        #     if val:
+        #         if type(holdz[i]) is str:
+        #             mx, mn = holdz[i].split('-')
+        #             self.tht_type = holdz[i]
+        #             self.tht =  (float(mn)+float(mx))*.5
+        #         else:
+        #             self.tht = holdz[i]
 
-        for i, val in enumerate(hold['chold']):
-            if val:
-                if type(holdz[i]) is str:
-                    mx, mn = holdz[i].split('-')
-                    self.cht_type = holdz[i]
-                    self.cht = (float(mn)+float(mx))*.5
-                else:
-                    self.cht = holdz[i]
+        # for i, val in enumerate(hold['chold']):
+        #     if val:
+        #         if type(holdz[i]) is str:
+        #             mx, mn = holdz[i].split('-')
+        #             self.cht_type = holdz[i]
+        #             self.cht = (float(mn)+float(mx))*.5
+        #         else:
+        #             self.cht = holdz[i]
                     
         
-        nudge_x_opts = [-6, -4, -2, 0, 2, 4, 6]    
-        for i, val in enumerate(nudge_x['nudge_x']):
-            if val:
-                self.nudge_x = nudge_x_opts[i]
+        self.nudge_x = nudge_x['nudge_x']
+        self.nudge_y = nudge_y['nudge_y']
+        # nudge_x_opts = [-6, -4, -2, 0, 2, 4, 6]    
+        # for i, val in enumerate(nudge_x['nudge_x']):
+        #     if val:
+        #         self.nudge_x = nudge_x_opts[i]
         
-        nudge_y_opts = [-3, -2, -1, 0, 1, 2, 3]    
-        for i, val in enumerate(nudge_y['nudge_y']):
-            if val:
-                self.nudge_y = nudge_y_opts[i]
+        # nudge_y_opts = [-3, -2, -1, 0, 1, 2, 3]    
+        # for i, val in enumerate(nudge_y['nudge_y']):
+        #     if val:
+        #         self.nudge_y = nudge_y_opts[i]
         
         
         try:
@@ -291,14 +302,16 @@ class COGame(Widget):
         #     if val:
         self.reward_delay_time = 0.0
 
-        reward_var_opt = [1.0, .5, .33]
-        for i, val in enumerate(rew_var['rew_var']):
-            if val:
-                self.percent_of_trials_rewarded = reward_var_opt[i]
-                if self.percent_of_trials_rewarded == 0.33:
-                    self.percent_of_trials_doubled = 0.1
-                else:
-                    self.percent_of_trials_doubled = 0.0
+        self.percent_of_trials_rewarded = rew_var['rew_var']
+        self.percent_of_trials_doubled = rew_var['perc_doubled']
+        # reward_var_opt = [1.0, .5, .33]
+        # for i, val in enumerate(rew_var['rew_var']):
+        #     if val:
+        #         self.percent_of_trials_rewarded = reward_var_opt[i]
+        #         if self.percent_of_trials_rewarded == 0.33:
+        #             self.percent_of_trials_doubled = 0.1
+        #         else:
+        #             self.percent_of_trials_doubled = 0.0
         
         self.reward_generator = self.gen_rewards(self.percent_of_trials_rewarded, self.percent_of_trials_doubled,
             self.reward_for_targtouch)
@@ -322,11 +335,12 @@ class COGame(Widget):
             self.in_cage = True
         else:
             self.in_cage = False
-
-        autoquit_trls = [10, 25, 50, 100, 10**10]
-        for i, val in enumerate(autoquit['autoquit']):
-            if val: 
-                self.max_trials = autoquit_trls[i]
+        
+        self.max_trials = autoquit['autoquit']
+        # autoquit_trls = [10, 25, 50, 100, 10**10]
+        # for i, val in enumerate(autoquit['autoquit']):
+        #     if val: 
+        #         self.max_trials = autoquit_trls[i]
 
         # drag_ok = [True, False]
         # for i, val in enumerate(drag['drag']):
@@ -362,7 +376,7 @@ class COGame(Widget):
         else:
             self.center_target_position[0] = self.center_target_position[0] + self.nudge_x
             self.center_target_position[1] = self.center_target_position[1] + self.nudge_y
-        if 'test' in sys.argv:
+        if '--test' in sys.argv:
             self.center_target_position = np.array([0., 0.])
         self.center_target.move(self.center_target_position)
         self.periph_target.set_size(2*self.periph_target_rad)
@@ -582,7 +596,7 @@ class COGame(Widget):
         rew = []
         trial_cnt_bonus = 0
 
-        for i in range(500):
+        for i in range(MAX_TRIALS):
             mini_block_array = np.zeros((mini_block))
             ix = np.random.permutation(mini_block)
             mini_block_array[ix[:2]] = reward_for_grasp[1]
@@ -640,7 +654,7 @@ class COGame(Widget):
 
     def update(self, ts):
         """
-            each key in self.FSM (=state) (set in self.init) is a state the game to be in
+            each key in self.FSM (=state) (set in self.init) is a state the game can be in
                 each value is a dict mapping (describing a condition and resulting behaviour)
                     a function (=fn) to check if the condition is currently met
                         _start_{state} is called when a state is initially activated
@@ -1113,7 +1127,7 @@ class COGame(Widget):
             offset = np.array([0., 0.])
             nudge_targ = np.array([0, 0, 1., 0])
         
-        if 'test' in sys.argv:
+        if '--test' in sys.argv:
             pass
             # target_distance = 6
         
@@ -1128,7 +1142,7 @@ class COGame(Widget):
 
         tgs = []
         nudges = []
-        for blks in range(100):
+        for blks in range(MAX_TRIALS // 4 + 1):
             ix = np.random.permutation(tmp.shape[0])
             tgs.append(tmp[ix, :])
             nudges.append(nudge_targ[ix])
@@ -1244,7 +1258,8 @@ class Target(Widget):
 
 class Manager(ScreenManager):
     _splash = ObjectProperty(None)
-    def __init__(self):
+    
+    def __init__(self, config_path: Path):
         super(Manager, self).__init__()
         print(self._splash)
         self.params = None
@@ -1271,6 +1286,79 @@ class Manager(ScreenManager):
         for name, key in monkey_names.items():
             add_monkey(name, key, active=first)
             first = False
+        
+        self.store_co_game_params_config_file(config_path)
+        self.current = 'splash_start'
+    
+    def store_co_game_params_config_file(self, config_path: Path):
+        with open(config_path) as f:
+            raw = hjson.load(f)
+        
+        params = {}
+        
+        params['animal_names_dict'] = {
+            raw['animal_name']: True,
+        }
+        
+        params['rew_in'] = {
+            'rew_manual': False, 'rew_anytouch': False,
+            'rew_center_pls_targ': raw['reward_setup'],
+            'rew_targ': not raw['reward_setup'],
+            'snd_only': False,
+            'small_rew': raw['peripheral_target_reward'],
+            'big_rew': raw['center_target_reward'],
+        }
+        
+        params['task_in'] = {
+            'targ_rad': raw['target_radius'],
+        }
+        
+        params['test'] = {'test': [False, True, False]}
+        
+        params['hold'] = {
+            'chold': raw['center_hold_time'],
+            'hold': raw['target_hold_time'],
+        }
+        
+        params['targ_structure'] = {
+            'get_targets_rand': False,
+            'get_4targets': False,
+            'get_targets_co': True,
+        }
+        
+        assert raw['autoquit_after'] <= MAX_TRIALS
+        params['autoquit'] = {
+            'autoquit': raw['autoquit_after'],
+        }
+        
+        params['rew_var'] = {
+            'rew_var': raw['reward_variability'],
+            'perc_doubled': raw['reward_double_chance'],
+        }
+        
+        params['targ_timeout'] = {
+            'tt': raw['target_timeout'],
+            'ch_timeout': raw['ch_timeout'],
+        }
+        
+        params['nudge_x'] = {
+            'nudge_x': raw['nudge_x'],
+        }
+        params['nudge_y'] = {
+            'nudge_y': raw['nudge_y'],
+        }
+        
+        params['peripheral_target'] = (
+            raw['peripheral_target_shape'],
+            raw['peripheral_target_color'].split('_')
+        )
+        
+        params['corner_non_cage_target_distance'] = raw['corner_non_cage_target_distance']
+        
+        from pprint import pp
+        pp(tuple(params.values()))
+        
+        self.params = params
     
     def store_co_game_params(self):
         # print(self._splash)
@@ -1390,6 +1478,10 @@ class Manager(ScreenManager):
         Clock.schedule_interval(game.update, 1.0 / 60.0)
 
 class COApp(App):
+    def __init__(self, config_path: Path):
+        super(COApp, self).__init__()
+        self._config_path = config_path
+    
     def build(self, **kwargs):
         if platform == 'darwin':
             screenx = 1800
@@ -1405,7 +1497,7 @@ class COApp(App):
         Window.size = (1800, 1000)
         Window.left = (screenx - 1800)/2
         Window.top = (screeny - 1000)/2
-        return Manager()
+        return Manager(self._config_path)
 
 def cm2pix(pos_cm, fixed_window_size=fixed_window_size, pix_per_cm=pix_per_cm):
     # Convert from CM to pixels: 
@@ -1426,5 +1518,26 @@ def pix2cm(pos_pix, fixed_window_size=fixed_window_size, pix_per_cm=pix_per_cm):
     pos_cm = pos_pix*(1./pix_per_cm)
     return pos_cm
 
+def parse_args():
+    parser = argparse.ArgumentParser(description='')
+    
+    parser.add_argument('--config', default='./config.hjson',
+        help='config file')
+    
+    parser.add_argument('--test', action='store_true',
+        help="run in test mode")
+    
+    args = parser.parse_args()
+    
+    return args
+
+def main():
+    args = parse_args()
+    
+    config_path = Path(args.config)
+    assert config_path.is_file()
+    
+    COApp(config_path).run()
+
 if __name__ == '__main__':
-    COApp().run()
+    main()

@@ -107,8 +107,8 @@ class TiltPlatform(AbstractContextManager):
     
     def tilt(self, tilt_type, water=False):
         water_duration = 0.15
-        tilt_duration = 1.75
-        tilt_duration = 0.2
+        # tilt_duration = 1.75
+        tilt_duration = 1.5
         
         try:
             tilt_name = {1: 'a', 2: 'b', 3: 'c', 4: 'd'}[tilt_type]
@@ -118,7 +118,6 @@ class TiltPlatform(AbstractContextManager):
         self.motor.tilt(tilt_name)
         time.sleep(tilt_duration)
         self.motor.tilt('stop')
-        time.sleep(20)
         
         if water:
             self.motor.tilt('wateron')
@@ -217,10 +216,11 @@ def run_non_psth_loop(platform: TiltPlatform, tilt_sequence, *, num_tilts):
         break
 
 def run_psth_loop(platform: PsthTiltPlatform, tilt_sequence, *,
-    sham: bool, retry_failed: bool,
+    yoked: bool, retry_failed: bool,
     output_extra: Dict[str, Any],
     before_platform_close: Callable[[PsthTiltPlatform], None],
 ):
+    sham = yoked
     
     input_file_list = []
     if platform.template_in_path is not None:
@@ -386,13 +386,17 @@ class Config:
     clock_rate: int
     
     num_tilts: int
+    tilt_sequence: Optional[List[int]]
+    
     # time range to wait between tilts
     delay_range: Tuple[float, float]
     
     # None if mode == open_loop
     baseline: Optional[bool]
-    sham: Optional[bool]
+    yoked: Optional[bool]
     reward: Optional[bool]
+    
+    plexon_lib: Optional[Literal['plex', 'opx']]
     
     # full deserialized json from the config file
     raw: Any
@@ -417,21 +421,29 @@ def load_config(path: Path, labels_path: Optional[Path]) -> Config:
     config.delay_range = (data['delay_range'][0], data['delay_range'][1])
     assert len(config.delay_range) == 2
     
+    config.tilt_sequence = data['tilt_sequence']
+    if config.tilt_sequence is not None:
+        assert type(config.tilt_sequence) == list
+        assert all(type(x) == int for x in config.tilt_sequence)
+        data['num_tilts'] = len(config.tilt_sequence)
+    
     config.num_tilts = data['num_tilts']
     assert type(config.num_tilts) == int
     
     if mode == 'open_loop':
         config.baseline = None
-        config.sham = None
+        config.yoked = None
         config.reward = None
         config.channels = None
     elif mode == 'closed_loop':
         config.baseline = data['baseline']
-        config.sham = data['sham']
+        config.yoked = data['yoked']
         config.reward = data['reward']
+        config.plexon_lib = data.get('plexon_lib', 'opx')
         assert type(config.baseline) == bool
-        assert type(config.sham) == bool
+        assert type(config.yoked) == bool
         assert type(config.reward) == bool
+        assert type(config.plexon_lib) in ['plex', 'opx']
         
         if labels_path is not None:
             with open(labels_path) as f:
@@ -474,8 +486,8 @@ def parse_args_config():
     
     parser.add_argument('--no-start-pulse', action='store_true',
         help='do not wait for plexon start pulse or enter press, skips initial 3 second wait')
-    parser.add_argument('--loadcell-out', default='./loadcell_tilt.csv',
-        help='file to write loadcell csv data to (default ./loadcell_tilt.csv)')
+    parser.add_argument('--loadcell-out',
+        help='file to write loadcell csv data to')
     parser.add_argument('--no-record', action='store_true',
         help='skip recording loadcell data')
     parser.add_argument('--live', action='store_true',
@@ -486,6 +498,9 @@ def parse_args_config():
         help='path to a bias file or glob pattern matching the bias file for live view')
     parser.add_argument('--live-secs', type=int, default=5,
         help='number of seconds to keep data for in live view (5)')
+    
+    parser.add_argument('--no-end-prompt', action='store_true',
+        help='skip the user prompt after tilts are completed')
     
     parser.add_argument('--template-out',
         help='output path for generated template')
@@ -521,6 +536,9 @@ def parse_args_config():
         raw_args = None
     
     args = parser.parse_args(args=raw_args)
+    
+    if args.loadcell_out is None and args.no_record is not None:
+        parser.error("must specify one of --loadcell-out or --no-record")
     
     return args
 
@@ -585,7 +603,10 @@ def main():
     
     assert mode in ['psth', 'normal', 'monitor']
     
-    tilt_sequence = generate_tilt_sequence(config.num_tilts)
+    if config.tilt_sequence is not None:
+        tilt_sequence = config.tilt_sequence
+    else:
+        tilt_sequence = generate_tilt_sequence(config.num_tilts)
     
     clock_source = NIDAQ_CLOCK_PINS[config.clock_source]
     
@@ -692,6 +713,7 @@ def main():
             template_in_path = args.template_in,
             channel_dict = config.channels,
             mock = mock,
+            pyopx = config.plexon_lib == 'opx',
             reward_enabled = config.reward,
         ) as platform:
             if args.no_spike_wait:
@@ -705,14 +727,18 @@ def main():
             with platform_close_context(platform):
                 run_psth_loop(
                     platform, tilt_sequence,
-                    sham=config.sham, retry_failed=args.retry,
+                    yoked=config.yoked, retry_failed=args.retry,
                     output_extra=output_extra,
                     before_platform_close = before_platform_close,
                 )
+        if not args.no_end_prompt:
+            input("press enter to stop recording and exit")
     elif mode == 'normal': # open loop
         print("running non psth")
         with TiltPlatform(mock=mock, delay_range=config.delay_range) as platform:
             run_non_psth_loop(platform, tilt_sequence, num_tilts=config.num_tilts)
+        if not args.no_end_prompt:
+            input("press enter to stop recording and exit")
     else:
         raise ValueError("Invalid mode")
     
