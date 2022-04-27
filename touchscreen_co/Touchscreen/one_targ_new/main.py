@@ -548,11 +548,16 @@ class COGame(Widget):
         compatible_devices = ['PXI-6224', 'PXI-6259']
         self.plex_do = PyPlexDO()
         doinfo = self.plex_do.get_digital_output_info()
+        device_number = None
+        device_strings = []
         for k in range(doinfo.num_devices):
-            if self.plex_do.get_device_string(doinfo.device_numbers[k]) in compatible_devices:
+            dev_string = self.plex_do.get_device_string(doinfo.device_numbers[k])
+            device_strings.append(dev_string)
+            if dev_string in compatible_devices:
                 device_number = doinfo.device_numbers[k]
         if device_number == None:
             print("No compatible devices found. Exiting.")
+            print("Found devices", device_strings)
             sys.exit(1)
         else:
             print("{} found as device {}".format(self.plex_do.get_device_string(device_number), device_number))
