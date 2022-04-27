@@ -40,6 +40,9 @@ corner_non_cage_target_distance: 6
 # when false always gives a big reward
 # big reward = center_target_reward setting, small reward = peripheral_target_reward
 # (based on config gui)
+# when true always gives a big reward (center_target_reward)
+# when false gives no reward
+# (based on kristina's observations)
 reward_setup: true
 
 }
