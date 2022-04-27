@@ -37,17 +37,17 @@ class MotorControl:
             'stop': [0,0,0,0,0,0,0,0],
             # tilt1 / 1 / 9 / tilt6
             # Slow Counter Clockwise
-            'a': [1,0,0,1,0,0,0,0],
+            'a': [0,0,0,1,0,0,0,0],
             # tilt3 / 2 / 11 / tilt4
             # Fast Counter Clockwise
-            'b': [1,1,0,1,0,0,0,0],
+            'b': [0,1,0,1,0,0,0,0],
             # tilt4 / 3 / 12 / tilt3
             # Slow Clockwise
             'c': [0,0,1,1,0,0,0,0],
             # tilt6 / 4 / 14 / tilt1
             # Fast Clockwise
             'd': [0,1,1,1,0,0,0,0],
-            'reward': [0,0,1,1,0,0,0,0],
+            'reward': [1,0,0,0,0,0,0,0],
             'punish': [0,0,1,0,0,0,0,0],
             'wateron': [0,0,0,0,1,0,0,0],
         }
