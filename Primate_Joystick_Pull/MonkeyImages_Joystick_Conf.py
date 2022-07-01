@@ -45,6 +45,7 @@ import json
 import os
 import os.path
 from pathlib import Path
+import shutil
 import time
 from datetime import datetime, timedelta
 import random
@@ -1799,6 +1800,29 @@ def gen_images():
         cimg = recolor(img, color)
         p = cdir / f"{name}_yellow.png"
         cimg.save(p, 'PNG')
+    
+    img = Image.open(src / 'zmonkey3.jpg')
+    img.thumbnail(CANVAS_SIZE)
+    p = out_path / 'green/monkey3.png'
+    img.save(p, 'PNG')
+    
+    img = Image.open(src / 'transparent.png')
+    img.thumbnail(CANVAS_SIZE)
+    p = out_path / 'red/monkey3.png'
+    img.save(p, 'PNG')
+    shutil.copyfile(
+        out_path / 'red/monkey3.png',
+        out_path / 'white/monkey3.png',
+    )
+    
+    # shutil.copyfile(
+    #     out_path / 'red/bRectangle.png',
+    #     out_path / 'red/monkey3.png',
+    # )
+    # shutil.copyfile(
+    #     out_path / 'white/bRectangle.png',
+    #     out_path / 'white/monkey3.png',
+    # )
 
 def main():
     try:
