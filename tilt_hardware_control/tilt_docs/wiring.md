@@ -54,10 +54,11 @@ the following pins should all be connected together
 `conv(5)`  
 `conv(18)` (optional)  
 `conv(16)` (optional)  
-`downsample(In -)`
-`downsample(Pwr -)`
-`downsample(out -)`
+`downsample(In -)`  
+`downsample(Pwr -)`  
+`downsample(out -)`  
 `motor(GND|19)`  
+`motor(X COMMON|8)`  
 `din(Ground|19)`  
 `tim(GND|15)`
 
@@ -72,24 +73,36 @@ the nidaq, plexon, f/t sensor amp and motor controller have external power sourc
 
 ## tilt type
 
-`nidaq(P0.0|52)` - `conv(15)` - `din(Data 1|1)`  
+((this pin isn't used to indicate tilt type anymore))  
+`nidaq(P1.0|52)` - `conv(15)` - `din(Data 1|1)`  
 `conv(14)` - `motor(X3|7)`
 
-`nidaq(P0.1|17)` - `conv(13)` - `din(Data2|2)`  
+`nidaq(P1.1|17)` - `conv(13)` - `din(Data2|2)`  
 `conv(12)` - `motor(X4|6)`
 
-`nidaq(P0.2|49)` - `conv(11)` - `din(Data3|3)`  
+`nidaq(P1.2|49)` - `conv(11)` - `din(Data3|3)`  
 `conv(10)` - `motor(X5|5)`
 
 ## tilt trigger (sent by tilt computer to indicate a tilt should occur)
 
-`nidaq(P0.3|47)` - `conv(9)`  
+`nidaq(P1.3|47)` - `conv(9)`  
 `conv(8)` - `motor(X6|4)`
 
+# tilt active (high while a tilt is currently occuring)
+
+`motor(Y2)` - `schmidt trigger ?`
+`schmidt trigger ?` - `nidaq(P0.3)`
+
+# tilt midpoint (pulse when tilt reaches midpoint)
+
+`motor(Y3)` - `schmidt trigger ?`
+`schmidt trigger ?` - `nidaq(P0.4)`
+
+((removed))  
 ## tilt start (sent by motor controller at the start of tilt)
 
-`motor(Y2|15)` - `conv(4)`  
-`conv(3)` - `nidaq(AI 8|34)` - `din(Data ready|22)`
+`motor(Y2|15)` - `conv(4)` - `nidaq(AI 8|34)`  
+`conv(3)` - `nidaq(P2.3|)` - `din(Data ready|22)`
 
 ## plexon start/sync signal
 

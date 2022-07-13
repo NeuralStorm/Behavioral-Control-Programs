@@ -11,60 +11,65 @@ if installation fails use
 
 # Usage
 
-Example command line calls
+Example command line call
 ```bash
-python main.py --config example_config.hjson --template-out x.json
-python main.py --config example_config.hjson --template-out x_2.json --template-in x.json
+python main.py --config config.hjson
 ```
 
 ## Usage examples
 
+Create a copy of `../tilt_docs/data_collection_template`.
+
+`clock_source` will need to be changed to "internal" in `config.hjson` if running without the plexon system.
+
+### Bias Collection
+
+Run `run_bias.sh` in the data collection directory.
+
+This will create a dated bias file.
+
 ### Open loop
 
-Make a copy of example_config.hjson, ensure `mode` is set to open_loop. Set `num_tilts` and `delay_range` to the desired values. `baseline`, `sham`, `reward` and `channels` can be ignored or removed from the config file.
+Edit `config.hjson`; ensure `mode` is set to open_loop. Set `num_tilts` and `delay_range` to the desired values. `baseline`, `sham`, `reward` and `channels` can be ignored or removed from the config file.
 
-Run the script
-```
-python main.py --config your_config.hjson
-```
-This will read setting from `your_config.hjson` and write recorded grf data to `loadcell_tilt.csv`.
+Collect a bias file by running `run_bias.sh`.
+
+Run `run_tilts.sh` in the data collection directory.  
+This will read setting from `config.hjson` and create dated output files in the data collection directory.
 
 The program will run through the specified number of tilts then wait for the user to press enter before exiting.
 
 ---
 ### Closed loop, initial run
 
-Make a copy of example_config.hjson, set `mode` to closed_loop, `baseline` to true and `sham` to false. Set `num_tilts`, `delay_range`, and `channels` to the desired values. `reward` is not used.
+Edit `config.hjson`; set `mode` to closed_loop, `baseline` to true and `sham` to false. Set `num_tilts`, `delay_range` and`reward` to the desired values.
 
-Run the script
-```
-python main.py --config your_config.hjson --template-out template_a.json
-```
-This will read settings from `your_config.hjson` and write recorded grf data to `loadcell_tilt.csv`. PSTH template data and a record of the run will be written to `template_a.json`.
+Run `run_tilts.sh` in the data collection directory.  
+This will read setting from `config.hjson` and create dated output files in the data collection directory.
 
-Make sure to use enter and not ctrl-c if you need to pause the program.
-
-The program will perform tilts and record the psth templates.
+The program will perform tilts and record the tilts and spikes.
 
 ---
 ### Closed loop, after initial run
 
-Make a copy of the config used for the initial run and change `baseline` to false.
+Edit config used for the initial run and change `baseline` to false.  
+Add `--template-in <file>` where `<file>` is the name of the meta.json file created by the initial run.
 
-Run the script
-```
-python main.py --config your_other_config.hjson --template-in template_a.json --template-out template_b.json
-```
-This will read settings from `your_other_config.hjson` and write recorded grf data to `loadcell_tilt.csv`. PSTH templates are loaded from `template_a.json`. PSTH template data and a record of the run will be written to `template_b.json`.
+Create or edit `labels.hjson`; set `channels` to the desired value. See [example_labels.hjson](./example_labels.hjson) for an example.
 
-The program will perform tilts and attempt to classify the tilt type based on templates from `template_a.json` and perform punish/reward actions based on if the classification was correct. It will also record a new set of templates.
+Run `run_tilts.sh` in the data collection directory.  
+This will read setting from `config.hjson` and create dated output files in the data collection directory.
+
+This will read settings from `config.hjson` and create dated output files in the data collection directory. Spike to create euclidian classifier templates are loaded from the specified meta.json file.
+
+The program will perform tilts and attempt to classify the tilt type based on the created templates and perform punish/reward actions based on if the classification was correct.
 
 ---
 ### Live view
 
 Add the `--live` parameter to enable the live view.
 ```
-python main.py --config your_config.hjson --monitor --live
+python main.py --config config.hjson --monitor --live
 ```
 
 ### Calibrated live view
@@ -95,12 +100,6 @@ python main.py --config your_config.hjson --monitor --live-cal --live-bias ./you
 
 ---
 ## Pausing
-
-### open loop
-
-ctrl-c can be pressed to immediatly stop the current tilt. enter will resume the program, ctrl-c again will exit the program
-
-### closed loop
 
 pressing enter will pause the program at the end of the current tilt. pressing enter will resume the program, pressing q then enter will exit the program
 
@@ -143,15 +142,18 @@ sensor3_s3
 sensor3_s4
 sensor3_s5
 sensor3_s6
-Strobe: ttl pulse indicating start of tilt
+Strobe: signal that gos high when a tilt starts and low when it finishes
 Start: ttl pulse indicating start of plexon recording
 Inclinometer: Inclinometer
 Timestamp: Timestamp (incremented by 1/sample rate for each row)
+strobe_digital: digital version of Strobe passed through a schmidt trigger
+tilt_midpoint: signal that gos high when the tilt reaches it's maximum inclination
+stim: ttl pulse indicating stimulation was applied
 ```
 
 # Program flow
 
-The program has multiple modes, set with the `mode` config parameter. The behaviour of the different modes is listed below. Recording of analog data is handled the same way for all modes except bias (live view can not be used).
+The program has multiple modes, set with the `mode` config parameter. The behaviour of the different modes is listed below. Recording of analog data is handled the same way for all modes except bias (where live view can not be used). Stimulation works the same for all modes except bias and monitor where stimulation is not available.
 
 ## open_loop
 
@@ -160,9 +162,10 @@ create a list of tilt types
 wait for start pulse
 for i in 0..num_tilts:
     perform tilt i
+    wait for after_tilt_delay
     if reward enabled:
         dispense water
-    wait for a random time within delay range
+    wait for a random time within delay_range
 waits for the user to press enter
 ```
 
@@ -174,15 +177,15 @@ wait for start pulse
 for i in 0..num_tilts:
     clear pending plexon events
     start tilt i
-    loop a:
-        for `event` recieved from plexon:
-            if event is a tilt:
-                add event to psth
-            if event is a spike:
-                add spike to psth
-                if time since tilt > post time:
-                    break a
+    for event recieved from plexon within about 200ms:
+        if event is a tilt:
+            add event to classifier
+        if event is a spike:
+            add spike to classifier
     finish tilt
+    wait for after_tilt_delay
+    if reward enabled:
+        dispense water
     wait for a random time within delay range
 waits for the user to press enter
 ```
@@ -194,20 +197,20 @@ create a list of tilt types
 for i in 0..num_tilts:
     clear pending plexon events
     start tilt i
-    loop a:
-        for `event` recieved from plexon:
-            if event is a tilt:
-                add event to psth
-            if event is a spike:
-                add spike to psth
-                if time since tilt > post time:
-                    break a
+    for event recieved from plexon within about 200ms:
+        if event is a tilt:
+            add event to classifier
+        if event is a spike:
+            add spike to classifier
     classify tilt
-    if classification was correct and reward is enabled:
-        dispense water
+    if classification was correct:
+        stop tilt and return to level
     if classification was incorrect:
         perform punish tilt
     finish tilt
+    wait for after_tilt_delay
+    if classification was correct and reward is enabled:
+        dispense water
     wait for a random time within delay range
 waits for the user to press enter
 ```
@@ -219,23 +222,22 @@ load list of tilt types from template
 for i in 0..num_tilts:
     clear pending plexon events
     start tilt i
-    loop a:
-        for `event` recieved from plexon:
-            if event is a tilt:
-                add event to psth
-            if event is a spike:
-                add spike to psth
-                if time since tilt > post time:
-                    break a
-    classify tilt
-    if classification recorded for tilt i in the template was correct and reward is enabled:
-        dispense water
-    if classification recorded for tilt i in the template was incorrect:
+    wait about 200ms
+    if recorded classification was correct:
+        stop tilt and return to level
+    if recorded classification was incorrect:
         perform punish tilt
     finish tilt
+    wait for after_tilt_delay
+    if recorded classification was correct and reward is enabled:
+        dispense water
     wait for a random time within delay range
 waits for the user to press enter
 ```
+
+## stim
+
+performs stimulation until enter is pressed
 
 ## monitor
 
@@ -249,24 +251,28 @@ records data for a fixed amount of time then exits
 
 Some parameters aren't listed in the readme. Run the program with `--help` for a fill list of parameters.
 
-`--template-in`  
-path to a template file created by a previous run of the program
-
-required in open loop non baseline, otherwise unused
-
-`--template-out`  
-path to write template file to
-
-optional in closed loop, otherwise unused
-
-`--loadcell-out`  
-path to write ground reaction force data csv to
-
 `--config`  
 path to hjson config file, see config parameters section
 
 `--labels`  
 path to labels config file, see label parameters section
+
+`--bias`  
+sets the mode to `bias`
+
+`--overwrite`  
+allows overwriting of existing output files
+
+`--monitor`  
+sets the mode to `monitor`
+
+`--template-in`  
+path to a template/meta file created by a previous run of the program
+
+required in open loop non baseline, otherwise unused
+
+`--loadcell-out`  
+path to write ground reaction force data csv to
 
 `--overwrite`  
 overwrite exsting output files, if not specified the program will stop if the output file already exists
@@ -279,13 +285,16 @@ show live graphs of analog recordings
 
 # Config file
 
-Config parameters that begin with `--` will be added to the passed command line parameters. The `_` parameter can be set to a list of strings which will be added to the command line parameters.
+Config parameters that begin with `--` will be added to the passed command line parameters. Setting one of these paramaters to null will pass the command line parameter without a value following it.
+
+The `-` parameter can be set to a list of strings which will be added to the command line parameters.
 
 Other parameters are used as listed below.
 
-# Config parameters
+## Config parameters
 
-parameters marked with * are required in closed loop mode but do not need to be specified in other modes
+parameters marked with * are required in closed loop mode but do not need to be specified in other modes.  
+parameters marked with ** are not required.  
 
 `mode`: Literal['open_loop', 'closed_loop', 'monitor', 'bias']  
 see program flow section
@@ -295,31 +304,41 @@ should normally be set to external
 
 internal uses the internal nidaq clock. externel sets the clock to Dev6/PFI6
 
-Dev6/PFI6 should be connected to the downsampled plexon clock
-
 `clock_rate`: int  
-The rate at which to collect samples in hertz.
-If clock_source is external this should probably be 1250.
+The rate at which to collect samples in hertz.  
+If clock_source is external this should typically be 1000.
 
 `num_tilts`: int  
-Number of tilts to perform. This number must be divisible by 4. The tilts will be split evenly between tilt types 1, 2, 3 and 4.
+Number of tilts to perform. This number must be divisible by four. The tilts will be split evenly between the four tilt types.
 
-`tilt_sequence`: Optional[List[int]]  
-A fixed sequence of tilts to use instead of generating a randomized sequence. If specified `num_tilts` will be ignored.
+`tilt_sequence`: Optional[List[str]]  
+A fixed sequence of tilts to use instead of generating a randomized sequence. If specified `num_tilts` will be ignored. `sequence_repeat` and `sequence_shuffle` only apply if this parameter is specified.
+
+`sequence_repeat`: int  
+The number of times to repeat the tilt sequence.
+
+`sequence_shuffle`: bool  
+If true the tilt sequence is randomized. Applies before `sequence_repeat`.
 
 `delay_range`: Tuple[float, float]  
-Range of delays between tilts is seconds.
+Range of delays between trials in seconds.
+
+`after_tilt_delay`: float  
+Delay after tilt completion in seconds.
 
 `baseline`*: Optional[bool]  
-Only used when mode == closed loop. If false an input template will be used to classify tilts. If true a template will be generated without performing classification.
+If false an input template will be used to classify tilts. If true spikes will be collected without performing classification.
 
 `yoked`*: Optional[bool]  
-If true the tilts from the input template will be repeated. If baseline is false the rewards and punish tilts will be repeated. reward must be true for rewards to be enabled.
+If true the tilts from the input template will be repeated. If baseline is false the rewards and punish tilts will be repeated. `reward` must be true for rewards to be enabled.
 
-`reward`*: Optional[bool]  
-If true a water reward will be given after succesful decoding. If false no water reward will be given.
+`reward`: bool  
+If true a water reward will be given after succesful decoding. If false no water reward will be given. If true the reward is always given with mode == open_loop or baseline == true.
 
-`plexon_lib`*: Optional[Literal['plex', 'opx']]  
+`water_duration`: float  
+Duration for which water is dispensed.
+
+`plexon_lib`**: Optional[Literal['plex', 'opx']]  
 'plex' uses the `pyplexclientts` library  
 'opx' uses the `pyopxclient` library
 
@@ -327,9 +346,15 @@ If true a water reward will be given after succesful decoding. If false no water
 
 defaults to 'opx'
 
+`stim_enabled`: bool  
+
+
+`stim_params`: Dict[str, Any]  
+
+
 # Labels file
 
-# Label parameters
+## Label parameters
 
 `channels`: Dict[int, List[int]]  
 Selects a set of plexon units to be used in the psth template. The parameters of the dict are plexon channels and the values are plexon units within that channel.

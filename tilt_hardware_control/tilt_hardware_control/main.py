@@ -3,131 +3,37 @@
 
 from typing import List, Dict, get_type_hints, Any, Literal, Tuple, Optional, Callable
 import time
-from random import randint
-from contextlib import ExitStack, AbstractContextManager, contextmanager
-import csv
-from itertools import count
+from contextlib import ExitStack
 from threading import Thread
-from multiprocessing import Process, Event as PEvent
+from multiprocessing import Process
 from queue import Queue, Empty as QEmpty
 import sys
+import os
 import atexit
 import functools
 import traceback
 import argparse
 from pprint import pprint
-from copy import deepcopy
+from copy import copy, deepcopy
 import json
 from pathlib import Path
-from copy import copy
+import random
 
 import hjson
 
-import numpy as np
-
-from psth_tilt import PsthTiltPlatform, SpikeWaitTimeout
-from motor_control import MotorControl
+from psth_tilt import PsthTiltPlatform
 from util import hash_file
+from util_multiprocess import spawn_process
+from util_nidaq import line_wait
+from psth_new import EuclClassifier
+from stimulation import spawn_random_stimulus_process, State as StimState
 
 from grf_data import record_data, RecordState
-
-DEBUG_CONFIG = {
-    # 'motor_control': False,
-    'mock': False,
-}
-# RECORD_PROCESS_STOP_TIMEOUT = 30
 
 NIDAQ_CLOCK_PINS: Dict[str, str] = {
     'internal': '',
     'external': '/Dev6/PFI6',
 }
-
-# start Dev4/port2/line1 True
-# stop  Dev4/port2/line2 False
-def line_wait(line: str, value):
-    waiter = LineWait(line)
-    waiter.wait(value)
-    waiter.end()
-
-class LineWait:
-    def __init__(self, line: str):
-        import nidaqmx # pylint: disable=import-error
-        from nidaqmx.constants import LineGrouping # pylint: disable=import-error
-        
-        self.task = nidaqmx.Task()
-        self.task.di_channels.add_di_chan(line, line_grouping = LineGrouping.CHAN_PER_LINE)
-        self.task.start()
-    
-    def wait(self, value):
-        while True:
-            data = self.task.read(number_of_samples_per_channel = 1)
-            if data == [value]:
-                return
-    
-    def end(self):
-        self.task.stop()
-
-# record stop line "Dev4/port2/line6"
-class LineReader:
-    def __init__(self, line: str):
-        import nidaqmx # pylint: disable=import-error
-        from nidaqmx.constants import LineGrouping # pylint: disable=import-error
-        
-        task = nidaqmx.Task()
-        task.di_channels.add_di_chan(line, line_grouping=LineGrouping.CHAN_PER_LINE)
-        task.start()
-        self.task = task
-    
-    def read_bool(self) -> bool:
-        value = self.task.read(number_of_samples_per_channel=1)
-        return bool(value[0])
-    
-    def __enter__(self):
-        self.task.__enter__()
-        return self
-    
-    def __exit__(self, *exc):
-        return self.task.__exit__(*exc)
-
-class TiltPlatform(AbstractContextManager):
-    def __init__(self, *, mock: bool = False, delay_range: Tuple[float, float]):
-        
-        self.delay_range = delay_range
-        
-        self.motor = MotorControl(mock = mock)
-    
-    def __exit__(self, *exc):
-        self.close()
-    
-    def stop(self):
-        self.motor.tilt('stop')
-    
-    def close(self):
-        self.motor.close()
-    
-    def tilt(self, tilt_type, water=False):
-        water_duration = 0.15
-        # tilt_duration = 1.75
-        tilt_duration = 1.5
-        
-        try:
-            tilt_name = {1: 'a', 2: 'b', 3: 'c', 4: 'd'}[tilt_type]
-        except KeyError:
-            raise ValueError("Invalid tilt type {}".format(tilt_type))
-        
-        self.motor.tilt(tilt_name)
-        time.sleep(tilt_duration)
-        self.motor.tilt('stop')
-        
-        if water:
-            self.motor.tilt('wateron')
-            time.sleep(water_duration)
-            self.motor.tilt('stop')
-        
-        # delay = ((randint(1,100))/100)+1.5
-        import random
-        delay = random.uniform(*self.delay_range)
-        time.sleep(delay)
 
 def generate_tilt_sequence(num_tilts):
     #No event 2 and 4 for early training
@@ -136,20 +42,26 @@ def generate_tilt_sequence(num_tilts):
     assert num_tilts % 4 == 0, "num tilts must be divisable by 4"
     n = num_tilts // 4
     
-    a = [1]*n
-    a.extend([2]*n)
-    a.extend([3]*n)
-    a.extend([4]*n)
-    np.random.shuffle(a)
-    return a
+    tilt_list = [
+        *(['slow_left']*n),
+        *(['fast_left']*n),
+        *(['slow_right']*n),
+        *(['fast_right']*n),
+    ]
+    random.shuffle(tilt_list)
+    return tilt_list
 
 class RecordFailure(Exception):
     pass
+class StimFailure(Exception):
+    pass
 
-# None if  unitialized, False if not recording
-_recording_check_event = {'_': None}
+# None if unitialized, False if not recording
+_recording_check_event = {'_': None, 'stim': None}
 def check_recording():
-    """raises an exception if recording has failed"""
+    """raises an exception if the recording or stimulation processes has failed"""
+    _check_stim()
+    
     e = _recording_check_event['_']
     assert e is not None
     if e is False:
@@ -157,22 +69,19 @@ def check_recording():
     if e.is_set():
         raise RecordFailure()
 
+def _check_stim():
+    stim = _recording_check_event['stim']
+    assert stim is not None
+    if stim is False:
+        return
+    if stim.is_set():
+        raise StimFailure()
+
 def spawn_thread(func, *args, **kwargs) -> Thread:
     thread = Thread(target=func, args=args, kwargs=kwargs)
     thread.daemon = True
     thread.start()
     return thread
-
-def print_errors(f):
-    @functools.wraps(f)
-    def wrapper(*args, **kwargs):
-        try:
-            return f(*args, **kwargs)
-        except:
-            traceback.print_exc()
-            raise
-    
-    return wrapper
 
 def _error_record_data(*args, **kwargs):
     try:
@@ -182,57 +91,24 @@ def _error_record_data(*args, **kwargs):
         traceback.print_exc()
         raise
 
-def spawn_process(func, *args, **kwargs) -> Process:
-    proc = Process(target=func, args=args, kwargs=kwargs)
-    proc.start()
-    atexit.register(lambda: proc.terminate())
-    return proc
-
-def run_non_psth_loop(platform: TiltPlatform, tilt_sequence, *, num_tilts):
-    assert num_tilts == len(tilt_sequence)
-    i = 0
-    while True:
-        try:
-            while True:
-                check_recording()
-                
-                # check at start of loop in case of keyboard interrupt
-                if i >= num_tilts:
-                    break
-                
-                print(f"tilt {i+1}/{num_tilts}")
-                platform.tilt(tilt_sequence[i])
-                
-                i += 1
-        except KeyboardInterrupt:
-            platform.stop()
-            i += 1
-            try:
-                input("\nPausing... (Hit ENTER to continue, ctrl-c again to quit.)")
-            except KeyboardInterrupt:
-                break
-            continue
-        
-        break
-
 def run_psth_loop(platform: PsthTiltPlatform, tilt_sequence, *,
     yoked: bool, retry_failed: bool,
     output_extra: Dict[str, Any],
-    before_platform_close: Callable[[PsthTiltPlatform], None],
+    template_in_path: Optional[str],
+    stim_state: Optional[StimState],
 ):
     sham = yoked
     
     input_file_list = []
-    if platform.template_in_path is not None:
-        input_file_list.append(Path(platform.template_in_path))
+    if template_in_path is not None:
+        input_file_list.append(Path(template_in_path))
     
-    input_files = {}
     for fpath in input_file_list:
-        input_files[fpath.name] = hash_file(fpath)
+        output_extra['input_files'][fpath.name] = hash_file(fpath)
     
-    # psth = platform.psth
     if sham:
-        with open(platform.template_in_path) as f:
+        assert template_in_path is not None
+        with open(template_in_path, encoding='utf8') as f:
             template_in = json.load(f)
         tilt_sequence = []
         sham_decodes = []
@@ -249,122 +125,143 @@ def run_psth_loop(platform: PsthTiltPlatform, tilt_sequence, *,
     input_queue: 'Queue[str]' = Queue(1)
     def input_thread():
         while True:
-            cmd = input(">")
-            input_queue.put(cmd)
-            input_queue.put("")
+            input("")
+            input_queue.put(time.perf_counter())
             input_queue.join()
     
     spawn_thread(input_thread)
     
+    output_extra['baseline'] = platform.baseline_recording
+    # tilt_records will be added to below before being written to json
     tilt_records: List[Dict[str, Any]] = []
-    # tilts will be added to below before being written to json
-    platform.psth.output_extra['tilts'] = tilt_records
-    platform.psth.output_extra['baseline'] = platform.baseline_recording
-    platform.psth.output_extra['input_files'] = input_files
-    platform.psth.output_extra['output_files'] = {}
-    platform.psth.output_extra.update(output_extra)
+    output_extra['tilts'] = tilt_records
     
     def get_cmd():
         try:
-            _cmd: str = input_queue.get_nowait()
+            pause_time: str = input_queue.get_nowait()
         except QEmpty:
-            pass
+            return None
         else:
-            input_queue.task_done()
-            print("Press enter to resume; q, enter to stop")
-            cmd = input("paused>")
-            # if cmd == 'q':
-            #     break
-            input_queue.get()
-            input_queue.task_done()
-            return cmd
+            return pause_time
     
-    def do_tilt(tilt_type, i, sham_i, retry=None):
-        check_recording()
-        if sham:
-            sham_result = tilt_type == sham_decodes[sham_i]
-        else:
-            sham_result = None
+    tilt_counter = [0]
+    
+    def run_tilt_list(tilt_commands):
+        # reverse tilt list so we can .pop() the next tilt
+        tilt_commands = list(reversed(tilt_commands))
         
-        if retry is not None:
-            delay = retry['delay']
-        elif sham:
-            delay = sham_delays[sham_i]
-        else:
-            delay = None
-        
-        try:
-            tilt_rec = platform.tilt(tilt_type, sham_result=sham_result, delay=delay)
-        except SpikeWaitTimeout as e:
-            tilt_rec = e.tilt_rec
-            tilt_rec['spike_wait_timeout'] = True
-            tilt_records.append(tilt_rec)
-            raise
-        tilt_rec['i'] = i
-        tilt_rec['retry'] = retry
-        # pprint(tilt_rec, sort_dicts=False)
-        # pprint(tilt_rec)
-        tilt_records.append(tilt_rec)
-        # put data into psth class often so data will get saved in the case of a crash
-        platform.psth.output_extra['tilts'] = tilt_records
-        return tilt_rec
+        while tilt_commands:
+            tilt = tilt_commands.pop()
+            
+            tilt_name = tilt['tilt_name']
+            retry_i = tilt.get('i')
+            tilt_i = tilt_counter[0]
+            tilt_counter[0] += 1
+            
+            check_recording()
+            tilt_rec = platform.tilt(
+                tilt_name = tilt_name,
+                yoked_prediction = tilt.get('sham_prediction'),
+                delay = tilt.get('delay'),
+            )
+            
+            tilt_rec['i'] = tilt_i
+            if retry_i is not None:
+                tilt_rec['retry_of'] = retry_i
+            
+            pause_time = get_cmd()
+            if pause_time is not None:
+                if stim_state is not None:
+                    stim_state.pause()
+                
+                tilt_rec['paused'] = True
+                tilt_rec['pause_time'] = pause_time
+                retry_tilt = deepcopy(tilt)
+                retry_tilt['i'] = tilt_i
+                tilt_commands.append(retry_tilt)
+                
+                print("Press enter to resume; or type a command and press enter")
+                print("Commands:")
+                print("  q: stops the program")
+                print("  pop: skips the next tilt (first use will skip re-run of paused tilt")
+                print("  n <text>: add a note to the record of the tilt")
+                while True:
+                    cmd = input("paused>")
+                    check_recording()
+                    if cmd == 'q':
+                        tilt_rec['warnings'].append('manual quit')
+                        yield tilt_rec
+                        return
+                    elif cmd == 'pop':
+                        try:
+                            tilt_commands.pop()
+                        except IndexError:
+                            print("no remaining tilts")
+                    elif cmd.startswith('n '):
+                        notes = tilt_rec.get('notes', [])
+                        notes.append(cmd[2:])
+                        tilt_rec['notes'] = notes
+                    elif cmd == '':
+                        break
+                    else:
+                        print(f"unknown command `{cmd}`")
+                # allow pause input_thread to resume
+                input_queue.task_done()
+                if stim_state is not None:
+                    stim_state.unpause()
+            
+            if tilt_rec['decoder_result_source'] == 'no_spikes':
+                tilt_rec['failed'] = True
+            
+            # don't retry twice if a pause happened
+            if not tilt_rec.get('paused') and tilt_rec.get('failed'):
+                retry_tilt = deepcopy(tilt)
+                retry_tilt['i'] = tilt_i
+                if retry_failed:
+                    tilt_commands.insert(0, retry_tilt)
+            
+            yield tilt_rec
     
     def run_tilts():
-        for i, tilt_type in enumerate(tilt_sequence):
-            print(f'tilt {i}/{len(tilt_sequence)}')
-            do_tilt(tilt_type, i, i)
-            
-            if get_cmd() == 'q':
-                return
+        tilt_commands = []
+        for i, tilt_name in enumerate(tilt_sequence):
+            tilt_command = {
+                'tilt_name': tilt_name,
+            }
+            if sham:
+                tilt_command.update({
+                    'sham_prediction': sham_decodes[i],
+                    'delay': sham_delays[i],
+                })
+            tilt_commands.append(tilt_command)
         
-        out_i = i
-        
-        if retry_failed:
-            failed_tilts = [
-                deepcopy(x)
-                for x in tilt_records
-                if x['decoder_result_source'] == 'no_spikes'
-            ]
-        else:
-            failed_tilts = None
-        
-        while failed_tilts:
-            for tilt in failed_tilts:
-                out_i += 1
-                
-                i = tilt['i']
-                tilt_type = tilt['tilt_type']
-                
-                retry_tilt = do_tilt(tilt_type, out_i, i, retry=tilt)
-                
-                if retry_tilt['decoder_result_source'] != 'no_spikes':
-                    tilt['retry_success'] = True
-                
-                if get_cmd() == 'q':
-                    return
-            
-            failed_tilts = [x for x in failed_tilts if not x.get('retry_success')]
+        for tilt_rec in run_tilt_list(tilt_commands):
+            tilt_records.append(tilt_rec)
+            if tilt_rec['warnings']:
+                for warning in tilt_rec['warnings']:
+                    print('WARNING:', warning)
     
     run_tilts()
     
-    before_platform_close(platform)
-    
-    platform.close()
-    psthclass = platform.psth
-    
     if not platform.baseline_recording and not sham:
-        # pylint: disable=import-error
+        # pylint: disable=import-error,import-outside-toplevel
         from sklearn.metrics import confusion_matrix
         
+        actual = []
+        predicted = []
+        for rec in tilt_records:
+            if rec['predicted_tilt_type'] is not None:
+                actual.append(rec['tilt_name'])
+                predicted.append(rec['predicted_tilt_type'])
+        
         print('actual events:y axis, predicted events:x axis')
-        confusion_matrix_calc = confusion_matrix(psthclass.event_number_list,psthclass.decoder_list)
+        confusion_matrix_calc = confusion_matrix(actual, predicted)
         print(confusion_matrix_calc)
         correct_trials = 0
-        for i in range(0,len(confusion_matrix_calc)):
+        for i, _ in enumerate(confusion_matrix_calc):
             correct_trials = correct_trials + confusion_matrix_calc[i][i]
-        decoder_accuracy = correct_trials / len(psthclass.event_number_list)
-        print(('Accuracy = {} / {} = {}').format(correct_trials, len(psthclass.event_number_list), decoder_accuracy))
-        print('Stop Plexon Recording.')
+        decoder_accuracy = correct_trials / len(actual)
+        print(f"Accuracy = {correct_trials} / {len(actual)} = {decoder_accuracy}")
     
     for tilt in tilt_records:
         for warning in tilt['warnings']:
@@ -373,6 +270,52 @@ def run_psth_loop(platform: PsthTiltPlatform, tilt_sequence, *,
     if any(x['decoder_result_source'] == 'no_spikes' for x in tilt_records):
         num_failures = len([x['decoder_result_source'] == 'no_spikes' for x in tilt_records])
         print(f"{num_failures} tilts failed due to no spikes occuring, THIS SHOULD NOT HAPPEN. TELL DR MOXON")
+
+def start_recording(state: RecordState, args, config: 'Config'):
+    clock_source = NIDAQ_CLOCK_PINS[config.clock_source]
+    
+    record_stop_event = state
+    _recording_check_event['_'] = state.failed
+    
+    if args.live:
+        record_stop_event.live.enabled = True
+        assert not args.live_cal, "can not use both --live and --live-cal at the same time"
+        
+    if args.live_cal:
+        record_stop_event.live.enabled = True
+        record_stop_event.live.calibrated = True
+        
+        live_bias_str = args.live_bias
+        assert live_bias_str is not None, "--live-bias is required when --live-cal is present"
+        live_bias = Path(live_bias_str)
+        if live_bias.exists():
+            record_stop_event.live.bias_file = live_bias_str
+        else:
+            matches = list(live_bias.glob(f"*/{live_bias_str}"))
+            assert len(matches) != 0, "no files matching bias file pattern found"
+            if len(matches) > 1:
+                print(f"warning: multiple bias files match pattern, using {matches[0]}")
+            record_stop_event.live.bias_file = str(matches[0])
+    
+    if args.loadcell_out is not None and not args.overwrite:
+        assert not Path(args.loadcell_out).exists(), f"output file {args.loadcell_out} already exists"
+    
+    # record_output_extra = {
+    #     **output_extra,
+    # }
+    spawn_process(
+        record_data, clock_source=clock_source,
+        clock_rate=config.clock_rate, csv_path=args.loadcell_out,
+        state=record_stop_event, mock=args.mock,
+        live_view_seconds=args.live_secs,
+        # output_meta=record_output_extra,
+        output_meta=None,
+    )
+    # wait after starting recording to make sure there is enough time
+    # before a tilt to cover an analysis window
+    # only needed if recording data
+    if args.loadcell_out is not None:
+        time.sleep(config.after_tilt_delay + config.delay_range[0])
 
 class Config:
     channels: Optional[Dict[int, List[int]]]
@@ -386,15 +329,23 @@ class Config:
     clock_rate: int
     
     num_tilts: int
-    tilt_sequence: Optional[List[int]]
+    tilt_sequence: Optional[List[str]]
+    sequence_repeat: Optional[int]
+    sequence_shuffle: bool
     
     # time range to wait between tilts
     delay_range: Tuple[float, float]
+    # time after tilt completes before water reward
+    after_tilt_delay: float
+    
+    reward: bool
+    water_duration: float
+    
+    stim_params: Optional[Dict[str, Any]]
     
     # None if mode == open_loop
     baseline: Optional[bool]
     yoked: Optional[bool]
-    reward: Optional[bool]
     
     plexon_lib: Optional[Literal['plex', 'opx']]
     
@@ -402,14 +353,14 @@ class Config:
     raw: Any
 
 def load_config(path: Path, labels_path: Optional[Path]) -> Config:
-    with open(path) as f:
+    with open(path, encoding='utf8') as f:
         data = hjson.load(f)
     
     config = Config()
     config.raw = data
     
     mode = data['mode']
-    assert mode in ['open_loop', 'closed_loop', 'bias']
+    # assert mode in ['open_loop', 'closed_loop', 'stim', 'bias']
     config.mode = mode
     
     config.clock_source = data['clock_source']
@@ -420,33 +371,52 @@ def load_config(path: Path, labels_path: Optional[Path]) -> Config:
     assert len(data['delay_range']) == 2
     config.delay_range = (data['delay_range'][0], data['delay_range'][1])
     assert len(config.delay_range) == 2
+    config.after_tilt_delay = data['after_tilt_delay']
+    assert type(config.after_tilt_delay) == int
     
     config.tilt_sequence = data['tilt_sequence']
     if config.tilt_sequence is not None:
         assert type(config.tilt_sequence) == list
-        assert all(type(x) == int for x in config.tilt_sequence)
+        assert all(type(x) == str for x in config.tilt_sequence)
         data['num_tilts'] = len(config.tilt_sequence)
+        config.sequence_repeat = data['sequence_repeat']
+        assert type(config.sequence_repeat) == int
+        assert config.sequence_repeat >= 1
+        config.sequence_shuffle = data['sequence_shuffle']
+        assert type(config.sequence_shuffle) == bool
+    else:
+        config.sequence_repeat = None
+        config.sequence_shuffle = False
     
     config.num_tilts = data['num_tilts']
     assert type(config.num_tilts) == int
     
+    config.reward = data['reward']
+    config.water_duration = data['water_duration']
+    assert type(config.reward) == bool
+    assert type(config.water_duration) in [int, float]
+    
+    if data['stim_enabled']:
+        config.stim_params = data['stim_params']
+        assert config.stim_params is not None
+    else:
+        config.stim_params = None
+    
     if mode == 'open_loop':
         config.baseline = None
         config.yoked = None
-        config.reward = None
         config.channels = None
+        config.plexon_lib = None
     elif mode == 'closed_loop':
         config.baseline = data['baseline']
         config.yoked = data['yoked']
-        config.reward = data['reward']
         config.plexon_lib = data.get('plexon_lib', 'opx')
         assert type(config.baseline) == bool
         assert type(config.yoked) == bool
-        assert type(config.reward) == bool
-        assert type(config.plexon_lib) in ['plex', 'opx']
+        assert config.plexon_lib in ['plex', 'opx']
         
         if labels_path is not None:
-            with open(labels_path) as f:
+            with open(labels_path, encoding='utf8') as f:
                 labels_data = hjson.load(f)
         else:
             labels_data = data
@@ -454,10 +424,11 @@ def load_config(path: Path, labels_path: Optional[Path]) -> Config:
             int(k): v
             for k, v in labels_data['channels'].items()
         }
-        # assert isinstance(channels, get_type_hints(Config)['channels'])
         config.channels = channels
+    elif mode in ['bias', 'stim', 'monitor']:
+        pass
     else:
-        assert False
+        raise ValueError(f"Invalid mode `{mode}`")
     
     return config
 
@@ -488,8 +459,10 @@ def parse_args_config():
         help='do not wait for plexon start pulse or enter press, skips initial 3 second wait')
     parser.add_argument('--loadcell-out',
         help='file to write loadcell csv data to')
+    parser.add_argument('--events-out',
+        help='file to write event data to')
     parser.add_argument('--no-record', action='store_true',
-        help='skip recording loadcell data')
+        help='allow not recording loadcell data')
     parser.add_argument('--live', action='store_true',
         help='show real time data')
     parser.add_argument('--live-cal', action='store_true',
@@ -503,24 +476,18 @@ def parse_args_config():
         help='skip the user prompt after tilts are completed')
     
     parser.add_argument('--template-out',
-        help='output path for generated template')
+        help='output path for generated template/meta file')
     parser.add_argument('--template-in',
         help='input path for template')
     
-    parser.add_argument('--no-spike-wait', action='store_true',
-        help=argparse.SUPPRESS)
-    parser.add_argument('--fixed-spike-wait', action='store_true',
-        help=argparse.SUPPRESS)
     parser.add_argument('--retry', action='store_true',
         help=argparse.SUPPRESS)
     parser.add_argument('--mock', action='store_true',
         help=argparse.SUPPRESS)
-    parser.add_argument('--dbg-motor-control', action='store_true',
-        help=argparse.SUPPRESS)
     
     if config_path is not None:
         raw_args = copy(sys.argv[1:])
-        with open(config_path) as f:
+        with open(config_path, encoding='utf8') as f:
             config_data = hjson.load(f)
         
         if '-' in config_data:
@@ -537,8 +504,8 @@ def parse_args_config():
     
     args = parser.parse_args(args=raw_args)
     
-    if args.loadcell_out is None and args.no_record is not None:
-        parser.error("must specify one of --loadcell-out or --no-record")
+    # if args.loadcell_out is None and not args.no_record:
+    #     parser.error("must specify --no-record if --loadcell-out is not set")
     
     return args
 
@@ -560,15 +527,26 @@ def bias_main(config: Config, loadcell_out: str, mock: bool):
 def main():
     args = parse_args_config()
     config = load_config(args.config, args.labels)
-    print("channels", config.channels)
+    
+    def auto_path(path_str: Optional[str], postfix: str) -> Optional[str]:
+        if path_str == "":
+            return None
+        if args.loadcell_out is None or path_str is not None:
+            return path_str
+        path = Path(args.loadcell_out)
+        path = path.parent / f"{path.stem}{postfix}"
+        return str(path)
+    
+    args.template_out = auto_path(args.template_out, "_meta.json")
+    
+    args.events_out = auto_path(args.events_out, "_events.json")
     
     args_record = dict(vars(args))
+    # hide unused dev flags
     dev_flags = [
-        'dbg_motor_control',
         'mock',
-        'no_spike_wait',
-        'fixed_spike_wait',
         'retry',
+        'no_end_prompt',
     ]
     for flag in dev_flags:
         if not args_record[flag]:
@@ -581,91 +559,60 @@ def main():
     if args.monitor:
         config.mode = 'monitor'
     
-    if not args.dbg_motor_control:
-        DEBUG_CONFIG['motor_control'] = True
-    if mock:
-        DEBUG_CONFIG['mock'] = True
-    
     if config.mode == 'bias':
         if not args.overwrite:
             assert not Path(args.bias).exists(), f"output file {args.bias} already exists"
         return bias_main(config, args.bias, args.mock)
     
-    # mode = 'normal' if args.non_psth else 'psth'
     if config.mode == 'open_loop':
-        mode = 'normal'
+        mode = 'open_loop'
     elif config.mode == 'closed_loop':
-        mode = 'psth'
+        mode = 'closed_loop'
     elif config.mode == 'monitor':
         mode = 'monitor'
+    elif config.mode in ['stim']:
+        mode = config.mode
     else:
         raise ValueError(f"invalid mode {config.mode}")
     
-    assert mode in ['psth', 'normal', 'monitor']
+    assert mode in ['closed_loop', 'open_loop', 'monitor', 'stim']
     
     if config.tilt_sequence is not None:
         tilt_sequence = config.tilt_sequence
+        if config.sequence_repeat != 1:
+            tilt_sequence = tilt_sequence * config.sequence_repeat
+        if config.sequence_shuffle:
+            tilt_sequence = random.sample(tilt_sequence, k=len(tilt_sequence))
     else:
         tilt_sequence = generate_tilt_sequence(config.num_tilts)
-    
-    clock_source = NIDAQ_CLOCK_PINS[config.clock_source]
     
     output_extra = {
         'config': config.raw,
         'args': args_record,
-    }
-    record_output_extra = {
-        **output_extra,
+        'input_files': {},
+        'output_files': {},
         'tilt_sequence': tilt_sequence,
     }
     
-    if not args.no_record:
-        record_stop_event = RecordState()
-        if args.live:
-            record_stop_event.live.enabled = True
-            assert not args.live_cal, "can not use both --live and --live-cal at the same time"
-            
-        if args.live_cal:
-            record_stop_event.live.enabled = True
-            record_stop_event.live.calibrated = True
-            
-            live_bias_str = args.live_bias
-            assert live_bias_str is not None, "--live-bias is required when --live-cal is present"
-            live_bias = Path(live_bias_str)
-            if live_bias.exists():
-                record_stop_event.live.bias_file = live_bias_str
-            else:
-                matches = list(live_bias.glob(f"*/{live_bias_str}"))
-                assert len(matches) != 0, "no files matching bias file pattern found"
-                if len(matches) > 1:
-                    print(f"warning: multiple bias files match pattern, using {matches[0]}")
-                record_stop_event.live.bias_file = str(matches[0])
-        
-        _recording_check_event['_'] = record_stop_event.failed
-        
-        if not args.overwrite:
-            assert not Path(args.loadcell_out).exists(), f"output file {args.loadcell_out} already exists"
-        
-        spawn_process(
-            _error_record_data, clock_source=clock_source,
-            clock_rate=config.clock_rate, csv_path=args.loadcell_out,
-            state=record_stop_event, mock=args.mock,
-            live_view_seconds=args.live_secs,
-            output_meta=record_output_extra,
-        )
-        # wait after starting recording to make sure there is enough time
-        # before a tilt to cover an analysis window
-        time.sleep(4)
-    else:
-        _recording_check_event['_'] = False
-        record_stop_event = None
+    record_state = RecordState()
+    start_recording(record_state, args, config)
     
     if mode == 'monitor':
         input('press enter to exit')
-        record_stop_event.stop_recording()
+        record_state.stop_recording()
         return
     
-    assert mode in ['psth', 'normal']
+    if mode == 'stim':
+        if config.stim_params is None:
+            print('stim disabled in config')
+            return
+        stim_state = spawn_random_stimulus_process(config.stim_params, mock=args.mock, verbose=os.environ.get('print_stim'))
+        input('press enter to exit')
+        stim_state.stop()
+        record_state.stop_recording()
+        return
+    
+    assert mode in ['closed_loop', 'open_loop']
     
     if not args.no_start_pulse and not args.mock:
         print("waiting for plexon start pulse")
@@ -675,79 +622,137 @@ def main():
         print("Waiting 3 seconds ?")
         time.sleep(3) # ?
     
-    if mode == 'psth': # closed loop
-        print("running psth")
+    with ExitStack() as stack:
+        
+        if config.stim_params is not None:
+            stim_state = spawn_random_stimulus_process(config.stim_params, mock=args.mock, verbose=os.environ.get('print_stim'))
+            _recording_check_event['stim'] = stim_state.failed
+        else:
+            stim_state = None
+            _recording_check_event['stim'] = False
+        
         baseline_recording = config.baseline
         
-        def before_platform_close(platform):
-            # if the platform is already closed the psth will have written
-            # its output and it's too late to add the file hash
-            if platform.closed:
-                return
-            if record_stop_event is not None:
-                # stop the recording process so we can calculate the hash of the recorded file
-                print("waiting for recording to stop (platform)")
-                record_stop_event.stop_recording()
-                
+        def before_platform_close():
+            if args.loadcell_out is not None:
                 fpath = Path(args.loadcell_out)
                 grf_file_hash = hash_file(fpath)
                 
-                platform.psth.output_extra['output_files'][fpath.name] = grf_file_hash
+                output_extra['output_files'][fpath.name] = grf_file_hash
         
-        # also create a context manager so before_platform_close will still be run
-        # if an error occures
-        @contextmanager
-        def platform_close_context(platform):
-            try:
-                yield
-            finally:
-                before_platform_close(platform)
+        def after_platform_close():
+            if args.events_out is not None:
+                fpath = Path(args.events_out)
+                file_hash = hash_file(fpath)
+                output_extra['output_files'][fpath.name] = file_hash
+            
+            if args.template_out is not None:
+                with open(args.template_out, 'w', encoding='utf8') as f:
+                    json.dump(output_extra, f, indent=2)
         
-        if args.template_out and not args.overwrite:
+        def stop_recording():
+            print("waiting for recording to stop")
+            record_state.stop_recording()
+        
+        if args.template_out is not None and not args.overwrite:
             assert not Path(args.template_out).exists(), f"output file {args.template_out} already exists"
+        if args.events_out is not None and not args.overwrite:
+            assert not Path(args.events_out).exists(), f"output file {args.events_out} already exists"
         
-        with PsthTiltPlatform(
+        if mode == 'closed_loop':
+            collect_events = True
+        elif mode == 'open_loop':
+            collect_events = False
+        else:
+            raise ValueError("Invalid mode")
+        
+        post_time = 200
+        
+        if mode == 'closed_loop':
+            bin_size = 20
+            classifier: Optional[Any] = EuclClassifier(
+                post_time = post_time,
+                bin_size = bin_size,
+            )
+            
+            if not baseline_recording:
+                assert args.template_in is not None
+            if args.template_in is not None:
+                with open(args.template_in, encoding='utf8') as f:
+                    template_in = json.load(f)
+                events_path = template_in.get('events_path')
+                if events_path is not None:
+                    events_path = Path(events_path)
+                    if not events_path.is_absolute():
+                        events_path = Path(args.template_in).parent / events_path
+                    with open(events_path, encoding='utf8') as f:
+                        events_record = json.load(f)
+                    classifier.build_template_from_events(template_in['tilts'], events_record)
+                else:
+                    classifier.build_template_from_record(template_in['tilts'])
+        else:
+            classifier = None
+            baseline_recording = True
+        
+        stack.callback(after_platform_close)
+        # add stim callback after after_platform_close so the events are saved to the output file
+        if stim_state is not None:
+            def stop_stim():
+                stim_state.stop()
+                output_extra['stim_events'] = stim_state.event_list()
+            stack.callback(stop_stim)
+        platform = PsthTiltPlatform(
             baseline_recording = baseline_recording,
-            save_template = bool(args.template_out),
-            template_output_path = args.template_out,
-            template_in_path = args.template_in,
             channel_dict = config.channels,
             mock = mock,
             pyopx = config.plexon_lib == 'opx',
+            after_tilt_delay = config.after_tilt_delay,
+            collect_events = collect_events,
             reward_enabled = config.reward,
-        ) as platform:
-            if args.no_spike_wait:
-                assert not args.fixed_spike_wait
-                platform.fixed_spike_wait_time = 0.2
-                platform.fixed_spike_wait_timeout = 1.5
-            if args.fixed_spike_wait:
-                assert not args.no_spike_wait
-                platform.fixed_spike_wait = True
-            platform.delay_range = config.delay_range
-            with platform_close_context(platform):
-                run_psth_loop(
-                    platform, tilt_sequence,
-                    yoked=config.yoked, retry_failed=args.retry,
-                    output_extra=output_extra,
-                    before_platform_close = before_platform_close,
-                )
+            water_duration = config.water_duration,
+            post_time = post_time,
+            delay_range = config.delay_range,
+            classifier = classifier,
+            tilt_duration = 1.5 if mock else None,
+            record_state = record_state,
+        )
+        
+        stack.enter_context(platform)
+        stack.callback(before_platform_close)
+        # add stop_recording to the exit stack after before_close_platform so the 
+        # correct hash can be created for the grf recording
+        stack.callback(stop_recording)
+        
+        if args.events_out is not None:
+            try:
+                events_rel_path = Path(args.events_out).relative_to(Path(args.template_out).parent)
+            except ValueError:
+                events_rel_path = Path(args.events_out).resolve()
+            output_extra['events_path'] = str(events_rel_path)
+            
+            events_file = stack.enter_context(open(args.events_out, 'w', encoding='utf8'))
+            events_file.write('[\n')
+            def finish_write_events():
+                events_file.write('\n]\n')
+            stack.callback(finish_write_events)
+            _first_event = [True]
+            def write_event(rec):
+                if _first_event:
+                    _first_event.clear()
+                else:
+                    events_file.write(',\n')
+                json.dump(rec, events_file)
+            platform.event_callback = write_event
+        
+        run_psth_loop(
+            platform, tilt_sequence,
+            yoked = config.yoked, retry_failed = args.retry,
+            output_extra = output_extra,
+            template_in_path = args.template_in,
+            stim_state = stim_state,
+        )
         if not args.no_end_prompt:
             input("press enter to stop recording and exit")
-    elif mode == 'normal': # open loop
-        print("running non psth")
-        with TiltPlatform(mock=mock, delay_range=config.delay_range) as platform:
-            run_non_psth_loop(platform, tilt_sequence, num_tilts=config.num_tilts)
-        if not args.no_end_prompt:
-            input("press enter to stop recording and exit")
-    else:
-        raise ValueError("Invalid mode")
-    
-    if record_stop_event is not None:
-        print("waiting for recording to stop")
-        # wait before stopping recording to make sure there is enough time
-        # after a tilt to cover an analysis window
-        time.sleep(3)
-        record_stop_event.stop_recording()
     
     check_recording()
 

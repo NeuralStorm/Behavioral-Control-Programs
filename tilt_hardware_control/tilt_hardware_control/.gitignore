@@ -1,4 +1,2 @@
-*.json
-*.hjson
-*.csv
-notes*.md
+!example_*.hjson
+test_data

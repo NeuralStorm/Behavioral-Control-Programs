@@ -2,24 +2,22 @@
 
 // either open_loop or closed_loop
 mode: open_loop
-//mode: closed_loop
+// mode: closed_loop
 
-baseline: false
+baseline: true
 yoked: false
 reward: false
 water_duration: 0.15
 
 clock_source: 'external'
-// clock_source: 'internal'
 clock_rate: 1000
 
-num_tilts: 200
+num_tilts: 400
 tilt_sequence: null
-// tilt_sequence: ["slow_left","slow_right","fast_left","fast_right",]
 sequence_repeat: 1
 sequence_shuffle: false
 
-delay_range: [0.5, 0.5]
+delay_range: [2, 3]
 after_tilt_delay: 1
 
 stim_enabled: false
@@ -34,5 +32,7 @@ stim_params: {
         current: [1, 2],
     }
 }
+
+--loadcell-out: ./loadcell_tilt.csv
 
 }
