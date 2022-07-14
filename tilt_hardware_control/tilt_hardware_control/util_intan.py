@@ -1,4 +1,5 @@
 
+from typing import List, Optional
 import time
 import socket
 from pprint import pprint
@@ -106,17 +107,26 @@ class Intan:
         self._socket.close()
 
 class Stimulator:
-    def __init__(self):
+    def __init__(self, channels: List[str]):
         self.intan = Intan()
-        self.channel = 'a-000'
+        # self.channel = 'a-000'
+        self.channels = channels
         self.digital_out = 'digital-out-01'
         
+        # the current channel with stimenabled true
+        self._selected_channel: Optional[str] = None
+        
+        # send commands for each channel separately so the channel that
+        # caused an error can be known
+        for ch in self.channels:
+            self.intan.cmd([
+                f'set {ch}.StimEnabled false',
+                f'set {ch}.TriggerEdgeOrLevel edge',
+                f'set {ch}.TriggerHighOrLow high',
+                f'set {ch}.source keypressf1',
+            ])
+        
         self.intan.cmd([
-            f'set {self.channel}.StimEnabled true',
-            f'set {self.channel}.TriggerEdgeOrLevel edge',
-            f'set {self.channel}.TriggerHighOrLow high',
-            f'set {self.channel}.source keypressf1',
-            
             f'set {self.digital_out}.source keypressf1',
             f'set {self.digital_out}.StimEnabled true',
             f'set {self.digital_out}.TriggerEdgeOrLevel edge',
@@ -129,6 +139,7 @@ class Stimulator:
         ])
     
     def set_stimulation_parameters(self, *,
+        channel: Optional[str] = None,
         first_phase_amplitude: float,
         first_phase_duration: float,
         second_phase_amplitude: float,
@@ -136,14 +147,23 @@ class Stimulator:
         number_of_pulses: int = 1,
         pulse_train_period: float = None,
     ):
+        if channel is None:
+            assert len(self.channels) == 1
+            channel = self.channels[0]
+        assert channel in self.channels
+        
         self.intan.stop_recording()
-        ch = self.channel
+        
+        ch = channel
         cmds = [
+            f'set {ch}.StimEnabled true',
             f'set {ch}.firstphaseamplitudemicroamps {first_phase_amplitude}',
             f'set {ch}.firstphasedurationmicroseconds {first_phase_duration}',
             f'set {ch}.secondphaseamplitudemicroamps {second_phase_amplitude}',
             f'set {ch}.secondphasedurationmicroseconds {second_phase_duration}',
         ]
+        if self._selected_channel is not None:
+            cmds.append(f'set {self._selected_channel}.StimEnabled false')
         assert number_of_pulses >= 1
         if number_of_pulses == 1:
             cmds.append(f'set {ch}.PulseOrTrain SinglePulse')
@@ -156,6 +176,7 @@ class Stimulator:
             ])
         
         self.intan.cmd(cmds)
+        self._selected_channel = channel
         self.intan.wait_for_upload()
         self.intan.start_recording()
     

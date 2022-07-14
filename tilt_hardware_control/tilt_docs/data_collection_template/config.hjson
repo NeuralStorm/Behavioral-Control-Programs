@@ -33,6 +33,7 @@ stim_params: {
         duration: [1, 2],
         current: [1, 2],
     }
+    channel: ["a-000"]
 }
 
 }

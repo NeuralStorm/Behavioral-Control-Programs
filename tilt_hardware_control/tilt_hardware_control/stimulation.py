@@ -66,8 +66,10 @@ def _random_stimulus(state: State, params_config, *, mock, verbose):
     with ExitStack() as stack:
         stack.enter_context(state.context())
         
+        channels = params_config['channel']
+        
         if not mock:
-            stim = stack.enter_context(Stimulator())
+            stim = stack.enter_context(Stimulator(channels=channels))
         
         delay_range = params_config['delay_range']
         
@@ -95,7 +97,10 @@ def _random_stimulus(state: State, params_config, *, mock, verbose):
             # pulse period
             p_p = random.choice(params_config['pulse_period'])
             
+            channel = random.choice(channels)
+            
             params = dict(
+                channel = channel,
                 first_phase_amplitude = f_c,
                 first_phase_duration = f_d,
                 second_phase_amplitude = s_c,
