@@ -13,6 +13,11 @@ from event_source import Event, SpikeEvent, TiltEvent, StimEvent, UnknownEvent
 from event_source import Source, MockSource, OpxSource, PyPlexSource
 from grf_data import RecordState
 
+WAIT_TIMEOUT = 8
+
+class TiltWaitTimeout(Exception):
+    pass
+
 class PsthTiltPlatform(AbstractContextManager):
     def __init__(self, *, 
             baseline_recording: bool,
@@ -160,6 +165,7 @@ class PsthTiltPlatform(AbstractContextManager):
         found_event = False
         collected_ts = False
         
+        wait_start_time = time.perf_counter()
         while True:
             evt: Optional[Event] = self.event_source.next_event()
             if evt is not None:
@@ -171,6 +177,8 @@ class PsthTiltPlatform(AbstractContextManager):
                     self._add_event_to_record(evt, relevent=True)
                     break
                 self._add_event_to_record(evt, relevent=False)
+            if time.perf_counter() - wait_start_time > WAIT_TIMEOUT:
+                raise TiltWaitTimeout()
         
         while True:
             evt = self.event_source.next_event()
@@ -237,7 +245,7 @@ class PsthTiltPlatform(AbstractContextManager):
             got_response = collect_result['got_response']
         else:
             if self.tilt_duration is None:
-                self.record_state.digital_lines['tilt_active'].wait_true(timeout=8)
+                self.record_state.digital_lines['tilt_active'].wait_true(timeout=WAIT_TIMEOUT)
             got_response = False
         
         if not self.baseline_recording:
@@ -278,7 +286,7 @@ class PsthTiltPlatform(AbstractContextManager):
         if self.tilt_duration is None:
             if not self.mock:
                 # line_wait("Dev4/port2/line3", False)
-                self.record_state.digital_lines['tilt_active'].wait_false(timeout=8)
+                self.record_state.digital_lines['tilt_active'].wait_false(timeout=WAIT_TIMEOUT)
             self._add_local_event('tilt_finish')
         else:
             # calculate additional time to sleep
