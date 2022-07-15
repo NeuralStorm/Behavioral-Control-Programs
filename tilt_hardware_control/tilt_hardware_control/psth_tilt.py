@@ -12,6 +12,7 @@ from util_nidaq import line_wait
 from event_source import Event, SpikeEvent, TiltEvent, StimEvent, UnknownEvent
 from event_source import Source, MockSource, OpxSource, PyPlexSource
 from grf_data import RecordState
+from stimulation import TiltStimulation
 
 WAIT_TIMEOUT = 8
 
@@ -33,6 +34,7 @@ class PsthTiltPlatform(AbstractContextManager):
             classifier: Optional[EuclClassifier],
             tilt_duration: Optional[float] = None,
             record_state: RecordState,
+            stim_handler: Optional[TiltStimulation] = None,
         ):
         """
             Args:
@@ -73,7 +75,8 @@ class PsthTiltPlatform(AbstractContextManager):
         self._post_time_ms = post_time / 1000
         self.baseline_recording = baseline_recording
         
-        self.classifier = classifier
+        self.classifier: Optional[EuclClassifier] = classifier
+        self.stim_handler: Optional[TiltStimulation] = stim_handler
         
         self._tilt_record: Optional[Dict[str, Any]] = None
         
@@ -251,7 +254,7 @@ class PsthTiltPlatform(AbstractContextManager):
         if not self.baseline_recording:
             if yoked_prediction is not None:
                 d_source = 'yoked'
-                predicted_tilt_type = yoked_prediction
+                predicted_tilt_type: str = yoked_prediction
                 decoder_result = yoked_prediction == tilt_name
             elif got_response:
                 assert self.classifier is not None
@@ -264,6 +267,9 @@ class PsthTiltPlatform(AbstractContextManager):
                 decoder_result = True
                 d_source = 'no_spikes'
                 predicted_tilt_type = None
+            
+            if predicted_tilt_type is not None:
+                self.stim_handler.prediction_made(predicted_tilt_type, tilt_name)
             
             tilt_record['decoder_result_source'] = d_source
             tilt_record['decoder_result'] = decoder_result

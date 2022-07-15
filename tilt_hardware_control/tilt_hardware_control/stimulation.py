@@ -1,4 +1,5 @@
 
+from typing import Set
 import random
 import time
 from pprint import pprint
@@ -10,6 +11,65 @@ from multiprocessing import Process, Event as PEvent, Queue, Value
 from queue import Empty
 
 from grf_data import RECORD_PROCESS_STOP_TIMEOUT
+
+class TiltStimulation:
+    def __init__(self, *, stim_params, tilt_types: Set[str], mock: bool, verbose: bool = False):
+        self._verbose = verbose
+        self._mock = mock
+        
+        assert stim_params['mode'] == 'classifier'
+        
+        # ensure we have settings for all tilt types
+        assert set(stim_params['predicted'].keys()) >= tilt_types
+        
+        for tilt_type, tilt_params in stim_params['predicted'].items():
+            for k in ['channel', 'first_phase', 'second_phase', 'num_pulses', 'pulse_period']:
+                assert k in tilt_params, f"missing key `{k}` in config for tilt type {tilt_type}"
+            for k in ['first_phase', 'second_phase']:
+                for sk in ['duration', 'current']:
+                    assert sk in tilt_params[k], f"missing key `{k}.{sk}` in config for tilt type {tilt_type}"
+        
+        self._tilt_types = stim_params['predicted']
+        if not mock:
+            self._stim = Stimulator(channels=['a-000'])
+        
+        self.event_log: List[Dict[str, Any]] = []
+    
+    def prediction_made(self, predicted_tilt_type, actual_tilt_type):
+        stim_params = self._tilt_types[predicted_tilt_type]
+        
+        params = dict(
+            channel = stim_params['channel'],
+            first_phase_amplitude = stim_params['first_phase']['current'],
+            first_phase_duration = stim_params['first_phase']['duration'],
+            second_phase_amplitude = stim_params['second_phase']['current'],
+            second_phase_duration = stim_params['second_phase']['duration'],
+            number_of_pulses = stim_params['num_pulses'],
+            pulse_train_period = stim_params['pulse_period'],
+        )
+        if self._verbose:
+            pprint(params)
+        if not self._mock:
+            self._stim.set_stimulation_parameters(
+                **params,
+            )
+            event_log_item = {
+                'system_time': time.perf_counter(),
+                'type': 'trigger_stimulus',
+                'params': params,
+            }
+            self.event_log.append(event_log_item)
+            self._stim.trigger_stimulus()
+        
+        # return {
+        #     'event_log': [event_log_item],
+        # }
+    
+    def __enter__(self):
+        self._stim.__enter__()
+    
+    def __exit__(self, *exc):
+        self._stim.__exit__()
 
 class State:
     def __init__(self):

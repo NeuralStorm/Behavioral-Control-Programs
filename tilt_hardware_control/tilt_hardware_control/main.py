@@ -26,7 +26,7 @@ from util import hash_file
 from util_multiprocess import spawn_process
 from util_nidaq import line_wait
 from psth_new import EuclClassifier
-from stimulation import spawn_random_stimulus_process, State as StimState
+from stimulation import spawn_random_stimulus_process, State as StimState, TiltStimulation
 
 from grf_data import record_data, RecordState
 
@@ -575,6 +575,15 @@ def main():
     else:
         raise ValueError(f"invalid mode {config.mode}")
     
+    if config.stim_params is not None:
+        raw_stim_mode = config.stim_params['mode']
+        if raw_stim_mode in ['random', 'classifier']:
+            stim_mode = raw_stim_mode
+        else:
+            raise ValueError(f"Invalid stim mode {raw_stim_mode}")
+    else:
+        stim_mode = None
+    
     assert mode in ['closed_loop', 'open_loop', 'monitor', 'stim']
     
     if config.tilt_sequence is not None:
@@ -603,8 +612,8 @@ def main():
         return
     
     if mode == 'stim':
-        if config.stim_params is None:
-            print('stim disabled in config')
+        if stim_mode != 'random':
+            print(f'invalid stim mode {stim_mode}')
             return
         stim_state = spawn_random_stimulus_process(config.stim_params, mock=args.mock, verbose=os.environ.get('print_stim'))
         input('press enter to exit')
@@ -624,11 +633,22 @@ def main():
     
     with ExitStack() as stack:
         
-        if config.stim_params is not None:
+        if stim_mode == 'random':
             stim_state = spawn_random_stimulus_process(config.stim_params, mock=args.mock, verbose=os.environ.get('print_stim'))
             _recording_check_event['stim'] = stim_state.failed
+            stim_handler = None
+        elif stim_mode == 'classifier':
+            stim_state = None
+            _recording_check_event['stim'] = False
+            stim_handler = TiltStimulation(
+                stim_params = config.stim_params,
+                tilt_types = set(tilt_sequence),
+                mock = args.mock,
+                verbose = os.environ.get('print_stim'),
+            )
         else:
             stim_state = None
+            stim_handler = None
             _recording_check_event['stim'] = False
         
         baseline_recording = config.baseline
@@ -695,12 +715,17 @@ def main():
             baseline_recording = True
         
         stack.callback(after_platform_close)
-        # add stim callback after after_platform_close so the events are saved to the output file
-        if stim_state is not None:
-            def stop_stim():
+        
+        # add stim callback after after_platform_close so the events are saved
+        # to the output file before it is saved
+        def stop_stim():
+            if stim_state is not None:
                 stim_state.stop()
                 output_extra['stim_events'] = stim_state.event_list()
-            stack.callback(stop_stim)
+            elif stim_handler is not None:
+                output_extra['stim_events'] = stim_handler.event_log
+        stack.callback(stop_stim)
+        
         platform = PsthTiltPlatform(
             baseline_recording = baseline_recording,
             channel_dict = config.channels,
@@ -715,6 +740,7 @@ def main():
             classifier = classifier,
             tilt_duration = 1.5 if mock else None,
             record_state = record_state,
+            stim_handler = stim_handler,
         )
         
         stack.enter_context(platform)
