@@ -33,6 +33,63 @@ stim_params: {
     }
     channel: ["a-000"]
 }
+// stim_params: {
+//     mode: classifier
+//     predicted: {
+//         slow_left: {
+//             channel: a-000
+//             first_phase: {
+//                 duration: 1,
+//                 current: 1,
+//             }
+//             second_phase: {
+//                 duration: 1,
+//                 current: 1,
+//             }
+//             num_pulses: 1
+//             pulse_period: 1
+//         }
+//         slow_right: {
+//             channel: a-000
+//             first_phase: {
+//                 duration: 1,
+//                 current: 1,
+//             }
+//             second_phase: {
+//                 duration: 1,
+//                 current: 1,
+//             }
+//             num_pulses: 1
+//             pulse_period: 1
+//         }
+//         fast_left: {
+//             channel: a-000
+//             first_phase: {
+//                 duration: 1,
+//                 current: 1,
+//             }
+//             second_phase: {
+//                 duration: 1,
+//                 current: 1,
+//             }
+//             num_pulses: 1
+//             pulse_period: 1
+//         }
+//         fast_right: {
+//             channel: a-000
+//             first_phase: {
+//                 duration: 1,
+//                 current: 1,
+//             }
+//             second_phase: {
+//                 duration: 1,
+//                 current: 1,
+//             }
+//             num_pulses: 1
+//             pulse_period: 1
+//         }
+//     }
+// }
 
 --loadcell-out: ./loadcell_tilt.csv
 
