@@ -376,8 +376,6 @@ class COGame(Widget):
         else:
             self.center_target_position[0] = self.center_target_position[0] + self.nudge_x
             self.center_target_position[1] = self.center_target_position[1] + self.nudge_y
-        if '--test' in sys.argv:
-            self.center_target_position = np.array([0., 0.])
         self.center_target.move(self.center_target_position)
         self.periph_target.set_size(2*self.periph_target_rad)
 
