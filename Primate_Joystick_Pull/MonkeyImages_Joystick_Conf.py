@@ -272,7 +272,7 @@ class InfoView:
         out.append(f"  min-max: {ad['min']:.3f}-{ad['max']:.3f}")
         out.append(f"  mean: {ad['mean']:.3f} stdev: {ad['stdev']:.3f}")
         for discrim, dad in end_info['discrim_action_duration'].items():
-            out.append(f"  {discrim} pulls/count: {dad['pull_count']}/{dad['count']}")
+            out.append(f"  {discrim} correct/pulls/count: {dad['correct_count']}/{dad['pull_count']}/{dad['count']}")
             out.append(f"    min-max: {dad['min']:.3f}-{dad['max']:.3f}")
             out.append(f"    mean: {dad['mean']:.3f} stdev: {dad['stdev']:.3f}")
         
@@ -1605,10 +1605,10 @@ class MonkeyImages:
             ])
             
             writer.writerow([])
-            writer.writerow(['discrim', 'pulls', 'count', 'min', 'max', 'mean', 'stdev'])
+            writer.writerow(['discrim', 'correct', 'pulls', 'count', 'min', 'max', 'mean', 'stdev'])
             for discrim, dad in end_info['discrim_action_duration'].items():
                 writer.writerow([
-                    discrim, dad['pull_count'], dad['count'],
+                    discrim, dad['correct_count'], dad['pull_count'], dad['count'],
                     dad['min'], dad['max'], dad['mean'], dad['stdev'],
                 ])
             
@@ -1617,7 +1617,8 @@ class MonkeyImages:
             for e, ei in end_info['errors'].items():
                 writer.writerow([e, ei['count'], ei['percent']])
         
-        screenshot_widgets([*self.info_view.rows, self.info_view.label], histo_path)
+        if self.info_view is not None:
+            screenshot_widgets([*self.info_view.rows, self.info_view.label], histo_path)
     
     def print_histogram(self):
         events = [e for e in self.event_log if e['name'] == 'task_completed']
@@ -1693,6 +1694,7 @@ class MonkeyImages:
         
         def get_discrim_durations():
             for discrim, d_events in sgroup(events, lambda x: x['info']['discrim']):
+                d_correct = [e for e in events if e['info']['success']]
                 pull_durations = [
                     e['info']['action_duration']
                     for e in d_events
@@ -1702,6 +1704,7 @@ class MonkeyImages:
                 out = {
                     'count': count, # number of times discrim appeared
                     'pull_count': len(pull_durations), # number of pulls in response to discrim
+                    'correct_count': len(d_correct),
                     'min': min(pull_durations, default=0),
                     'max': max(pull_durations, default=0),
                     'mean': statistics.mean(pull_durations) if pull_durations else 0,
@@ -1711,6 +1714,7 @@ class MonkeyImages:
         
         info = {
             'count': n,
+            'correct_count': len(correct),
             'percent_correct': perc(correct_n),
             'action_duration': {
                 'min': min(pull_durations, default=0),
