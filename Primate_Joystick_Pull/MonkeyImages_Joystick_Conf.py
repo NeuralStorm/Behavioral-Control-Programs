@@ -1806,9 +1806,14 @@ def gen_images():
         cimg.save(p, 'PNG')
     
     img = Image.open(src / 'zmonkey3.jpg')
-    img.thumbnail(CANVAS_SIZE)
+    # img.thumbnail(CANVAS_SIZE)
+    img.thumbnail((430, 400))
+    y_offset = 35
+    new_image = Image.new('RGBA', (img.width, img.height+y_offset), (0, 0, 0, 0))
+    new_image.paste(img, (0, y_offset))
     p = out_path / 'green/monkey3.png'
-    img.save(p, 'PNG')
+    # img.save(p, 'PNG')
+    new_image.save(p, 'PNG')
     
     img = Image.open(src / 'transparent.png')
     img.thumbnail(CANVAS_SIZE)
