@@ -68,7 +68,7 @@ class UnknownEvent(Event):
         return self._timestamp
 
 class MockSource(Source):
-    def __init__(self, channel, unit):
+    def __init__(self, channel: int, unit: int):
         self.PL_SingleWFType = 0
         self.PL_ExtEventType = 1
         
