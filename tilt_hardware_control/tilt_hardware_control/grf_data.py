@@ -784,7 +784,8 @@ def record_data(*,
                 # no timeout on first read to wait for start trigger
                 # read_timeout = WAIT_INFINITELY
                 # actually a timeout since start trigger isn't being used
-                # short timeout for first sample so the 
+                # short timeout for first sample so an error happens quickly if
+                # plexon is not collecting data (required to enable the 40khz clock)
                 read_timeout = 1
             else:
                 read_timeout = 10 # default in nidaqmx

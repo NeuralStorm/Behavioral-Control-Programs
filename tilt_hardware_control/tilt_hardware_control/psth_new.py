@@ -1,5 +1,7 @@
 
 from typing import Optional, Tuple, List, Dict
+from pathlib import Path
+import json
 
 class EuclClassifier:
     """classifies tilts using a euclidian distance classifier
@@ -98,7 +100,8 @@ def _find_tilt(events):
 def build_templates(tilt_record, *, post_time: int, bin_size: int, events_record = None) -> Dict[str, List[float]]:
     """builds templates from a record of tilts and spikes
         
-        tilt_record corresponsd to the `tilts` key in template files
+        tilt_record corresponsd to the `tilts` key in meta files
+        events_record is the entire events file
         """
     psths: Dict[str, List[List[int]]] = {}
     for tilt in tilt_record:
@@ -147,3 +150,27 @@ def build_templates(tilt_record, *, post_time: int, bin_size: int, events_record
         templates[tilt_type] = template
     
     return templates
+
+def build_template_file(meta_path: Path, events_path: Path, template_path: Path, *, post_time: int, bin_size: int):
+    with open(meta_path) as f:
+        meta_data = json.load(f)
+    with open(events_path) as f:
+        events = json.load(f)
+    
+    templates = build_templates(
+        tilt_record = meta_data['tilts'],
+        events_record = events,
+        post_time = post_time,
+        bin_size = bin_size,
+    )
+    
+    out_data = {
+        'info': {
+            'post_time': post_time,
+            'bin_size': bin_size,
+        },
+        'templates': templates,
+    }
+    
+    with open(template_path, 'w') as f:
+        json.dump(out_data, f, indent=2)

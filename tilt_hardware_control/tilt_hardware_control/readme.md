@@ -35,7 +35,7 @@ Edit `config.hjson`; ensure `mode` is set to open_loop. Set `num_tilts` and `del
 Collect a bias file by running `run_bias.sh`.
 
 Run `run_tilts.sh` in the data collection directory.  
-This will read setting from `config.hjson` and create dated output files in the data collection directory.
+This will read settings from `config.hjson` and create dated output files in the data collection directory.
 
 The program will run through the specified number of tilts then wait for the user to press enter before exiting.
 
@@ -53,14 +53,13 @@ The program will perform tilts and record the tilts and spikes.
 ### Closed loop, after initial run
 
 Edit config used for the initial run and change `baseline` to false.  
-Add `--template-in <file>` where `<file>` is the name of the meta.json file created by the initial run.
+Add `--template-in <file>` where `<file>` is the name of the template.json file created by the initial run.  
+If a template file wasn't generated or different settings are needed a new template file can be generated using build_template.py.
 
 Create or edit `labels.hjson`; set `channels` to the desired value. See [example_labels.hjson](./example_labels.hjson) for an example.
 
 Run `run_tilts.sh` in the data collection directory.  
-This will read setting from `config.hjson` and create dated output files in the data collection directory.
-
-This will read settings from `config.hjson` and create dated output files in the data collection directory. Spike to create euclidian classifier templates are loaded from the specified meta.json file.
+This will read settings from `config.hjson` and create dated output files in the data collection directory. Euclidian classifier templates are loaded from the specified template.json file.
 
 The program will perform tilts and attempt to classify the tilt type based on the created templates and perform punish/reward actions based on if the classification was correct.
 
@@ -105,7 +104,7 @@ pressing enter will pause the program at the end of the current tilt. pressing e
 
 ## Notes on clocks
 
-Plexon outputs a 40khz clock signal. This is downsampled by a hardware downsampler to 1250hz and sent to Dev6/PFI6.
+Plexon outputs a 40khz clock signal. This is downsampled by a hardware downsampler to 1000hz and sent to Dev6/PFI6. Note that data collection must be started for the plexon system to output its 40khz clock.
 
 Using plexon's clock signal instead of the internal nidaq clock means, given one known shared event (such as the start pulse), all the neural and grf data can be correlated in time. Without using a shared clock the two clocks will experience a different amount of drift and diverge over time.
 
@@ -267,9 +266,14 @@ allows overwriting of existing output files
 sets the mode to `monitor`
 
 `--template-in`  
-path to a template/meta file created by a previous run of the program
+path to a template file created by a previous run of the program
 
-required in open loop non baseline, otherwise unused
+required in closed loop non baseline, otherwise unused
+
+`--template-out`  
+automatically generate a template file at the specified path from the generated events and meta files before exiting
+
+note: if there are a large number of spike events template generation could take a long time
 
 `--loadcell-out`  
 path to write ground reaction force data csv to

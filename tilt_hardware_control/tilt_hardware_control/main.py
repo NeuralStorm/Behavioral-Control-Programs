@@ -25,7 +25,7 @@ from psth_tilt import PsthTiltPlatform
 from util import hash_file
 from util_multiprocess import spawn_process
 from util_nidaq import line_wait
-from psth_new import EuclClassifier
+from psth_new import EuclClassifier, build_template_file
 from stimulation import spawn_random_stimulus_process, State as StimState, TiltStimulation
 
 from grf_data import record_data, RecordState
@@ -57,7 +57,7 @@ class StimFailure(Exception):
     pass
 
 # None if unitialized, False if not recording
-_recording_check_event = {'_': None, 'stim': None}
+_recording_check_event: Any = {'_': None, 'stim': None}
 def check_recording():
     """raises an exception if the recording or stimulation processes has failed"""
     _check_stim()
@@ -320,7 +320,7 @@ def start_recording(state: RecordState, args, config: 'Config'):
 class Config:
     channels: Optional[Dict[int, List[int]]]
     # "open_loop" or "closed_loop"
-    mode: Literal['open_loop', 'closed_loop', 'bias']
+    mode: Literal['open_loop', 'closed_loop', 'bias', 'stim', 'monitor']
     
     # clock source and rate for grf data collection
     # external = downsampled plexon clock, PFI6
@@ -330,7 +330,7 @@ class Config:
     
     num_tilts: int
     tilt_sequence: Optional[List[str]]
-    sequence_repeat: Optional[int]
+    sequence_repeat: int
     sequence_shuffle: bool
     
     # time range to wait between tilts
@@ -475,10 +475,12 @@ def parse_args_config():
     parser.add_argument('--no-end-prompt', action='store_true',
         help='skip the user prompt after tilts are completed')
     
-    parser.add_argument('--template-out',
-        help='output path for generated template/meta file')
+    parser.add_argument('--meta-out',
+        help='output path for generated meta file')
     parser.add_argument('--template-in',
         help='input path for template')
+    parser.add_argument('--template-out',
+        help='output path for template')
     
     parser.add_argument('--retry', action='store_true',
         help=argparse.SUPPRESS)
@@ -537,9 +539,12 @@ def main():
         path = path.parent / f"{path.stem}{postfix}"
         return str(path)
     
-    args.template_out = auto_path(args.template_out, "_meta.json")
+    args.meta_out = auto_path(args.meta_out, "_meta.json")
     
     args.events_out = auto_path(args.events_out, "_events.json")
+    
+    if args.template_out is not None:
+        assert args.meta_out is not None and args.events_out is not None, "Must output meta and events file to automatically generate a template."
     
     args_record = dict(vars(args))
     # hide unused dev flags
@@ -623,6 +628,13 @@ def main():
     
     assert mode in ['closed_loop', 'open_loop']
     
+    if args.meta_out is not None and not args.overwrite:
+        assert not Path(args.meta_out).exists(), f"output file {args.meta_out} already exists"
+    if args.events_out is not None and not args.overwrite:
+        assert not Path(args.events_out).exists(), f"output file {args.events_out} already exists"
+    if args.template_out is not None and not args.overwrite:
+        assert not Path(args.template_out).exists(), f"output file {args.template_out} already exists"
+    
     if not args.no_start_pulse and not args.mock:
         print("waiting for plexon start pulse")
         line_wait("Dev4/port2/line1", True)
@@ -630,6 +642,9 @@ def main():
         input("Press enter to start")
         print("Waiting 3 seconds ?")
         time.sleep(3) # ?
+    
+    post_time = 200
+    bin_size = 20
     
     with ExitStack() as stack:
         
@@ -666,18 +681,22 @@ def main():
                 file_hash = hash_file(fpath)
                 output_extra['output_files'][fpath.name] = file_hash
             
-            if args.template_out is not None:
-                with open(args.template_out, 'w', encoding='utf8') as f:
+            if args.meta_out is not None:
+                with open(args.meta_out, 'w', encoding='utf8') as f:
                     json.dump(output_extra, f, indent=2)
+            
+            if args.template_out is not None:
+                print("building templates...")
+                build_template_file(
+                    args.meta_out, args.events_out, args.template_out,
+                    post_time = post_time,
+                    bin_size = bin_size,
+                )
+                print("templates generated")
         
         def stop_recording():
             print("waiting for recording to stop")
             record_state.stop_recording()
-        
-        if args.template_out is not None and not args.overwrite:
-            assert not Path(args.template_out).exists(), f"output file {args.template_out} already exists"
-        if args.events_out is not None and not args.overwrite:
-            assert not Path(args.events_out).exists(), f"output file {args.events_out} already exists"
         
         if mode == 'closed_loop':
             collect_events = True
@@ -686,11 +705,8 @@ def main():
         else:
             raise ValueError("Invalid mode")
         
-        post_time = 200
-        
         if mode == 'closed_loop':
-            bin_size = 20
-            classifier: Optional[Any] = EuclClassifier(
+            classifier: Optional[EuclClassifier] = EuclClassifier(
                 post_time = post_time,
                 bin_size = bin_size,
             )
@@ -700,16 +716,19 @@ def main():
             if args.template_in is not None:
                 with open(args.template_in, encoding='utf8') as f:
                     template_in = json.load(f)
-                events_path = template_in.get('events_path')
-                if events_path is not None:
-                    events_path = Path(events_path)
-                    if not events_path.is_absolute():
-                        events_path = Path(args.template_in).parent / events_path
-                    with open(events_path, encoding='utf8') as f:
-                        events_record = json.load(f)
-                    classifier.build_template_from_events(template_in['tilts'], events_record)
-                else:
-                    classifier.build_template_from_record(template_in['tilts'])
+                assert classifier.post_time == template_in['info']['post_time'], f"{classifier.post_time} {template_in['info']['post_time']}"
+                assert classifier.bin_size == template_in['info']['bin_size'], f"{classifier.bin_size} {template_in['info']['bin_size']}"
+                classifier.templates = template_in['templates']
+                # events_path = template_in.get('events_path')
+                # if events_path is not None:
+                #     events_path = Path(events_path)
+                #     if not events_path.is_absolute():
+                #         events_path = Path(args.template_in).parent / events_path
+                #     with open(events_path, encoding='utf8') as f:
+                #         events_record = json.load(f)
+                #     classifier.build_template_from_events(template_in['tilts'], events_record)
+                # else:
+                #     classifier.build_template_from_record(template_in['tilts'])
         else:
             classifier = None
             baseline_recording = True
@@ -750,12 +769,6 @@ def main():
         stack.callback(stop_recording)
         
         if args.events_out is not None:
-            try:
-                events_rel_path = Path(args.events_out).relative_to(Path(args.template_out).parent)
-            except ValueError:
-                events_rel_path = Path(args.events_out).resolve()
-            output_extra['events_path'] = str(events_rel_path)
-            
             events_file = stack.enter_context(open(args.events_out, 'w', encoding='utf8'))
             events_file.write('[\n')
             def finish_write_events():
