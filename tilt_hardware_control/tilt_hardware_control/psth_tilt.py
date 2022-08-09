@@ -268,7 +268,7 @@ class PsthTiltPlatform(AbstractContextManager):
                 d_source = 'no_spikes'
                 predicted_tilt_type = None
             
-            if predicted_tilt_type is not None:
+            if self.stim_handler is not None and predicted_tilt_type is not None:
                 self.stim_handler.prediction_made(predicted_tilt_type, tilt_name)
             
             tilt_record['decoder_result_source'] = d_source

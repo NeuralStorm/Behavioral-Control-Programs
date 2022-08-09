@@ -1694,7 +1694,7 @@ class MonkeyImages:
         
         def get_discrim_durations():
             for discrim, d_events in sgroup(events, lambda x: x['info']['discrim']):
-                d_correct = [e for e in events if e['info']['success']]
+                d_correct = [e for e in d_events if e['info']['success']]
                 pull_durations = [
                     e['info']['action_duration']
                     for e in d_events
@@ -1823,6 +1823,27 @@ def gen_images():
         out_path / 'red/monkey3.png',
         out_path / 'white/monkey3.png',
     )
+    
+    # also copy monkey3 transparent image for sun
+    shutil.copyfile(
+        out_path / 'red/monkey3.png',
+        out_path / 'red/sun.png',
+    )
+    shutil.copyfile(
+        out_path / 'red/monkey3.png',
+        out_path / 'white/sun.png',
+    )
+    
+    img = Image.open(src / 'sun.png')
+    # img.thumbnail(CANVAS_SIZE)
+    img.thumbnail((430, 400))
+    x_offset = 30
+    y_offset = 35
+    new_image = Image.new('RGBA', (img.width+x_offset, img.height+y_offset), (0, 0, 0, 0))
+    new_image.paste(img, (x_offset, y_offset))
+    p = out_path / 'green/sun.png'
+    # img.save(p, 'PNG')
+    new_image.save(p, 'PNG')
     
     # shutil.copyfile(
     #     out_path / 'red/bRectangle.png',
