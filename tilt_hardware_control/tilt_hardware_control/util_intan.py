@@ -5,6 +5,7 @@ import socket
 from pprint import pprint
 
 COMMAND_BUFFER_SIZE = 1024
+SET_RUNMODE_DELAY = 0.08
 
 class Intan:
     def __init__(self):
@@ -21,7 +22,7 @@ class Intan:
                 'set runmode run',
                 # 'get runmode',
             ], add_get=False)
-            time.sleep(0.05)
+            time.sleep(SET_RUNMODE_DELAY)
             runmode = self.cmd('get runmode')
             self._running = runmode == 'Run'
             assert self._running
@@ -31,7 +32,7 @@ class Intan:
             runmode = self.cmd([
                 'set runmode stop',
             ], add_get=False)
-            time.sleep(0.05)
+            time.sleep(SET_RUNMODE_DELAY)
             runmode = self.cmd('get runmode')
             self._running = runmode == 'Run'
             assert not self._running
