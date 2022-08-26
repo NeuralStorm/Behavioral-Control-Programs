@@ -1694,6 +1694,7 @@ class MonkeyImages:
         
         def get_discrim_durations():
             for discrim, d_events in sgroup(events, lambda x: x['info']['discrim']):
+                d_events = list(d_events)
                 d_correct = [e for e in d_events if e['info']['success']]
                 pull_durations = [
                     e['info']['action_duration']
