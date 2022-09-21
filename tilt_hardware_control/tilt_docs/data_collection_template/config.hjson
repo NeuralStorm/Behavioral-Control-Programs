@@ -26,6 +26,19 @@ tilt_sequence: null
 delay_range: [0.5, 0.5]
 //delay_range: [6, 6]
 
+stim_enabled: false
+stim_params: {
+    delay_range: [0.5, 1]
+    first_phase: {
+        duration: [1, 2],
+        current: [1, 2],
+    }
+    second_phase: {
+        duration: [1, 2],
+        current: [1, 2],
+    }
+}
+
 "channels": {
     "1": [1], "2": [1,2], "3": [1,2], "4": [1,2],
     "6": [1,2], "7": [1,2,3,4], "8": [1,2,3],
