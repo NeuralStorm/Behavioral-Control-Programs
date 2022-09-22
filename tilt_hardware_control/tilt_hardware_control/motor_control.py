@@ -1,5 +1,347 @@
 
+from typing import List, Literal, Any
 import time
+from math import floor
+from multiprocessing import Pipe
+from multiprocessing.connection import Connection
+from contextlib import ExitStack
+
+from util import get_logger
+from util_multiprocess import spawn_process
+
+logger = get_logger(__name__)
+
+_PROTOCOL_BITS = [
+    'default',
+    'always_use_address_character',
+    'ack_nack',
+    'checksum',
+    '_reserved',
+    '3_digit_numeric_register_addressing',
+    'checksum_type',
+    'little_big_endian_in_modbus_mode',
+    'full_duplex_in_rs_422',
+]
+
+def _to_counts(deg):
+    """convert degrees to counts"""
+    revs = deg / 360 # convert to revolutions
+    return revs * 10000
+
+def _to_revs(deg):
+    """converts degrees to revolutions"""
+    return deg / 360
+
+class CommandError(Exception):
+    pass
+
+class ReadTimeout(Exception):
+    pass
+
+class SerialMotorControl:
+    def __init__(self):
+        
+        import serial
+        import serial.tools.list_ports
+        port_list = list(serial.tools.list_ports.comports())
+        open_ports = [comport.device for comport in port_list]
+        if len(open_ports) != 1:
+            found_port = None
+            for p in port_list:
+                if 'Prolific' in p.description:
+                    found_port = p
+            if found_port is None:
+                for p in port_list:
+                    print (p)
+                raise ValueError(f"unexpected com ports available {open_ports}")
+            else:
+                # print(p.description)
+                open_ports = [found_port.device]
+        com_port: str = open_ports[0]
+        
+        self._ser = serial.Serial(com_port, baudrate=9600, timeout=1)
+        
+        # if communication fails 
+        try:
+            self._cmd('IP')
+        except ReadTimeout:
+            logger.info("changing baud rate to 38400")
+            self._change_baud_rate(38400)
+        
+        # clear any pending commands/paused state
+        self._cmd('SKD')
+        
+        prot = self._get_protocol()
+        prot_sparse = {k for k, v in prot.items() if v}
+        if prot_sparse != {'ack_nack'}:
+            logger.debug("protocal not set correctly, currently {}", prot)
+            self._set_protocol({'ack_nack': True})
+        
+        self._cmd('AC5400')
+        self._cmd('DE5400')
+        self._cmd('VE0.05')
+        self.feed_pos(0)
+        
+        # degrees per second and max angle in degrees of each tilt type
+        self.tilt_types = {
+            'slow_left': {
+                'dps': 12.5,
+                'degrees': 16,
+            },
+            'fast_left': {
+                'dps': 68,
+                'degrees': 16,
+            },
+            'slow_right': {
+                'dps': 12.5,
+                'degrees': -16,
+            },
+            'fast_right': {
+                'dps': 68,
+                'degrees': -16,
+            },
+        }
+        # speed at which the platform returns to home after tilt_return or tilt_punish
+        self.return_dps = 12.5
+        # punish degrees per second
+        self.punish_dps = 71.4
+        
+        self._current_tilt = None
+    
+    def _read_to(self, *, end=b'\r'):
+        out = []
+        while True:
+            x = self._ser.read()
+            if x == end:
+                break
+            if not x:
+                raise ReadTimeout()
+                # break
+            out.append(x)
+        
+        return b''.join(out)
+    
+    def _cmd(self, c):
+        if isinstance(c, str):
+            c = c.encode('ascii')
+        raw = b''.join([c, b'\r'])
+        # print(raw)
+        self._ser.write(raw)
+        self._ser.flush()
+        # res = ser.read(30)
+        # res = text.readline()
+        res = self._read_to()
+        if res in [b'%', b'*']:
+            pass # command ack
+        elif b'=' in res:
+            pass
+        else:
+            # print(c, res)
+            raise CommandError(f"{c.decode('ascii')} {res.decode('ascii')}")
+        # sleep(0.01)
+        return res
+    
+    def _change_baud_rate(self, rate):
+        if rate == 38400:
+            self._ser.write(b'BR3\r')
+        elif rate == 9600:
+            self._ser.write(b'BR1\r')
+        else:
+            raise ValueError(f'invalid baud rate {rate}')
+        self._ser.flush()
+        time.sleep(0.5)
+        self._ser.baudrate = rate
+        try:
+            res = self._read_to()
+        except ReadTimeout:
+            res = '<read timeout>'
+        logger.debug("change baud rate {}", res)
+    
+    def _get_protocol(self):
+        res = self._cmd('PR')
+        num_str = res.strip().split(b'=')[1]
+        x = int(num_str)
+        out = {}
+        for i, k in enumerate(_PROTOCOL_BITS):
+            is_set = (x >> i) & 1
+            out[k] = bool(is_set)
+        
+        return out
+    
+    def _set_protocol(self, prot):
+        acc = 0
+        for i, k in enumerate(_PROTOCOL_BITS):
+            if prot.get(k):
+                acc += 1 << i
+        self._cmd(f'PR{acc}')
+    
+    def set_home(self):
+        self._cmd('EP0')
+        self._cmd('SP0')
+    
+    def close(self):
+        self._ser.close()
+    
+    def set_velocity(self, deg_per_sec):
+        self._cmd(f'VE{round(_to_revs(deg_per_sec), 4)}')
+    
+    def feed_pos(self, deg):
+        self._cmd(f'FP{floor(_to_counts(deg))}')
+    
+    def tilt(self, tilt_type: str):
+        """perform a tilt of type"""
+        self._current_tilt = tilt_type
+        self.set_velocity(self.tilt_types[tilt_type]['dps'])
+        self._cmd('PS')
+        self.feed_pos(self.tilt_types[tilt_type]['degrees'])
+        self.feed_pos(0)
+        self._cmd('CT')
+    
+    def tilt_return(self):
+        """stop the current tilt and return to neutral"""
+        self._cmd('SKD')
+        self.set_velocity(self.return_dps)
+        self.feed_pos(0)
+    
+    def tilt_punish(self):
+        """move to end of tilt at punish_dps and return to neutral"""
+        if self._current_tilt is None:
+            return
+        tilt = self.tilt_types[self._current_tilt]
+        self._cmd('SKD')
+        self.set_velocity(self.punish_dps)
+        self.feed_pos(tilt['degrees'])
+        self.set_velocity(self.return_dps)
+        self.feed_pos(0)
+    
+    def get_pos(self) -> int:
+        res = self._cmd('IP')
+        pos = int(res.split(b'=')[1], 16)
+        
+        # apply two's compliment
+        if pos > 1<<31:
+            pos -= 1<<32
+        
+        return pos
+    
+    def stop(self):
+        """present for compatability with MotorControl"""
+
+class SerialMotorProcessError(Exception):
+    def __init__(self, exc: Any):
+        Exception.__init__(self, str(exc))
+
+class SerialMotorProcessStuck(Exception):
+    """Thrown if the motor control process does not exit in a timely mannery after being sent a stop command"""
+
+def _wrapper_inner(pipe: Connection):
+    with ExitStack() as stack:
+        class ErrorHandler:
+            def __enter__(self):
+                pass
+            def __exit__(self, *exc):
+                if exc != (None, None, None):
+                    # convert traceback to string so it can be pickled
+                    pipe.send(['error', (exc[0], exc[1], str(exc[2]))])
+        stack.enter_context(ErrorHandler())
+        
+        import nidaqmx
+        from nidaqmx.constants import LineGrouping
+        task = stack.enter_context(nidaqmx.Task())
+        task.do_channels.add_do_chan(f"/Dev6/port2/line0,/Dev6/port2/line1", line_grouping = LineGrouping.CHAN_PER_LINE)
+        task.start()
+        
+        motor = SerialMotorControl()
+        stack.callback(motor.close)
+        
+        state: Literal['idle', 'before_mid', 'after_mid'] = 'idle'
+        
+        while True:
+            command: List[str] = pipe.recv()
+            if command[0] == 'stop':
+                return
+            elif command[0] == 'tilt':
+                _, tilt_type = command
+                
+                motor.tilt(tilt_type)
+                task.write([True, False])
+                state = 'before_mid'
+                
+                # last_pos = motor.get_pos()
+                while state != 'idle':
+                    if pipe.poll():
+                        command: List[str] = pipe.recv()
+                        if command == ['stop']:
+                            motor.tilt_return()
+                            return
+                        
+                        if command == ['return']:
+                            motor.tilt_return()
+                        elif command == ['punish']:
+                            motor.tilt_punish()
+                        else:
+                            raise ValueError(f"Invalid command in tilt {command}")
+                    
+                    
+                    queue_size = 63 - int(motor._cmd('BS').split(b'=')[1])
+                    # print(queue_size)
+                    
+                    if state == 'before_mid' and queue_size <= 1:
+                        state = 'after_mid'
+                        task.write([True, True])
+                    
+                    if queue_size <= 0:
+                        task.write([False, False])
+                        state = 'idle'
+                        pipe.send(['tilt_done'])
+                    
+                    # pos = motor.get_pos()
+                    # # print(pos, motor._cmd('BS'))
+                    
+                    # if state == 'before_mid':
+                    #     if abs(pos) < abs(last_pos):
+                    #         state = 'after_mid'
+                    #         task.write([True, True])
+                    #     last_pos = pos
+                    
+                    # if pos == 0:
+                    #     task.write([False, False])
+                    #     state = 'idle'
+                    #     pipe.send(['tilt_done'])
+
+class SerialMotorOutputWrapper:
+    """wraps SerialMotorControl and sets nidaq output based on state"""
+    def __init__(self):
+        pipe, child_pipe = Pipe()
+        self._proc = spawn_process(_wrapper_inner, child_pipe)
+        self._pipe: Connection = pipe
+    
+    def close(self):
+        self._pipe.send(['stop'])
+        self._proc.join(5)
+        if self._proc.exitcode is None:
+            raise SerialMotorProcessStuck()
+    
+    def wait_for_tilt_finish(self):
+        res = self._pipe.recv()
+        if res[0] == 'error':
+            raise SerialMotorProcessError(res[1])
+        
+        assert res == ['tilt_done']
+    
+    def tilt(self, tilt_type: str):
+        if tilt_type == 'stop':
+            return
+        self._pipe.send(['tilt', tilt_type])
+    
+    def tilt_return(self):
+        self._pipe.send(['return'])
+    
+    def tilt_punish(self):
+        self._pipe.send(['punish'])
+    
+    def stop(self):
+        pass
 
 class MotorControl:
     def __init__(self, *, port: int = 1, mock: bool = False):

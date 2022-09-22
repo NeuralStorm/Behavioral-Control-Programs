@@ -22,6 +22,7 @@ after_tilt_delay: 1
 
 stim_enabled: false
 stim_params: {
+    mode: random
     delay_range: [0.5, 1]
     first_phase: {
         duration: [1, 2],

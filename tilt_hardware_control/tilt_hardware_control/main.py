@@ -159,6 +159,8 @@ def run_psth_loop(platform: PsthTiltPlatform, tilt_sequence, *,
             tilt_counter[0] += 1
             
             check_recording()
+            print(f"{tilt_i+1:0>3}/{len(tilt_commands)+tilt_i+1:0>3} {tilt_name}")
+            
             tilt_rec = platform.tilt(
                 tilt_name = tilt_name,
                 yoked_prediction = tilt.get('sham_prediction'),
@@ -515,6 +517,7 @@ def bias_main(config: Config, loadcell_out: str, mock: bool):
     record_events = RecordState()
     clock_source = NIDAQ_CLOCK_PINS[config.clock_source]
     
+    print("collecting bias")
     record_data(
         clock_source = clock_source,
         clock_rate = config.clock_rate,
@@ -668,6 +671,13 @@ def main():
         
         baseline_recording = config.baseline
         
+        if mode == 'closed_loop':
+            collect_events = True
+        elif mode == 'open_loop':
+            collect_events = False
+        else:
+            raise ValueError("Invalid mode")
+        
         def before_platform_close():
             if args.loadcell_out is not None:
                 fpath = Path(args.loadcell_out)
@@ -685,7 +695,7 @@ def main():
                 with open(args.meta_out, 'w', encoding='utf8') as f:
                     json.dump(output_extra, f, indent=2)
             
-            if args.template_out is not None:
+            if args.template_out is not None and collect_events:
                 print("building templates...")
                 build_template_file(
                     args.meta_out, args.events_out, args.template_out,
@@ -697,13 +707,6 @@ def main():
         def stop_recording():
             print("waiting for recording to stop")
             record_state.stop_recording()
-        
-        if mode == 'closed_loop':
-            collect_events = True
-        elif mode == 'open_loop':
-            collect_events = False
-        else:
-            raise ValueError("Invalid mode")
         
         if mode == 'closed_loop':
             classifier: Optional[EuclClassifier] = EuclClassifier(

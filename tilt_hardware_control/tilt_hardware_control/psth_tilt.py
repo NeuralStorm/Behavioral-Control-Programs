@@ -7,7 +7,7 @@ from pathlib import Path
 import json
 
 from psth_new import EuclClassifier
-from motor_control import MotorControl
+from motor_control import MotorControl, SerialMotorOutputWrapper
 from util_nidaq import line_wait
 from event_source import Event, SpikeEvent, TiltEvent, StimEvent, UnknownEvent
 from event_source import Source, MockSource, OpxSource, PyPlexSource
@@ -51,7 +51,22 @@ class PsthTiltPlatform(AbstractContextManager):
         self.water_duration: float = water_duration
         self.tilt_duration: Optional[float] = tilt_duration
         
-        self.motor = MotorControl(mock = mock)
+        if mock:
+            self.motor = MotorControl(mock = mock)
+        else:
+            self.motor = SerialMotorOutputWrapper()
+        
+        if not mock and reward_enabled:
+            assert not isinstance(self.motor, MotorControl)
+            
+            import nidaqmx
+            from nidaqmx.constants import LineGrouping
+            
+            self.water_task = nidaqmx.Task()
+            self.water_task.do_channels.add_do_chan(f"/Dev6/port1/line4", line_grouping = LineGrouping.CHAN_PER_LINE)
+            self.water_task.start()
+        else:
+            self.water_task = None
         
         self.event_source: Source
         if mock or classifier is None:
@@ -95,6 +110,9 @@ class PsthTiltPlatform(AbstractContextManager):
         
         self.motor.close()
         self.event_source.close()
+        
+        if self.water_task is not None:
+            self.water_task.close()
     
     def _init_record(self):
         self._tilt_record = {
@@ -238,7 +256,6 @@ class PsthTiltPlatform(AbstractContextManager):
         
         flush_events()
         
-        print(tilt_name)
         self.motor.tilt(tilt_name)
         send_tilt_time = time.perf_counter()
         self._add_local_event('send_tilt')
@@ -248,7 +265,8 @@ class PsthTiltPlatform(AbstractContextManager):
             got_response = collect_result['got_response']
         else:
             if self.tilt_duration is None:
-                self.record_state.digital_lines['tilt_active'].wait_true(timeout=WAIT_TIMEOUT)
+                if not isinstance(self.motor, SerialMotorOutputWrapper):
+                    self.record_state.digital_lines['tilt_active'].wait_true(timeout=WAIT_TIMEOUT)
             got_response = False
         
         if not self.baseline_recording:
@@ -290,7 +308,9 @@ class PsthTiltPlatform(AbstractContextManager):
         
         # wait for tilt to finish
         if self.tilt_duration is None:
-            if not self.mock:
+            if isinstance(self.motor, SerialMotorOutputWrapper):
+                self.motor.wait_for_tilt_finish()
+            elif not self.mock:
                 # line_wait("Dev4/port2/line3", False)
                 self.record_state.digital_lines['tilt_active'].wait_false(timeout=WAIT_TIMEOUT)
             self._add_local_event('tilt_finish')
@@ -307,14 +327,21 @@ class PsthTiltPlatform(AbstractContextManager):
         time.sleep(self.after_tilt_delay)
         
         if self.reward_enabled and decoder_result:
-            self.motor.water(self.water_duration)
+            # self.motor.water(self.water_duration)
+            if self.water_task is not None:
+                try:
+                    self.water_task.write([True])
+                    time.sleep(self.water_duration)
+                    self.water_task.write([False])
+                finally:
+                    self.water_task.write([False])
         
         if delay is None:
             delay = random.uniform(*self.delay_range)
         tilt_record['delay'] = delay
         
         self.motor.tilt('stop')
-        print(f'delay {delay:.2f}')
+        # print(f'delay {delay:.2f}')
         
         time.sleep(delay)
         

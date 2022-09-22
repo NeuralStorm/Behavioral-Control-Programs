@@ -1,6 +1,7 @@
 
 import hashlib
 from pathlib import Path
+import logging
 
 def _hash_file(path: Path, fhash):
     if path.is_dir():
@@ -28,3 +29,22 @@ def hash_file(path: Path) -> str:
     _hash_file(path, fhash)
     
     return fhash.hexdigest()
+
+class _BraceString(str):
+    def __mod__(self, other):
+        return self.format(*other)
+    def __str__(self):
+        return self
+
+class _StyleAdapter(logging.LoggerAdapter):
+    def __init__(self, logger, extra=None):
+        super(_StyleAdapter, self).__init__(logger, extra)
+    
+    def process(self, msg, kwargs):
+        # if kwargs.pop('style', "%") == "{":  # optional
+        #     msg = BraceString(msg)
+        msg = _BraceString(msg)
+        return msg, kwargs
+
+def get_logger(name):
+    return _StyleAdapter(logging.getLogger(name))

@@ -43,7 +43,7 @@ GRAPHS: Dict[str, Dict[str, Any]] = {
     },
     'start': {
         'pos': (2, 1),
-        'y_max': 6,
+        'y_max': 2,
     },
     'inclinometer': {
         'pos': (2, 2),
@@ -211,7 +211,8 @@ HEADERS: List[Dict[str, Any]] = [
         'analog_channel': "start",
         'csv': "Start",
         'cal': 'Start',
-        'graph': 'start',
+        'graph': 'strobe',
+        'color': (0, 255, 255),
     },
     {
         'nidaq': 'Dev6/ai10',
@@ -241,11 +242,28 @@ HEADERS: List[Dict[str, Any]] = [
         'color': (0, 255, 0),
     },
     {
+        'nidaq_digital': 'Dev6/port0/line0',
+        'analog_channel': 'tilt_active_new',
+        'digital_line': 'tilt_active_new',
+        'downsample_mode': 'max',
+        'csv': "tilt_active_new",
+        'graph': 'start',
+        'color': (255, 0, 0),
+    },
+    {
+        'nidaq_digital': 'Dev6/port0/line1',
+        'analog_channel': 'tilt_midpoint_new',
+        'downsample_mode': 'max',
+        'csv': "tilt_midpoint_new",
+        'graph': 'start',
+        'color': (0, 255, 0),
+    },
+    {
         'nidaq_digital': 'Dev6/port0/line5',
         'analog_channel': 'stim',
         'downsample_mode': 'max',
         'csv': "stim",
-        'graph': 'start',
+        'graph': 'strobe',
         'color': (0, 0, 255),
     },
     # {
@@ -648,6 +666,25 @@ def record_data(*,
                 state.digital_lines[line].set_false()
     
     csv_headers = [x['csv'] for x in HEADERS if 'csv' in x]
+    def get_channels():
+        for h in HEADERS:
+            if 'csv' not in h:
+                continue
+            # ensure header is a digital or analog channel but not both
+            assert ('nidaq' in h) ^ ('nidaq_digital' in h)
+            if 'nidaq' in h:
+                yield {
+                    'type': 'analog',
+                    'line': h['nidaq'],
+                    'header': h['csv'],
+                }
+            else:
+                yield {
+                    'type': 'digital',
+                    'line': h['nidaq_digital'],
+                    'header': h['csv'],
+                }
+    channels = list(get_channels())
     # csv_path = './loadcell_tilt.csv'
     # clock sourcs Dev6/PFI6
     with ExitStack() as stack:
@@ -660,6 +697,7 @@ def record_data(*,
         
         nidaq_channels = [x for x in HEADERS if 'nidaq' in x]
         digital_channels = [x for x in HEADERS if 'nidaq_digital' in x]
+        assert len(nidaq_channels) + len(digital_channels) == len(channels)
         
         if state.live.enabled:
             if state.live.calibrated:
@@ -854,13 +892,31 @@ def record_data(*,
             
             for i in range(sample_batch_size):
                 def gen_row():
-                    for meta, chan in zip(nidaq_channels, data):
-                        if 'csv' in meta:
-                            val = chan[i]
-                            if type(val) == bool:
-                                yield 1 if val else 0
-                            else:
-                                yield val
+                    # indexes for analog and digital channels
+                    a_i = 0
+                    d_i = 0
+                    for c in channels:
+                        if c['type'] == 'analog':
+                            x = data[a_i][i]
+                            yield x
+                            a_i += 1
+                        elif c['type'] == 'digital':
+                            x = digital_data[d_i][i]
+                            yield 1 if x else 0
+                            d_i += 1
+                        else:
+                            assert False
+                    
+                    assert a_i == len(data)
+                    assert d_i == len(digital_data)
+                    
+                    # for meta, chan in zip(nidaq_channels, data):
+                    #     if 'csv' in meta:
+                    #         val = chan[i]
+                    #         if type(val) == bool:
+                    #             yield 1 if val else 0
+                    #         else:
+                    #             yield val
                     yield sample_i / clock_rate
                 
                 if csv_path is not None:
