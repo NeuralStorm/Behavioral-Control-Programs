@@ -149,8 +149,12 @@ def _random_stimulus(state: State, params_config, *, mock, verbose):
             f_d = random.choice(params_config['first_phase']['duration'])
             f_c = random.choice(params_config['first_phase']['current'])
             # second duration/current
-            s_d = random.choice(params_config['second_phase']['duration'])
-            s_c = random.choice(params_config['second_phase']['current'])
+            if params_config['second_phase'] == 'same':
+                s_d = random.choice(params_config['first_phase']['duration'])
+                s_c = random.choice(params_config['first_phase']['current'])
+            else:
+                s_d = random.choice(params_config['second_phase']['duration'])
+                s_c = random.choice(params_config['second_phase']['current'])
             
             # pulse number
             p_n = random.choice(params_config['num_pulses'])
