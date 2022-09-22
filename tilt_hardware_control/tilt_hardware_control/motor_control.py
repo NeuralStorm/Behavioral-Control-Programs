@@ -1,5 +1,5 @@
 
-from typing import List, Literal, Any
+from typing import List, Literal, Any, TypedDict, Dict
 import time
 from math import floor
 from multiprocessing import Pipe
@@ -22,6 +22,14 @@ _PROTOCOL_BITS = [
     'little_big_endian_in_modbus_mode',
     'full_duplex_in_rs_422',
 ]
+
+# https://docs.python.org/3/library/typing.html#typing.TypedDict.__optional_keys__
+class _TiltTypeReq(TypedDict):
+    dps: float
+    degrees: float
+
+class TiltType(_TiltTypeReq, total=False):
+    active_pin: str
 
 def _to_counts(deg):
     """convert degrees to counts"""
@@ -83,22 +91,27 @@ class SerialMotorControl:
         self.feed_pos(0)
         
         # degrees per second and max angle in degrees of each tilt type
-        self.tilt_types = {
+        # active pin is set high while the tilt of a given type is occuring when using wrapper
+        self.tilt_types: Dict[str, TiltType] = {
             'slow_left': {
                 'dps': 12.5,
                 'degrees': 16,
+                'active_pin': '/Dev6/port2/line3',
             },
             'fast_left': {
                 'dps': 68,
                 'degrees': 16,
+                'active_pin': '/Dev6/port2/line5',
             },
             'slow_right': {
                 'dps': 12.5,
                 'degrees': -16,
+                'active_pin': '/Dev6/port2/line2',
             },
             'fast_right': {
                 'dps': 68,
                 'degrees': -16,
+                'active_pin': '/Dev6/port2/line4',
             },
         }
         # speed at which the platform returns to home after tilt_return or tilt_punish
@@ -245,14 +258,24 @@ def _wrapper_inner(pipe: Connection):
                     pipe.send(['error', (exc[0], exc[1], str(exc[2]))])
         stack.enter_context(ErrorHandler())
         
+        motor = SerialMotorControl()
+        stack.callback(motor.close)
+        
+        # first two channels for tilt active and tilt mid
+        channels = ['/Dev6/port2/line0', '/Dev6/port2/line1']
+        tilt_pins = []
+        for tilt_type, tilt_info in motor.tilt_types.items():
+            if 'active_pin' in tilt_info:
+                channels.append(tilt_info['active_pin'])
+                tilt_pins.append(tilt_type)
+        
+        out_list_off = [False for _ in channels]
+        
         import nidaqmx
         from nidaqmx.constants import LineGrouping
         task = stack.enter_context(nidaqmx.Task())
-        task.do_channels.add_do_chan(f"/Dev6/port2/line0,/Dev6/port2/line1", line_grouping = LineGrouping.CHAN_PER_LINE)
+        task.do_channels.add_do_chan(','.join(channels), line_grouping = LineGrouping.CHAN_PER_LINE)
         task.start()
-        
-        motor = SerialMotorControl()
-        stack.callback(motor.close)
         
         state: Literal['idle', 'before_mid', 'after_mid'] = 'idle'
         
@@ -263,8 +286,12 @@ def _wrapper_inner(pipe: Connection):
             elif command[0] == 'tilt':
                 _, tilt_type = command
                 
+                tilt_type_out_list = [tilt_type == pin_tilt_type for pin_tilt_type in tilt_pins]
+                out_list_start = [True, False, *tilt_type_out_list]
+                out_list_mid = [True, True, *tilt_type_out_list]
+                
                 motor.tilt(tilt_type)
-                task.write([True, False])
+                task.write(out_list_start)
                 state = 'before_mid'
                 
                 # last_pos = motor.get_pos()
@@ -288,10 +315,10 @@ def _wrapper_inner(pipe: Connection):
                     
                     if state == 'before_mid' and queue_size <= 1:
                         state = 'after_mid'
-                        task.write([True, True])
+                        task.write(out_list_mid)
                     
                     if queue_size <= 0:
-                        task.write([False, False])
+                        task.write(out_list_off)
                         state = 'idle'
                         pipe.send(['tilt_done'])
                     

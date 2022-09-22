@@ -19,31 +19,37 @@ RECORD_PROCESS_STOP_TIMEOUT = 30
 GRAPHS: Dict[str, Dict[str, Any]] = {
     'force_x': {
         'pos': (0, 0),
-        'title': "force x",
+        'title': "strain guage 1",
     },
     'force_y': {
         'pos': (0, 1),
+        'title': "strain guage 2",
     },
     'force_z': {
         'pos': (0, 2),
+        'title': "strain guage 3",
     },
     'torque_x': {
         'pos': (1, 0),
+        'title': "strain guage 4",
     },
     'torque_y': {
         'pos': (1, 1),
+        'title': "strain guage 5",
     },
     'torque_z': {
         'pos': (1, 2),
+        'title': "strain guage 6",
     },
     'strobe': {
         'pos': (2, 0),
-        'title': 'Start of tilt from motor',
-        'y_max': 6,
+        'title': 'Tilt active(r)/midpoint(g)',
+        'y_max': 1.5,
     },
-    'start': {
+    'misc': {
         'pos': (2, 1),
-        'y_max': 2,
+        'title': 'Stim',
+        'y_max': 1.5,
     },
     'inclinometer': {
         'pos': (2, 2),
@@ -224,7 +230,8 @@ HEADERS: List[Dict[str, Any]] = [
     {
         # 'nidaq_digital': 'Dev6/port2/line3',
         # 'nidaq': 'Dev6/port2/line3',
-        'nidaq_digital': 'Dev6/port0/line3',
+        # 'nidaq_digital': 'Dev6/port0/line3',
+        'nidaq_digital': 'Dev6/port0/line0',
         # 'nidaq_digital': 'Dev6/port0/line0:7',
         'digital_line': 'tilt_active',
         'analog_channel': "tilt_active",
@@ -234,37 +241,39 @@ HEADERS: List[Dict[str, Any]] = [
         'color': (255, 0, 0),
     },
     {
-        'nidaq_digital': 'Dev6/port0/line4',
+        # 'nidaq_digital': 'Dev6/port0/line4',
+        'nidaq_digital': 'Dev6/port0/line1',
         'analog_channel': 'tilt_midpoint',
         'downsample_mode': 'max',
         'csv': "tilt_midpoint",
         'graph': 'strobe',
         'color': (0, 255, 0),
     },
-    {
-        'nidaq_digital': 'Dev6/port0/line0',
-        'analog_channel': 'tilt_active_new',
-        'digital_line': 'tilt_active_new',
-        'downsample_mode': 'max',
-        'csv': "tilt_active_new",
-        'graph': 'start',
-        'color': (255, 0, 0),
-    },
-    {
-        'nidaq_digital': 'Dev6/port0/line1',
-        'analog_channel': 'tilt_midpoint_new',
-        'downsample_mode': 'max',
-        'csv': "tilt_midpoint_new",
-        'graph': 'start',
-        'color': (0, 255, 0),
-    },
+    # {
+    #     'nidaq_digital': 'Dev6/port0/line0',
+    #     'analog_channel': 'tilt_active_new',
+    #     'digital_line': 'tilt_active_new',
+    #     'downsample_mode': 'max',
+    #     'csv': "tilt_active_new",
+    #     'graph': 'start',
+    #     'color': (255, 0, 0),
+    # },
+    # {
+    #     'nidaq_digital': 'Dev6/port0/line1',
+    #     'analog_channel': 'tilt_midpoint_new',
+    #     'downsample_mode': 'max',
+    #     'csv': "tilt_midpoint_new",
+    #     'graph': 'start',
+    #     'color': (0, 255, 0),
+    # },
     {
         'nidaq_digital': 'Dev6/port0/line5',
         'analog_channel': 'stim',
         'downsample_mode': 'max',
         'csv': "stim",
-        'graph': 'strobe',
-        'color': (0, 0, 255),
+        # 'graph': 'strobe',
+        'graph': 'misc',
+        'color': (255, 255, 0),
     },
     # {
     #     # 'nidaq_digital': 'Dev6/port2/line3',

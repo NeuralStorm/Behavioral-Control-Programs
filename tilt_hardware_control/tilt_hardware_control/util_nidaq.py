@@ -10,6 +10,17 @@
 # gos high when the tilt reaches it's maximum inclination
 # stim output Dev6/port0/line5
 
+# P1.4 water output
+
+# new tilt feedback
+# P2.0 -> P0.0
+# P2.1 -> P0.1
+
+# tilt events to plexon digital in
+# P2.2 -> 6 (event 22) (slow right)
+# P2.3 -> 9 (event 25) (slow left)
+# P2.4 -> 5 (event 21) (fast right)
+# P2.5 -> 8 (event 24) (fast left)
 
 def line_wait(line: str, value=True):
     waiter = LineWait(line)
