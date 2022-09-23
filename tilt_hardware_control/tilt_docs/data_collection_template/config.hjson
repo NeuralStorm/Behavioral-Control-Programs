@@ -28,6 +28,7 @@ delay_range: [2, 3]
 // delay after tilt before reward
 after_tilt_delay: 1
 
+// delay_range in seconds
 // duration/pulse period in microseconds
 // current in microapms
 stim_enabled: false
@@ -38,12 +39,13 @@ stim_params: {
         duration: [1, 2],
         current: [1, 2],
     }
+    // second phase can be set to "same" to use the same value as chosen for first_phase
     second_phase: {
         duration: [1, 2],
         current: [1, 2],
     }
-    num_pulses: 1
-    pulse_period: 3000
+    num_pulses: [1]
+    pulse_period: [3000]
     channel: ["a-000"]
 }
 // stim_params: {

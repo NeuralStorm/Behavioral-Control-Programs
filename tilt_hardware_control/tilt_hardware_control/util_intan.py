@@ -163,8 +163,9 @@ class Stimulator:
             f'set {ch}.secondphaseamplitudemicroamps {second_phase_amplitude}',
             f'set {ch}.secondphasedurationmicroseconds {second_phase_duration}',
         ]
-        if self._selected_channel is not None:
+        if self._selected_channel is not None and self._selected_channel != ch:
             cmds.append(f'set {self._selected_channel}.StimEnabled false')
+            self._selected_channel = channel
         assert number_of_pulses >= 1
         if number_of_pulses == 1:
             cmds.append(f'set {ch}.PulseOrTrain SinglePulse')
@@ -177,7 +178,6 @@ class Stimulator:
             ])
         
         self.intan.cmd(cmds)
-        self._selected_channel = channel
         self.intan.wait_for_upload()
         self.intan.start_recording()
     

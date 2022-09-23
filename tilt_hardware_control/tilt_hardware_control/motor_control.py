@@ -67,23 +67,24 @@ class SerialMotorControl:
                 open_ports = [found_port.device]
         com_port: str = open_ports[0]
         
-        self._ser = serial.Serial(com_port, baudrate=9600, timeout=1)
+        self._ser = serial.Serial(com_port, baudrate=38400, timeout=1)
         
         # if communication fails 
         try:
             self._cmd('IP')
         except ReadTimeout:
             logger.info("changing baud rate to 38400")
+            self._ser.baudrate = 9600
             self._change_baud_rate(38400)
-        
-        # clear any pending commands/paused state
-        self._cmd('SKD')
         
         prot = self._get_protocol()
         prot_sparse = {k for k, v in prot.items() if v}
         if prot_sparse != {'ack_nack'}:
             logger.debug("protocal not set correctly, currently {}", prot)
             self._set_protocol({'ack_nack': True})
+        
+        # clear any pending commands/paused state
+        self._cmd('SKD')
         
         self._cmd('AC5400')
         self._cmd('DE5400')
@@ -186,7 +187,11 @@ class SerialMotorControl:
         for i, k in enumerate(_PROTOCOL_BITS):
             if prot.get(k):
                 acc += 1 << i
-        self._cmd(f'PR{acc}')
+        try:
+            self._cmd(f'PR{acc}')
+        except ReadTimeout:
+            # read timeout expected if protocol hasn't been set
+            pass
     
     def set_home(self):
         self._cmd('EP0')
