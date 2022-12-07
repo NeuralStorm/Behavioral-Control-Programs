@@ -1,7 +1,10 @@
 
-from typing import Optional, Tuple, List, Dict
+from typing import Optional, Tuple, List, Dict, Set
 from pathlib import Path
 import json
+
+# chan -> spike frequency
+PsthDict = Dict[str, List[float | int]]
 
 class EuclClassifier:
     """classifies tilts using a euclidian distance classifier
@@ -23,9 +26,10 @@ class EuclClassifier:
         # (event type, timestamp in ms)
         self._current_event: Optional[Tuple[str, int]] = None
         # list of spike timestamps in ms
-        self.event_spike_list: List[int] = []
+        self.event_spike_list: List[Tuple[str, int]] = []
         
-        self.templates: Dict[str, List[float]] = {}
+        # event_type -> psth dict
+        self.templates: Dict[str, PsthDict] = {}
     
     def clear(self):
         self._current_event = None
@@ -40,14 +44,25 @@ class EuclClassifier:
     
     def spike(self, channel: int, unit: int, timestamp: float):
         timestamp_ms = round(timestamp * 1000)
-        self.event_spike_list.append(timestamp_ms)
+        key = f"{channel}_{unit}"
+        self.event_spike_list.append((key, timestamp_ms))
     
-    def build_psth(self) -> List[int]:
-        psth = [0 for _ in range(self._bins_n)]
+    def zero_psth(self) -> List[int]:
+        """creates a list of the correct length filled with zeros"""
+        return [0 for _ in range(self._bins_n)]
+    
+    def get_keys(self) -> Set[str]:
+        return set(k for k, _ in self.event_spike_list)
+    
+    def build_key_psth(self, target_key: Optional[str] = None) -> List[int]:
+        psth = self.zero_psth()
         if self._current_event is None:
             return psth
         _, event_ts = self._current_event
-        for ts in self.event_spike_list:
+        for key, ts in self.event_spike_list:
+            if target_key is None or key != target_key:
+                continue
+            
             bin_ = (ts - event_ts) // self.bin_size
             try:
                 psth[bin_] += 1
@@ -56,17 +71,44 @@ class EuclClassifier:
         
         return psth
     
+    def build_per_key_psth(self) -> PsthDict:
+        keys = self.get_keys()
+        psths = {
+            key: self.build_key_psth(target_key=key)
+            for key in keys
+        }
+        return psths
+    
     def classify(self) -> str:
-        event_psth = self.build_psth()
+        event_psths = self.build_per_key_psth()
         
-        def calc_eucl_dist(template_psth):
-            assert len(template_psth) == len(event_psth)
+        def _avg(xs):
+            if not xs: # return 0 if no items
+                return 0
+            return sum(xs) / len(xs)
+        
+        def calc_chan_eucl_dist(a, b):
+            assert len(a) == len(b)
             acc = 0
-            for a, b in zip(event_psth, template_psth):
+            for a, b in zip(a, b):
                 acc += (a - b)**2
             acc **= 0.5 # square root
-            
             return acc
+        
+        def calc_eucl_dist(template: PsthDict):
+            chan_dists = []
+            for chan, template_psth in template.items():
+                try:
+                    chan_psth = event_psths[chan]
+                except KeyError:
+                    continue
+                
+                chan_dist = calc_chan_eucl_dist(template_psth, chan_psth)
+                chan_dists.append(chan_dist)
+            
+            dist = _avg(chan_dists)
+            
+            return dist
         
         dists = {
             event_type: calc_eucl_dist(template_psth)
@@ -96,14 +138,15 @@ def _find_tilt(events):
     for evt in events:
         if evt.get('tilt_type') is not None:
             return evt['tilt_type'], evt['time']
+    raise ValueError('could not find tilt in event list')
 
-def build_templates(tilt_record, *, post_time: int, bin_size: int, events_record = None) -> Dict[str, List[float]]:
+def build_templates(tilt_record, *, post_time: int, bin_size: int, events_record = None) -> Dict[str, PsthDict]:
     """builds templates from a record of tilts and spikes
         
         tilt_record corresponsd to the `tilts` key in meta files
         events_record is the entire events file
         """
-    psths: Dict[str, List[List[int]]] = {}
+    psths: Dict[str, List[EuclClassifier]] = {}
     for tilt in tilt_record:
         if tilt.get('paused'):
             continue
@@ -129,25 +172,36 @@ def build_templates(tilt_record, *, post_time: int, bin_size: int, events_record
             if evt['type'] == 'spike' and evt['relevent'] is True:
                 builder.spike(evt['channel'], evt['unit'], evt['time'])
         
-        psth = builder.build_psth()
         if tilt_type not in psths:
             psths[tilt_type] = []
-        psths[tilt_type].append(psth)
+        psths[tilt_type].append(builder)
     
     builder = EuclClassifier(post_time=post_time, bin_size=bin_size)
     # build_psth will create a list of zeros of the correct size since no event was created
     
     templates = {}
-    for tilt_type, tilt_type_psths in psths.items():
-        acc = builder.build_psth()
-        n = 0
-        for psth in tilt_type_psths:
-            assert len(acc) == len(psth)
-            for i, x in enumerate(psth):
-                acc[i] += x
-                n += 1
-        template = [x / n for x in acc]
-        templates[tilt_type] = template
+    for tilt_type, classifiers in psths.items():
+        def average_psths(psths: List[List[int|float]]) -> List[float]:
+            acc = builder.zero_psth()
+            n = 0
+            
+            for psth in psths:
+                assert len(psth) == len(acc)
+                for i, x in enumerate(psth):
+                    acc[i] += x
+                    n += 1
+            return [x / n for x in acc]
+        
+        chans = {}
+        chan_keys = set()
+        for classifier in classifiers:
+            chan_keys |= classifier.get_keys()
+        
+        for chan_key in chan_keys:
+            chan_psths = [c.build_key_psth(chan_key) for c in classifiers]
+            chans[chan_key] = average_psths(chan_psths)
+        
+        templates[tilt_type] = chans
     
     return templates
 
