@@ -546,6 +546,7 @@ def main():
     
     args.events_out = auto_path(args.events_out, "_events.json")
     
+    args.template_out = auto_path(args.template_out, "_template.json")
     if args.template_out is not None:
         assert args.meta_out is not None and args.events_out is not None, "Must output meta and events file to automatically generate a template."
     

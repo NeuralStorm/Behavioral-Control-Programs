@@ -181,7 +181,7 @@ def build_templates(tilt_record, *, post_time: int, bin_size: int, events_record
     
     templates = {}
     for tilt_type, classifiers in psths.items():
-        def average_psths(psths: List[List[int|float]]) -> List[float]:
+        def average_psths(psths: List[List[Union[int, float]]]) -> List[float]:
             acc = builder.zero_psth()
             n = 0
             
