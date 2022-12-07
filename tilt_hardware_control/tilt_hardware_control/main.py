@@ -247,7 +247,7 @@ def run_psth_loop(platform: PsthTiltPlatform, tilt_sequence, *,
     
     if not platform.baseline_recording and not sham:
         # pylint: disable=import-error,import-outside-toplevel
-        from sklearn.metrics import confusion_matrix
+        # from sklearn.metrics import confusion_matrix
         
         actual = []
         predicted = []
@@ -256,12 +256,17 @@ def run_psth_loop(platform: PsthTiltPlatform, tilt_sequence, *,
                 actual.append(rec['tilt_name'])
                 predicted.append(rec['predicted_tilt_type'])
         
-        print('actual events:y axis, predicted events:x axis')
-        confusion_matrix_calc = confusion_matrix(actual, predicted)
-        print(confusion_matrix_calc)
+        # print('actual events:y axis, predicted events:x axis')
+        # confusion_matrix_calc = confusion_matrix(actual, predicted)
+        # print(confusion_matrix_calc)
+        # correct_trials = 0
+        # for i, _ in enumerate(confusion_matrix_calc):
+        #     correct_trials = correct_trials + confusion_matrix_calc[i][i]
+        # decoder_accuracy = correct_trials / len(actual)
         correct_trials = 0
-        for i, _ in enumerate(confusion_matrix_calc):
-            correct_trials = correct_trials + confusion_matrix_calc[i][i]
+        for a, p in zip(actual, predicted):
+            if a == p:
+                correct_trials += 1
         decoder_accuracy = correct_trials / len(actual)
         print(f"Accuracy = {correct_trials} / {len(actual)} = {decoder_accuracy}")
     
