@@ -9,6 +9,9 @@ If using live graph view
 if installation fails use  
 `pip install pyside2==5.15.2`  
 
+When using closed loop the plexon dll requires Visual C++ Redistributable for Visual Studio 2013  
+https://www.microsoft.com/en-us/download/details.aspx?id=40784
+
 # Usage
 
 Example command line call

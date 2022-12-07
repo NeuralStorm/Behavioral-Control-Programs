@@ -1,10 +1,10 @@
 
-from typing import Optional, Tuple, List, Dict, Set
+from typing import Optional, Tuple, List, Dict, Set, Union
 from pathlib import Path
 import json
 
 # chan -> spike frequency
-PsthDict = Dict[str, List[float | int]]
+PsthDict = Dict[str, List[Union[float, int]]]
 
 class EuclClassifier:
     """classifies tilts using a euclidian distance classifier
