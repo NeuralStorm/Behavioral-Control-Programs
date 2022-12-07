@@ -119,13 +119,22 @@ class Stimulator:
         
         # send commands for each channel separately so the channel that
         # caused an error can be known
+        # I'm not sure if the initial StimEnabled calls actually help.
         for ch in self.channels:
             self.intan.cmd([
-                f'set {ch}.StimEnabled false',
+                f'set {ch}.StimEnabled true',
+            ])
+        for ch in self.channels:
+            self.intan.cmd([
                 f'set {ch}.TriggerEdgeOrLevel edge',
                 f'set {ch}.TriggerHighOrLow high',
                 f'set {ch}.source keypressf1',
             ])
+        for ch in self.channels:
+            self.intan.cmd([
+                f'set {ch}.StimEnabled false',
+            ])
+        
         
         self.intan.cmd([
             f'set {self.digital_out}.source keypressf1',
@@ -165,6 +174,7 @@ class Stimulator:
         ]
         if self._selected_channel is not None and self._selected_channel != ch:
             cmds.append(f'set {self._selected_channel}.StimEnabled false')
+            cmds.append(f'UploadStimParameters {self._selected_channel}')
             self._selected_channel = channel
         assert number_of_pulses >= 1
         if number_of_pulses == 1:
@@ -176,6 +186,8 @@ class Stimulator:
                 f'set {ch}.NumberOfStimPulses {number_of_pulses}',
                 f'set {ch}.PulseTrainPeriodMicroseconds {pulse_train_period}',
             ])
+        
+        cmds.append(f'UploadStimParameters {ch}')
         
         self.intan.cmd(cmds)
         self.intan.wait_for_upload()
