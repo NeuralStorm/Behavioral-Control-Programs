@@ -56,154 +56,158 @@ GRAPHS: Dict[str, Dict[str, Any]] = {
     },
 }
 
+FL_COLOR = (50, 150, 255)
+LHL_COLOR = (0, 255, 0)
+RHL_COLOR = (255, 75, 25)
+
 # rhl = red
 # lhl = green
 # fl = blue
 # cal indicates column name for calibration
 HEADERS: List[Dict[str, Any]] = [
-    { # rhl_fx
+    { # lhl_fx
         'nidaq': 'Dev6/ai18',
         'csv': "sensor1_s1",
         'analog_channel': "sensor1_s1",
-        'cal': 'rhl_s1',
+        'cal': 'lhl_s1',
         'graph': 'force_x',
-        'color': (255, 0, 0),
+        'color': LHL_COLOR,
     },
-    { # rhl_fy
+    { # lhl_fy
         'nidaq': 'Dev6/ai19',
         'csv': "sensor1_s2",
         'analog_channel': "sensor1_s2",
-        'cal': 'rhl_s2',
+        'cal': 'lhl_s2',
         'graph': 'force_y',
-        'color': (255, 0, 0),
+        'color': LHL_COLOR,
     },
-    { # rhl_fz
+    { # lhl_fz
         'nidaq': 'Dev6/ai20',
         'csv': "sensor1_s3",
         'analog_channel': "sensor1_s3",
-        'cal': 'rhl_s3',
+        'cal': 'lhl_s3',
         'graph': 'force_z',
-        'color': (255, 0, 0),
+        'color': LHL_COLOR,
     },
-    { # rhl_tx
+    { # lhl_tx
         'nidaq': 'Dev6/ai21',
         'csv': "sensor1_s4",
         'analog_channel': "sensor1_s4",
-        'cal': 'rhl_s4',
+        'cal': 'lhl_s4',
         'graph': 'torque_x',
-        'color': (255, 0, 0),
+        'color': LHL_COLOR,
     },
-    { # rhl_ty
+    { # lhl_ty
         'nidaq': 'Dev6/ai22',
         'csv': "sensor1_s5",
         'analog_channel': "sensor1_s5",
-        'cal': 'rhl_s5',
+        'cal': 'lhl_s5',
         'graph': 'torque_y',
-        'color': (255, 0, 0),
+        'color': LHL_COLOR,
     },
-    { # rhl_tz
+    { # lhl_tz
         'nidaq': 'Dev6/ai23',
         'csv': "sensor1_s6",
         'analog_channel': "sensor1_s6",
-        'cal': 'rhl_s6',
+        'cal': 'lhl_s6',
         'graph': 'torque_z',
-        'color': (255, 0, 0),
+        'color': LHL_COLOR,
     },
-    { # lhl_fx
+    { # fl_fx
         'nidaq': 'Dev6/ai32',
         'csv': "sensor2_s1",
         'analog_channel': "sensor2_s1",
-        'cal': 'lhl_s1',
+        'cal': 'fl_s1',
         'graph': 'force_x',
-        'color': (0, 255, 0),
+        'color': FL_COLOR,
     },
-    { # lhl_fy
+    { # fl_fy
         'nidaq': 'Dev6/ai33',
         'csv': "sensor2_s2",
         'analog_channel': "sensor2_s2",
-        'cal': 'lhl_s2',
+        'cal': 'fl_s2',
         'graph': 'force_y',
-        'color': (0, 255, 0),
+        'color': FL_COLOR,
     },
-    { # lhl_fz
+    { # fl_fz
         'nidaq': 'Dev6/ai34',
         'csv': "sensor2_s3",
         'analog_channel': "sensor2_s3",
-        'cal': 'lhl_s3',
+        'cal': 'fl_s3',
         'graph': 'force_z',
-        'color': (0, 255, 0),
+        'color': FL_COLOR,
     },
-    { # lhl_tx
+    { # fl_tx
         'nidaq': 'Dev6/ai35',
         'csv': "sensor2_s4",
         'analog_channel': "sensor2_s4",
-        'cal': 'lhl_s4',
+        'cal': 'fl_s4',
         'graph': 'torque_x',
-        'color': (0, 255, 0),
+        'color': FL_COLOR,
     },
-    { # lhl_ty
+    { # fl_ty
         'nidaq': 'Dev6/ai36',
         'csv': "sensor2_s5",
         'analog_channel': "sensor2_s5",
-        'cal': 'lhl_s5',
+        'cal': 'fl_s5',
         'graph': 'torque_y',
-        'color': (0, 255, 0),
+        'color': FL_COLOR,
     },
-    { #lhl_tz
+    { #fl_tz
         'nidaq': 'Dev6/ai37',
         'csv': "sensor2_s6",
         'analog_channel': "sensor2_s6",
-        'cal': 'lhl_s6',
+        'cal': 'fl_s6',
         'graph': 'torque_z',
-        'color': (0, 255, 0),
+        'color': FL_COLOR,
     },
-    { # fl_fx
+    { # rhl_fx
         'nidaq': 'Dev6/ai38',
         'csv': "sensor3_s1",
         'analog_channel': "sensor3_s1",
-        'cal': 'fl_s1',
+        'cal': 'rhl_s1',
         'graph': 'force_x',
-        'color': (0, 0, 255),
+        'color': RHL_COLOR,
     },
-    { # fl_fy
+    { # rhl_fy
         'nidaq': 'Dev6/ai39',
         'csv': "sensor3_s2",
         'analog_channel': "sensor3_s2",
-        'cal': 'fl_s2',
+        'cal': 'rhl_s2',
         'graph': 'force_y',
-        'color': (0, 0, 255),
+        'color': RHL_COLOR,
     },
-    { # fl_fz
+    { # rhl_fz
         'nidaq': 'Dev6/ai48',
         'csv': "sensor3_s3",
         'analog_channel': "sensor3_s3",
-        'cal': 'fl_s3',
+        'cal': 'rhl_s3',
         'graph': 'force_z',
-        'color': (0, 0, 255),
+        'color': RHL_COLOR,
     },
-    { # fl_tx
+    { # rhl_tx
         'nidaq': 'Dev6/ai49',
         'csv': "sensor3_s4",
         'analog_channel': "sensor3_s4",
-        'cal': 'fl_s4',
+        'cal': 'rhl_s4',
         'graph': 'torque_x',
-        'color': (0, 0, 255),
+        'color': RHL_COLOR,
     },
-    { # fl_ty
+    { # rhl_ty
         'nidaq': 'Dev6/ai50',
         'csv': "sensor3_s5",
         'analog_channel': "sensor3_s5",
-        'cal': 'fl_s5',
+        'cal': 'rhl_s5',
         'graph': 'torque_y',
-        'color': (0, 0, 255),
+        'color': RHL_COLOR,
     },
-    { # fl_tz
+    { # rhl_tz
         'nidaq': 'Dev6/ai51',
         'csv': "sensor3_s6",
         'analog_channel': "sensor3_s6",
-        'cal': 'fl_s6',
+        'cal': 'rhl_s6',
         'graph': 'torque_z',
-        'color': (0, 0, 255),
+        'color': RHL_COLOR,
     },
     {
         'nidaq': 'Dev6/ai8',

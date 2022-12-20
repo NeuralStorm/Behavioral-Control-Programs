@@ -34,11 +34,13 @@ class TiltType(_TiltTypeReq, total=False):
 def _to_counts(deg):
     """convert degrees to counts"""
     revs = deg / 360 # convert to revolutions
+    revs *= 25 # 25:1 gearbox
     return revs * 10000
 
 def _to_revs(deg):
     """converts degrees to revolutions"""
-    return deg / 360
+    # multiply by 25 for 25:1 gearbox
+    return deg * 25 / 360
 
 class CommandError(Exception):
     pass
@@ -86,8 +88,12 @@ class SerialMotorControl:
         # clear any pending commands/paused state
         self._cmd('SKD')
         
-        self._cmd('AC5400')
-        self._cmd('DE5400')
+        # self._cmd('AC5400')
+        # self._cmd('DE5400')
+        self._cmd('AC40')
+        self._cmd('DE40')
+        # self._cmd('AC1')
+        # self._cmd('DE1')
         self._cmd('VE0.05')
         self.feed_pos(0)
         
