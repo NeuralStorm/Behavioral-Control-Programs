@@ -39,7 +39,6 @@ import tkinter as tk
 from tkinter import filedialog
 from tkinter.font import Font
 from PIL import Image, ImageTk
-import pyscreenshot as ImageGrab
 import csv
 import json
 import os
@@ -107,6 +106,7 @@ def recolor(img, color, *, two_tone=False):
     return img
 
 def _screenshot_region(x: int, y: int, w: int, h: int) -> Image:
+    import pyscreenshot as ImageGrab
     # x //= 2
     # y //= 2
     
@@ -1617,8 +1617,8 @@ class MonkeyImages:
             for e, ei in end_info['errors'].items():
                 writer.writerow([e, ei['count'], ei['percent']])
         
-        if self.info_view is not None:
-            screenshot_widgets([*self.info_view.rows, self.info_view.label], histo_path)
+        # if self.info_view is not None:
+        #     screenshot_widgets([*self.info_view.rows, self.info_view.label], histo_path)
     
     def print_histogram(self):
         events = [e for e in self.event_log if e['name'] == 'task_completed']
@@ -1739,6 +1739,25 @@ class TestFrame(tk.Frame,):
         startbutton = tk.Button(parent, text = "Start-'a'", fg='white', height = 5, width = 6, command = x)
         startbutton.pack(side = tk.LEFT)
     
+
+def generate_histograms(overwrite=False):
+    from gen_histogram import gen_histogram
+    
+    prompt_root = tk.Tk()
+    config_path = filedialog.askopenfilename(initialdir = "/",title = "Select file",filetypes = (("all files","*.*"), ("csv files","*.csv")))
+    prompt_root.withdraw()
+    del prompt_root
+    
+    config = GameConfig(config_path=config_path)
+    output_dir = config.save_path
+    
+    for input_path in output_dir.glob('*_events.json'):
+        output_path = input_path.parent / f"{input_path.stem}_histogram.png"
+        
+        if output_path.is_file() and not overwrite:
+            continue
+        
+        gen_histogram(input_path, output_path)
 
 def gen_images():
     CANVAS_SIZE = 1600, 800
@@ -1863,6 +1882,10 @@ def main():
     
     if cmd == 'gen':
         gen_images()
+        return
+    
+    if cmd == 'gen_histograms':
+        generate_histograms()
         return
     
     root = tk.Tk()

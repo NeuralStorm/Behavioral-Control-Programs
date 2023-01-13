@@ -6,9 +6,9 @@ authors = ["Ryan <yarnnd@gmail.com>"]
 
 [tool.poetry.dependencies]
 python = "^3.8"
-numpy = "1.19.4"
+numpy = "1.22.4"
 Pillow = "8.0.1"
-pyscreenshot = "3.0"
+# pyscreenshot = "3.0"
 
 [tool.poetry.dev-dependencies]
 

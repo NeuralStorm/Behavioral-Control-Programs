@@ -19,7 +19,6 @@ key,
 
 # Config
 
-
 ### `reward_thresholds`
 
 example: `low=0'high=4'type=linear'reward_min=0'reward_max=1'cue=bOval`
@@ -131,3 +130,31 @@ The channel (direction) of the joystick to use. Default 3.
 ### `no_trials` (optional)
 
 Number of trials to run before stopping. If unspecified or "0" an unlimited number of trials will be performed.
+
+# Histogram generation
+
+## Setup
+
+Install additional dependencies
+```sh
+pip install -r requirements_histogram.txt
+```
+
+## Usage
+
+Example:
+```sh
+python gen_histogram.py output/TIP_1_001_20220725_180137_Joystick_events.json
+```
+
+Example to generate histograms for all events files in output directory, assuming the output directory is `./output`. This requires bash, not cmd.
+
+```sh
+python gen_histogram.py ./output/*
+```
+
+This can also be done through MonkeyImages_Joystick_Conf.py by selecting the config file
+
+```sh
+python MonkeyImages_Joystick_Conf.py gen_histograms
+```
