@@ -848,12 +848,14 @@ class MonkeyImages:
         
         self.event_log.append(out)
     
-    def log_hw(self, name, *, sim: bool = False, info=None):
+    def log_hw(self, name, *, sim: bool = False, info=None, plexon_ts: Optional[float] = None):
         tags = ['hw']
         if info is None:
             info = {}
         if sim: # event actually triggered manually via keyboard
             tags.append('hw_simulated')
+        if plexon_ts is not None:
+            info['plexon_ts'] = plexon_ts
         self.log_event(name, tags=tags, info=info)
     
     def _register_callback(self, event_key, cb):
@@ -1481,27 +1483,27 @@ class MonkeyImages:
                     
                     # joystick has transitioned from not pulled to pulled
                     if self.joystick_last_state < js_thresh and val >= js_thresh:
-                        self.log_hw('joystick_pulled')
+                        self.log_hw('joystick_pulled', plexon_ts=ts)
                         self.joystick_pulled = True
                         self.joystick_pull_remote_ts = ts
                     # joystick has transitioned from pulled to not pulled
                     elif self.joystick_last_state >= js_thresh and val < js_thresh:
-                        self.log_hw('joystick_released')
+                        self.log_hw('joystick_released', plexon_ts=ts)
                         self.joystick_pulled = False
                         self.joystick_release_remote_ts = ts
                     
                     self.joystick_last_state = val
             elif num_or_type == self.event_source:
                 if chan == 14: # enter home zone
-                    self.log_hw('homezone_enter')
+                    self.log_hw('homezone_enter', plexon_ts=ts)
                     self.Area1_right_pres = True
                     self._trigger_event('homezone_enter')
                 elif chan == 11: # enter joystick zone
-                    self.log_hw('joystick_zone_enter')
+                    self.log_hw('joystick_zone_enter', plexon_ts=ts)
                     if self.joystick_zone_enter is None:
                         self.joystick_zone_enter = ts
                 elif chan == 12: # exit either zone
-                    self.log_hw('zone_exit')
+                    self.log_hw('zone_exit', plexon_ts=ts)
                     if self.Area1_right_pres:
                         self.Area1_right_pres = False
                         self._trigger_event('homezone_exit')
