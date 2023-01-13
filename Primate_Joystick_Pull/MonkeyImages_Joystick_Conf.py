@@ -159,6 +159,16 @@ def screenshot_widget(widget, path):
     # img = ImageGrab.grab(backend='grim')
     img.save(path, 'PNG')
 
+def get_config_path() -> Path:
+    if 'config_path' in os.environ:
+        return Path(os.environ['config_path'])
+    else:
+        prompt_root = tk.Tk()
+        config_path = filedialog.askopenfilename(initialdir = "/",title = "Select file",filetypes = (("all files","*.*"), ("csv files","*.csv")))
+        prompt_root.withdraw()
+        del prompt_root
+        return Path(config_path)
+
 class RegisteredCallback:
     def __init__(self, cb, _clear_callback):
         self._cb = cb
@@ -331,6 +341,7 @@ class InfoView:
 class GameConfig:
     def __init__(self, *,
         config_path: str,
+        load_images: bool = True,
     ):
         def load_csv():
             data = []
@@ -415,7 +426,8 @@ class GameConfig:
             else:
                 image_ratios = [int(x.strip()) for x in image_ratios]
         
-        self.load_images(config_dict['images'], image_ratios)
+        if load_images:
+            self.load_images(config_dict['images'], image_ratios)
         self.selectable_images: List[str]
         # image selection list has keys duplicated based on image_ratios
         self.image_selection_list: List[str]
@@ -743,13 +755,10 @@ class MonkeyImages:
         self.reward_nidaq_bit = 17 # DO Channel
         
         # self._test_config = test_config
-        if test_config:
+        if test_config and 'config_path' not in os.environ:
             self.config_path = 'dev_config.csv'
         else:
-            prompt_root = tk.Tk()
-            self.config_path = filedialog.askopenfilename(initialdir = "/",title = "Select file",filetypes = (("all files","*.*"), ("csv files","*.csv")))
-            prompt_root.withdraw()
-            del prompt_root
+            self.config_path = get_config_path()
         print(self.config_path)
         
         self.config: GameConfig
@@ -1743,12 +1752,9 @@ class TestFrame(tk.Frame,):
 def generate_histograms(overwrite=False):
     from gen_histogram import gen_histogram
     
-    prompt_root = tk.Tk()
-    config_path = filedialog.askopenfilename(initialdir = "/",title = "Select file",filetypes = (("all files","*.*"), ("csv files","*.csv")))
-    prompt_root.withdraw()
-    del prompt_root
+    config_path = get_config_path()
     
-    config = GameConfig(config_path=config_path)
+    config = GameConfig(config_path=config_path, load_images=False)
     output_dir = config.save_path
     
     for input_path in output_dir.glob('*_events.json'):
