@@ -1,4 +1,6 @@
 
+from .classifier import Classifier
+
 from typing import Optional, Tuple, List, Dict, Set, Union
 from pathlib import Path
 import json
@@ -6,7 +8,7 @@ import json
 # chan -> spike frequency
 PsthDict = Dict[str, List[Union[float, int]]]
 
-class EuclClassifier:
+class EuclClassifier(Classifier):
     """classifies tilts using a euclidian distance classifier
         """
     

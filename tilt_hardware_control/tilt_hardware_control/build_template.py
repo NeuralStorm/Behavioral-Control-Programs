@@ -2,7 +2,7 @@
 import argparse
 from pathlib import Path
 
-from psth_new import build_template_file
+from classifier.psth_new import build_template_file
 
 def parse_args():
     parser = argparse.ArgumentParser(description='')

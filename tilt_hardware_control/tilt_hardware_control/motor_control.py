@@ -2,7 +2,7 @@
 from typing import List, Literal, Any, TypedDict, Dict
 import time
 from math import floor
-from multiprocessing import Pipe
+from multiprocessing import Pipe, Event
 from multiprocessing.connection import Connection
 from contextlib import ExitStack
 
@@ -41,6 +41,14 @@ def _to_revs(deg):
     """converts degrees to revolutions"""
     # multiply by 25 for 25:1 gearbox
     return deg * 25 / 360
+
+def _counts_to_degrees(counts):
+    """convert counts to degrees"""
+    #                   V counts per revolution (without gearbox)
+    #                   |       V gearbox ratio
+    #                   |       |    V revolutions / degree
+    counts_per_degree = 10000 * 25 / 360
+    return counts / counts_per_degree
 
 class CommandError(Exception):
     pass
@@ -123,6 +131,7 @@ class SerialMotorControl:
         }
         # speed at which the platform returns to home after tilt_return or tilt_punish
         self.return_dps = 12.5
+        # self.return_dps = 1
         # punish degrees per second
         self.punish_dps = 71.4
         
@@ -258,7 +267,7 @@ class SerialMotorProcessError(Exception):
 class SerialMotorProcessStuck(Exception):
     """Thrown if the motor control process does not exit in a timely mannery after being sent a stop command"""
 
-def _wrapper_inner(pipe: Connection):
+def _wrapper_inner(pipe: Connection, start_event: Event, mid_event: Event, *, collect_positions: bool = False):
     with ExitStack() as stack:
         class ErrorHandler:
             def __enter__(self):
@@ -302,8 +311,10 @@ def _wrapper_inner(pipe: Connection):
                 out_list_mid = [True, True, *tilt_type_out_list]
                 
                 motor.tilt(tilt_type)
+                start_event.set()
                 task.write(out_list_start)
                 state = 'before_mid'
+                position_log = []
                 
                 # last_pos = motor.get_pos()
                 while state != 'idle':
@@ -320,18 +331,43 @@ def _wrapper_inner(pipe: Connection):
                         else:
                             raise ValueError(f"Invalid command in tilt {command}")
                     
+                    def parse_i32(hex_str):
+                        val = int(hex_str, 16)
+                        assert val < (1 << 32)
+                        if val & (1<<31):
+                            # 1 << 32 == (1 << 31) * 2
+                            # subtract the most significant bit twice
+                            val -= 1 << 32
+                        
+                        return val
                     
+                    # aa = time.perf_counter()
+                    if collect_positions:
+                        # target_pos = parse_i32(motor._cmd('IP').split(b'=')[1])
+                        encoder_pos = parse_i32(motor._cmd('IE').split(b'=')[1])
+                        # target_pos = _counts_to_degrees(target_pos)
+                        encoder_pos = _counts_to_degrees(encoder_pos)
+                        target_pos = 0
+                        # encoder_pos = 0
+                        # print(target_pos, encoder_pos)
+                        position_log.append((time.perf_counter(), target_pos, encoder_pos))
+                    
+                    # a = time.perf_counter()
                     queue_size = 63 - int(motor._cmd('BS').split(b'=')[1])
+                    # b = time.perf_counter()
+                    # print(b - aa, b - a)
                     # print(queue_size)
                     
                     if state == 'before_mid' and queue_size <= 1:
                         state = 'after_mid'
+                        # motor.tilt_return()
+                        mid_event.set()
                         task.write(out_list_mid)
                     
                     if queue_size <= 0:
                         task.write(out_list_off)
+                        pipe.send(['tilt_done', position_log])
                         state = 'idle'
-                        pipe.send(['tilt_done'])
                     
                     # pos = motor.get_pos()
                     # # print(pos, motor._cmd('BS'))
@@ -351,7 +387,9 @@ class SerialMotorOutputWrapper:
     """wraps SerialMotorControl and sets nidaq output based on state"""
     def __init__(self):
         pipe, child_pipe = Pipe()
-        self._proc = spawn_process(_wrapper_inner, child_pipe)
+        self._start_event = Event()
+        self._mid_event = Event()
+        self._proc = spawn_process(_wrapper_inner, child_pipe, self._start_event, self._mid_event)
         self._pipe: Connection = pipe
     
     def close(self):
@@ -365,7 +403,21 @@ class SerialMotorOutputWrapper:
         if res[0] == 'error':
             raise SerialMotorProcessError(res[1])
         
-        assert res == ['tilt_done']
+        assert res[0] == 'tilt_done'
+        _, position_log = res
+        position_out = []
+        for t, target_pos, actual_pos in position_log:
+            position_out.append({
+                't': t,
+                'pos': actual_pos,
+                'target': target_pos,
+            })
+        
+        out = {
+            'position': position_out,
+        }
+        
+        return out
     
     def tilt(self, tilt_type: str):
         if tilt_type == 'stop':

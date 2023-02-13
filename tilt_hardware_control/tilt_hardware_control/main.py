@@ -25,7 +25,8 @@ from psth_tilt import PsthTiltPlatform
 from util import hash_file
 from util_multiprocess import spawn_process
 from util_nidaq import line_wait
-from psth_new import EuclClassifier, build_template_file
+from classifier import Classifier, classifier_map, RandomClassifier
+from classifier.psth_new import EuclClassifier, build_template_file
 from stimulation import spawn_random_stimulus_process, State as StimState, TiltStimulation
 
 from grf_data import record_data, RecordState
@@ -269,6 +270,11 @@ def run_psth_loop(platform: PsthTiltPlatform, tilt_sequence, *,
                 correct_trials += 1
         decoder_accuracy = correct_trials / len(actual)
         print(f"Accuracy = {correct_trials} / {len(actual)} = {decoder_accuracy}")
+        output_extra['accuracy'] = {
+            'correct': correct_trials,
+            'trials': len(actual),
+            'precent_correct': decoder_accuracy,
+        }
     
     for tilt in tilt_records:
         for warning in tilt['warnings']:
@@ -355,6 +361,7 @@ class Config:
     yoked: Optional[bool]
     
     plexon_lib: Optional[Literal['plex', 'opx']]
+    classifier: Optional[str]
     
     # full deserialized json from the config file
     raw: Any
@@ -421,6 +428,7 @@ def load_config(path: Path, labels_path: Optional[Path]) -> Config:
         assert type(config.baseline) == bool
         assert type(config.yoked) == bool
         assert config.plexon_lib in ['plex', 'opx']
+        config.classifier = data.get('classifier', 'psth')
         
         if labels_path is not None:
             with open(labels_path, encoding='utf8') as f:
@@ -668,7 +676,7 @@ def main():
                 stim_params = config.stim_params,
                 tilt_types = set(tilt_sequence),
                 mock = args.mock,
-                verbose = os.environ.get('print_stim'),
+                verbose = bool(os.environ.get('print_stim')),
             )
         else:
             stim_state = None
@@ -687,14 +695,19 @@ def main():
         def before_platform_close():
             if args.loadcell_out is not None:
                 fpath = Path(args.loadcell_out)
-                grf_file_hash = hash_file(fpath)
-                
+                if fpath.exists():
+                    grf_file_hash = hash_file(fpath)
+                else:
+                    grf_file_hash = None
                 output_extra['output_files'][fpath.name] = grf_file_hash
         
         def after_platform_close():
             if args.events_out is not None:
                 fpath = Path(args.events_out)
-                file_hash = hash_file(fpath)
+                if fpath.exists():
+                    file_hash = hash_file(fpath)
+                else:
+                    file_hash = None
                 output_extra['output_files'][fpath.name] = file_hash
             
             if args.meta_out is not None:
@@ -715,29 +728,37 @@ def main():
             record_state.stop_recording()
         
         if mode == 'closed_loop':
-            classifier: Optional[EuclClassifier] = EuclClassifier(
-                post_time = post_time,
-                bin_size = bin_size,
-            )
-            
-            if not baseline_recording:
-                assert args.template_in is not None
-            if args.template_in is not None:
-                with open(args.template_in, encoding='utf8') as f:
-                    template_in = json.load(f)
-                assert classifier.post_time == template_in['info']['post_time'], f"{classifier.post_time} {template_in['info']['post_time']}"
-                assert classifier.bin_size == template_in['info']['bin_size'], f"{classifier.bin_size} {template_in['info']['bin_size']}"
-                classifier.templates = template_in['templates']
-                # events_path = template_in.get('events_path')
-                # if events_path is not None:
-                #     events_path = Path(events_path)
-                #     if not events_path.is_absolute():
-                #         events_path = Path(args.template_in).parent / events_path
-                #     with open(events_path, encoding='utf8') as f:
-                #         events_record = json.load(f)
-                #     classifier.build_template_from_events(template_in['tilts'], events_record)
-                # else:
-                #     classifier.build_template_from_record(template_in['tilts'])
+            classifier: Optional[Classifier]
+            if config.classifier in ['psth', 'eucl']:
+                classifier = EuclClassifier(
+                    post_time = post_time,
+                    bin_size = bin_size,
+                )
+                
+                if not baseline_recording:
+                    assert args.template_in is not None
+                if args.template_in is not None:
+                    with open(args.template_in, encoding='utf8') as f:
+                        template_in = json.load(f)
+                    assert classifier.post_time == template_in['info']['post_time'], f"{classifier.post_time} {template_in['info']['post_time']}"
+                    assert classifier.bin_size == template_in['info']['bin_size'], f"{classifier.bin_size} {template_in['info']['bin_size']}"
+                    classifier.templates = template_in['templates']
+                    # events_path = template_in.get('events_path')
+                    # if events_path is not None:
+                    #     events_path = Path(events_path)
+                    #     if not events_path.is_absolute():
+                    #         events_path = Path(args.template_in).parent / events_path
+                    #     with open(events_path, encoding='utf8') as f:
+                    #         events_record = json.load(f)
+                    #     classifier.build_template_from_events(template_in['tilts'], events_record)
+                    # else:
+                    #     classifier.build_template_from_record(template_in['tilts'])
+            elif config.classifier == 'random':
+                assert config.tilt_sequence is not None
+                random_choices = list(set(config.tilt_sequence))
+                classifier = RandomClassifier(random_choices)
+            else:
+                raise ValueError(f"unknown classifier `{config.classifier}`")
         else:
             classifier = None
             baseline_recording = True

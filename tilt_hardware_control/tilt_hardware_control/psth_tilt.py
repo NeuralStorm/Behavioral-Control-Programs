@@ -6,7 +6,7 @@ from contextlib import ExitStack, AbstractContextManager
 from pathlib import Path
 import json
 
-from psth_new import EuclClassifier
+from classifier import Classifier
 from motor_control import MotorControl, SerialMotorOutputWrapper
 from util_nidaq import line_wait
 from event_source import Event, SpikeEvent, TiltEvent, StimEvent, UnknownEvent
@@ -31,7 +31,7 @@ class PsthTiltPlatform(AbstractContextManager):
             water_duration: float,
             post_time: int,
             delay_range: Tuple[float, float],
-            classifier: Optional[EuclClassifier],
+            classifier: Optional[Classifier],
             tilt_duration: Optional[float] = None,
             record_state: RecordState,
             stim_handler: Optional[TiltStimulation] = None,
@@ -90,7 +90,7 @@ class PsthTiltPlatform(AbstractContextManager):
         self._post_time_ms = post_time / 1000
         self.baseline_recording = baseline_recording
         
-        self.classifier: Optional[EuclClassifier] = classifier
+        self.classifier: Optional[Classifier] = classifier
         self.stim_handler: Optional[TiltStimulation] = stim_handler
         
         self._tilt_record: Optional[Dict[str, Any]] = None
@@ -309,7 +309,9 @@ class PsthTiltPlatform(AbstractContextManager):
         # wait for tilt to finish
         if self.tilt_duration is None:
             if isinstance(self.motor, SerialMotorOutputWrapper):
-                self.motor.wait_for_tilt_finish()
+                tilt_res = self.motor.wait_for_tilt_finish()
+                # from pprint import pprint
+                # pprint(tilt_res)
             elif not self.mock:
                 # line_wait("Dev4/port2/line3", False)
                 self.record_state.digital_lines['tilt_active'].wait_false(timeout=WAIT_TIMEOUT)
