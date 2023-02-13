@@ -837,7 +837,7 @@ class MonkeyImages:
         if info is None:
             info = {}
         human_time = datetime.utcnow().isoformat()
-        mono_time = time.monotonic()
+        mono_time = time.perf_counter()
         out = {
             'time_human': human_time,
             'time_m': mono_time,
@@ -880,7 +880,7 @@ class MonkeyImages:
     
     # resets loop state, starts callback loop
     def start_new_loop(self):
-        self.last_new_loop_time = time.monotonic()
+        self.last_new_loop_time = time.perf_counter()
         self.new_loop_iter = self.new_loop_gen()
         self.normalized_time = 0
         next(self.new_loop_iter)
@@ -890,7 +890,7 @@ class MonkeyImages:
         if self.stopped:
             return
         
-        cur_time = time.monotonic()
+        cur_time = time.perf_counter()
         elapsed_time = cur_time - self.last_new_loop_time
         self.last_new_loop_time = cur_time
         
@@ -1278,8 +1278,8 @@ class MonkeyImages:
                 self.task.WriteDigitalLines(1, 1, 10.0, PyDAQmx.DAQmx_Val_GroupByChannel, self.begin, None, None)
             if self.plexon:
                 self.plexdo.set_bit(self.device_number, self.reward_nidaq_bit)
-            t = time.monotonic()
-            while time.monotonic() - t < self.config.manual_reward_time:
+            t = time.perf_counter()
+            while time.perf_counter() - t < self.config.manual_reward_time:
                 yield
             print("water off")
             if self.plexon:
@@ -1405,21 +1405,21 @@ class MonkeyImages:
             print('in zone toggled', self.Area1_right_pres)
         elif key == '2':
             if not self.joystick_pulled:
-                self.joystick_pull_remote_ts = time.monotonic()
+                self.joystick_pull_remote_ts = time.perf_counter()
                 self.joystick_pulled = True
                 self.log_hw('joystick_pulled', sim=True)
             else:
-                self.joystick_release_remote_ts = time.monotonic()
+                self.joystick_release_remote_ts = time.perf_counter()
                 self.joystick_pulled = False
                 self.log_hw('joystick_released', sim=True)
             
             print('joystick', self.joystick_pulled)
         elif key == '3':
             if self.joystick_zone_enter is None:
-                self.joystick_zone_enter = time.monotonic()
+                self.joystick_zone_enter = time.perf_counter()
                 self.log_hw('joystick_zone_enter', sim=True)
             elif self.joystick_zone_exit is None:
-                self.joystick_zone_exit = time.monotonic()
+                self.joystick_zone_exit = time.perf_counter()
                 self.log_hw('zone_exit', sim=True, info={'simulated_zone': 'joystick_zone'})
             
             print('joystick zone', self.joystick_zone_enter, self.joystick_zone_exit)
@@ -1534,7 +1534,7 @@ class MonkeyImages:
         if partial:
             partial_dir = Path(self.config.save_path) / "partial"
             partial_dir.mkdir(exist_ok=True)
-            gen_time = str(time.monotonic())
+            gen_time = str(time.perf_counter())
             csv_path = partial_dir / f"{base}_{gen_time}.csv"
             event_log_path = partial_dir / f"{base}_{gen_time}_events.json"
             histo_path = partial_dir / f"{base}_{gen_time}_histogram.png"
@@ -1596,7 +1596,7 @@ class MonkeyImages:
             def get_time_in_game():
                 for e in self.event_log:
                     if e['name'] == 'game_start':
-                        delta = time.monotonic() - e['time_m']
+                        delta = time.perf_counter() - e['time_m']
                         delta = timedelta(seconds=delta)
                         return str(delta)
                 return None
