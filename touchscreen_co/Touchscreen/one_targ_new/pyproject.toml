@@ -5,7 +5,7 @@ description = ""
 authors = ["Ryan <yarnnd@gmail.com>"]
 
 [tool.poetry.dependencies]
-python = "^3.8"
+python = "3.8.*"
 
 "kivy" = { version = "2.0.0", extras = ["base"] }
 numpy = "1.19.4"

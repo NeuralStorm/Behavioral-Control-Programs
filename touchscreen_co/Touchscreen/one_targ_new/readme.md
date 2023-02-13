@@ -15,6 +15,9 @@ copy `./example_config.hjson` to `./config.hjson`
 
 run `pip install -r requirements.txt`
 
+If running with actual hardware  
+`pip install nidaqmx==0.5.7`
+
 # Running
 
 modify `./config.hjson` as needed
@@ -46,5 +49,8 @@ on systems with backslash as the default path delimeter (windows)
 
 saving HDF5 file requires https://www.pytables.org/
 
-misc dev notes  
+## misc dev notes  
 https://kivy.org/doc/stable/guide/lang.html
+
+`poetry env use ~/.pyenv/versions/3.8.12/bin/python`
+`set -x KIVY_NO_ARGS 1`

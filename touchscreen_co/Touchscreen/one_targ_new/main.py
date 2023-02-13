@@ -18,6 +18,9 @@ try:
 except ImportError:
     pass
 import time, pickle, datetime
+from contextlib import ExitStack
+from typing import Optional, Any, List
+
 from numpy import binary_repr
 import struct
 from sys import platform
@@ -176,7 +179,9 @@ class COGame(Widget):
     ):
 
         self.plexon = '--test' not in sys.argv
-
+        
+        self.update_callback: Optional[Any] = None
+        
         assert peripheral_target is not None
         self.peripheral_target_param = peripheral_target
         if peripheral_target is not None:
@@ -347,26 +352,21 @@ class COGame(Widget):
         #     if val:
         #         self.drag_ok = drag_ok[i]
         self.drag_ok = False;
-
+        
         # nudge_9am_dist = [0., .5, 1.]
         # for i, val in enumerate(nudge['nudge']):
         #     if val:
         self.nudge_dist = 0.
-
+        
         # targ_pos = ['corners', None]
         # for i, val in enumerate(targ_pos['targ_pos']):
         #     if val:
         self.generator_kwarg = 'corners'
-
-
+        
         # Preload sounds: 
         self.reward1 = SoundLoader.load('reward1.wav')
         self.reward2 = SoundLoader.load('reward2.wav')
-
-        self.state = 'ITI'
-        self.state_start = time.time()
-        self.ITI = self.ITI_std + self.ITI_mean
-
+        
         # Initialize targets: 
         self.center_target.set_size(2*self.center_target_rad)
         
@@ -399,36 +399,9 @@ class COGame(Widget):
         self.target_list[:, 1] = self.target_list[:, 1] + self.nudge_y
         self.target_index = 0
         self.repeat = False
-
-        self.periph_target_position = self.target_list[self.target_index, :]
-
-        self.FSM = dict()
-        self.FSM['ITI'] = dict(end_ITI='vid_trig', stop=None)
-        self.FSM['vid_trig'] = dict(rhtouch='target', stop=None)
         
-        if self.use_center:
-            self.FSM['vid_trig'] = dict(end_vid_trig='center', stop=None)
-            self.FSM['center'] = dict(touch_center='center_hold', center_timeout='timeout_error', non_rhtouch='RH_touch',stop=None)
-            self.FSM['center_hold'] = dict(finish_center_hold='target', early_leave_center_hold='hold_error', non_rhtouch='RH_touch', stop=None)
-
-        self.FSM['target'] = dict(touch_target = 'targ_hold', target_timeout='timeout_error', stop=None,
-            anytouch='rew_anytouch', non_rhtouch='RH_touch')#,touch_not_target='touch_error')
-        self.FSM['targ_hold'] = dict(finish_targ_hold='reward', early_leave_target_hold = 'hold_error',
-         targ_drag_out = 'drag_error', stop=None, non_rhtouch='RH_touch')
-        self.FSM['reward'] = dict(end_reward = 'ITI', stop=None, non_rhtouch='RH_touch')
-
-        if self.use_center:
-            return_ = 'center'
-        else:
-            return_ = 'target'
-
-        self.FSM['touch_error'] = dict(end_touch_error=return_, stop=None, non_rhtouch='RH_touch')
-        self.FSM['timeout_error'] = dict(end_timeout_error='ITI', stop=None, non_rhtouch='RH_touch')
-        self.FSM['hold_error'] = dict(end_hold_error=return_, stop=None, non_rhtouch='RH_touch')
-        self.FSM['drag_error'] = dict(end_drag_error=return_, stop=None, non_rhtouch='RH_touch')
-        self.FSM['rew_anytouch'] = dict(end_rewanytouch='target', stop=None, non_rhtouch='RH_touch')
-        self.FSM['idle_exit'] = dict(stop=None)
-
+        self.periph_target_position = self.target_list[self.target_index, :]
+        
         try:
             self.reward_port = serial.Serial(port='COM4',
                 baudrate=115200)
@@ -667,60 +640,10 @@ class COGame(Widget):
                     a new state that is triggered when the condition is met
                         if the new state is "stop" the program is stopped
             """
-        self.state_length = time.time() - self.state_start
-        self.rew_cnt += 1
-        self.small_rew_cnt += 1
         
-        # Run task update functions: 
-        for f, (fcn_test_name, next_state) in enumerate(self.FSM[self.state].items()):
-            kw = dict(ts=self.state_length)
-            
-            fcn_test = getattr(self, fcn_test_name)
-            if fcn_test(**kw):
-                # if stop: close the app
-                if fcn_test_name == 'stop':
-                    self.close_app()
-
-                else:
-                    # Run any 'end' fcns from prevoius state: 
-                    end_state_fn_name = "_end_%s" % self.state
-                    if hasattr(self, end_state_fn_name):
-                        end_state_fn = getattr(self, end_state_fn_name)
-                        end_state_fn()
-                    self.prev_state = self.state
-                    self.state = next_state
-                    self.state_start = time.time()
-
-                    # Run any starting functions: 
-                    start_state_fn_name = "_start_%s" % self.state
-                    if hasattr(self, start_state_fn_name):
-                        start_state_fn = getattr(self, start_state_fn_name)
-                        start_state_fn()
-            else:
-                while_state_fn_name = "_while_%s" % self.state
-                if hasattr(self, while_state_fn_name):
-                    while_state_fn = getattr(self, while_state_fn_name)
-                    while_state_fn()
-            
-        if self.use_cap_sensor:
-            try:
-                self.serial_port_cap.flushInput()
-                port_read = self.serial_port_cap.read(4)
-                if str(port_read[:2]) == "b'N1'":
-                    self.rhtouch_sensor = False
-                elif str(port_read[:2]) == "b'C1'":
-                    self.rhtouch_sensor = True
-                    print(self.rhtouch_sensor)
-            except:
-                print('passing state! ')
-                pass     
-        if self.testing:
-            pass
-        else:
-            if self.state == 'idle_exit':
-                pass
-            else:
-                self.write_to_h5file()
+        if self.update_callback is not None:
+            self.update_callback()
+        
 
     def write_to_h5file(self):
         if h5:
@@ -786,142 +709,6 @@ class COGame(Widget):
             else:
                 return False
 
-    def _start_ITI(self, **kwargs):
-        try:
-            self.cam_trig_port.write('0'.encode())
-        except:
-            pass
-        Window.clearcolor = (0., 0., 0., 1.)
-        self.exit_target1.color = (.15, .15, .15, 1.)
-        self.exit_target2.color = (.15, .15, .15, 1.)
-
-        # Set ITI, CHT, THT
-        self.ITI = np.random.random()*self.ITI_std + self.ITI_mean
-
-        if type(self.cht_type) is str:
-            cht_min, cht_max = self.cht_type.split('-')
-            self.cht = ((float(cht_max) - float(cht_min)) * np.random.random()) + float(cht_min)
-
-        if type(self.tht_type) is str:
-            tht_min, tht_max = self.tht_type.split('-')
-            self.tht = ((float(tht_max) - float(tht_min)) * np.random.random()) + float(tht_min)            
-        
-        self.center_target.color = (0., 0., 0., 0.)
-        # self.periph_target.color = (0., 0., 0., 0.)
-        self._hide_periph()
-        self.indicator_targ.color = (0., 0., 0., 0.)
-        
-    def end_ITI(self, **kwargs):
-        return kwargs['ts'] > self.ITI
-
-    def _start_vid_trig(self, **kwargs):
-        if self.trial_counter == 0:
-            time.sleep(1.)
-        try:    
-            self.cam_trig_port.write('1'.encode())
-        except:
-            pass
-        self.first_target_attempt = True
-
-        if np.logical_and(self.use_cap_sensor, not self.rhtouch_sensor):
-            # self.periph_target.color = (1., 0., 0., 1.)
-            self._red_periph()
-            self.center_target.color = (1., 0., 0., 1.)
-            Window.clearcolor = (1., 0., 0., 1.)
-
-            # Turn exit buttons redish:
-            self.exit_target1.color = (.9, 0, 0, 1.)
-            self.exit_target2.color = (.9, 0, 0, 1.)
-
-    def end_vid_trig(self, **kwargs):
-        return kwargs['ts'] > self.pre_start_vid_ts
-
-
-    def rhtouch(self, **kwargs):
-        if self.use_cap_sensor:
-            if self.rhtouch_sensor:
-                return True
-            else:
-                return False
-        else:
-            return True
-
-    def non_rhtouch(self, **kwargs):
-        x = not self.rhtouch()
-        # if x:
-        #     self.repeat = True
-        return x
-
-    def _start_center(self, **kwargs):
-        Window.clearcolor = (0., 0., 0., 1.)
-        self.center_target.color = (1., 1., 0., 1.)
-        self.exit_target1.color = (.15, .15, .15, 1)
-        self.exit_target2.color = (.15, .15, .15, 1)
-        # self.periph_target.color = (0., 0., 0., 0.) ### Make peripheral target alpha = 0 so doesn't obscure 
-        self._hide_periph()
-        self.indicator_targ.color = (.25, .25, .25, 1.)
-
-    def _start_center_hold(self, **kwargs):
-        self.center_target.color = (0., 1., 0., 1.)
-        self.indicator_targ.color = (0.75, .75, .75, 1.)
-
-    def _start_targ_hold(self, **kwargs):
-        # self.periph_target.color = (0., 1., 0., 1.)
-        self._green_periph()
-        self.indicator_targ.color = (0.75, .75, .75, 1.)
-
-    def _end_center_hold(self, **kwargs):
-        self.center_target.color = (0., 0., 0., 1.)
-
-    def _end_target_hold(self, **kwargs):
-        self._hide_periph()
-        # self.periph_target.color = (0., 0., 0., 0.)
-
-    def _start_touch_error(self, **kwargs):
-        self.center_target.color = (0., 0., 0., 1.)
-        # self.periph_target.color = (0., 0., 0., 1.)
-        self._hide_periph()
-        self.repeat = True
-
-    def _start_timeout_error(self, **kwargs):
-        self.center_target.color = (0., 0., 0., 1.)
-        # self.periph_target.color = (0., 0., 0., 1.)
-        self._hide_periph()
-        #self.repeat = True
-
-    def _start_hold_error(self, **kwargs):
-        self.center_target.color = (0., 0., 0., 1.)
-        # self.periph_target.color = (0., 0., 0., 1.)
-        self._hide_periph()
-        self.repeat = True
-
-    def _start_drag_error(self, **kwargs):
-        self.center_target.color = (0., 0., 0., 1.)
-        # self.periph_target.color = (0., 0., 0., 1.)
-        self._hide_periph()
-        self.repeat = True
-
-    def _start_target(self, **kwargs):
-        Window.clearcolor = (0., 0., 0., 1.)
-        self.center_target.color = (0., 0., 0., 0.)
-
-        if self.repeat is False:
-            self.periph_target_position = self.target_list[self.target_index, :]
-            self.target_index += 1
-            print(self.periph_target_position)
-            print(self.target_index)
-
-        self.periph_target.move(self.periph_target_position)
-        # self.periph_target.color = (1., 1., 0., 1.)
-        self._show_periph()
-        self.repeat = False
-        self.exit_target1.color = (.15, .15, .15, 1)
-        self.exit_target2.color = (.15, .15, .15, 1)
-        self.indicator_targ.color = (.25, .25, .25, 1.)
-        if self.first_target_attempt:
-            self.first_target_attempt_t0 = time.time();
-            self.first_target_attempt = False
-
     def _start_reward(self, **kwargs):
         self.trial_counter += 1
         Window.clearcolor = (1., 1., 1., 1.)
@@ -933,19 +720,6 @@ class COGame(Widget):
         self.cnts_in_rew = 0
         self.indicator_targ.color = (1., 1., 1., 1.)
         self.repeat = False
-
-    def _while_reward(self, **kwargs):
-        if self.rew_cnt == 1:
-            self.run_big_rew()
-            self.rew_cnt += 1
-
-    def _start_rew_anytouch(self, **kwargs):
-        #if self.small_rew_cnt == 1:
-        if self.reward_for_anytouch[0]:
-            self.run_small_rew()
-        else:
-            self.repeat = True
-            #self.small_rew_cnt += 1
 
     def run_big_rew(self, **kwargs):
         try:
@@ -1007,6 +781,7 @@ class COGame(Widget):
                     self.reward_port.close()
         except:
             pass
+            # print('eeeee')
 
         #self.repeat = True
 
@@ -1022,73 +797,6 @@ class COGame(Widget):
                 self.cnts_in_rew += 1
                 return False
 
-    def end_rewanytouch(self, **kwargs):
-        if self.small_rew_cnt > 1:
-            return True
-        else:
-            return False
-
-    def end_touch_error(self, **kwargs):
-        return kwargs['ts'] >= self.touch_error_timeout
-
-    def end_timeout_error(self, **kwargs):
-        return kwargs['ts'] >= self.timeout_error_timeout
-
-    def end_hold_error(self, **kwargs):
-        return kwargs['ts'] >= self.hold_error_timeout
-
-    def end_drag_error(self, **kwargs):
-        return kwargs['ts'] >= self.drag_error_timeout
-
-    def touch_center(self, **kwargs):
-        if self.drag_ok:
-            return self.check_if_cursors_in_targ(self.center_target_position, self.center_target_rad)
-        else:
-            return np.logical_and(self.check_if_cursors_in_targ(self.center_target_position, self.center_target_rad),
-                self.check_if_started_in_targ(self.center_target_position, self.center_target_rad))
-
-    def center_timeout(self, **kwargs):
-        return kwargs['ts'] > self.ch_timeout
-
-    def finish_center_hold(self, **kwargs):
-        if self.cht <= kwargs['ts']:
-            if self.reward_for_center[0]:
-                self.run_small_rew()
-            return True
-        else:
-            return False
-
-    def early_leave_center_hold(self, **kwargs):
-        return not self.check_if_cursors_in_targ(self.center_target_position, self.center_target_rad)
-        
-    def center_drag_out(self, **kwargs):
-        touch = self.touch
-        self.touch = True
-        stay_in = self.check_if_cursors_in_targ(self.center_target_position, self.center_target_rad)
-        self.touch = touch
-        return not stay_in
-
-    def touch_target(self, **kwargs):
-        return self.periph_target_touched()
-        # if self.drag_ok:
-        #     return self.check_if_cursors_in_targ(self.periph_target_position, self.periph_target_rad)
-        # else:
-        #     return np.logical_and(self.check_if_cursors_in_targ(self.periph_target_position, self.periph_target_rad),
-        #         self.check_if_started_in_targ(self.periph_target_position, self.periph_target_rad))
-
-    def target_timeout(self, **kwargs):
-        #return kwargs['ts'] > self.target_timeout_time
-        if time.time() - self.first_target_attempt_t0 > self.target_timeout_time:
-            self.repeat = False
-            return True
-
-    def finish_targ_hold(self, **kwargs):
-        return self.tht <= kwargs['ts']
-
-    def early_leave_target_hold(self, **kwargs):
-        # return not self.check_if_cursors_in_targ(self.periph_target_position, self.periph_target_rad)
-        return not self.periph_target_touched()
-
     def targ_drag_out(self, **kwargs):
         touch = self.touch
         self.touch = True
@@ -1098,7 +806,7 @@ class COGame(Widget):
         return not stay_in
 
     def anytouch(self, **kwargs):
-        if not self.touch_target():
+        if not self.periph_target_touched():
             current_touch = len(self.cursor_ids) > 0
             rew = False
             if current_touch and not self.anytouch_prev:
@@ -1478,6 +1186,7 @@ class Manager(ScreenManager):
         self.current = 'game_screen'
         game = self.ids['game']
         game.init(**self.params)
+        GameState(game)
         Clock.schedule_interval(game.update, 1.0 / 60.0)
 
 class COApp(App):
@@ -1520,6 +1229,337 @@ def pix2cm(pos_pix, fixed_window_size=fixed_window_size, pix_per_cm=pix_per_cm):
 
     pos_cm = pos_pix*(1./pix_per_cm)
     return pos_cm
+
+class Timeout:
+    def __init__(self, p, timeout, get_time):
+        self.hit_timeout = False
+        
+        self.get_time = get_time
+        self.p = p
+        self.timeout = timeout
+    
+    def __iter__(self):
+        start_time = self.get_time()
+        while True:
+            if not self.p():
+                return
+            if self.get_time() - start_time > self.timeout:
+                self.hit_timeout = True
+                return
+            yield
+
+class SelectAny:
+    def __init__(self, gens):
+        self.gens = gens
+        self.first = None
+    
+    def __iter__(self):
+        while True:
+            for k, gen in self.gens.items():
+                try:
+                    next(gen)
+                except StopIteration:
+                    self.first = k
+                    return
+            yield
+
+class Nidaq:
+    def __init__(self, pins: List[str]):
+        import nidaqmx
+        from nidaqmx.constants import LineGrouping, Edge, AcquisitionType, WAIT_INFINITELY
+        from nidaqmx.constants import RegenerationMode
+        self.pins = pins
+        self.tasks = [nidaqmx.Task() for _ in pins]
+        
+        # self.task = nidaqmx.Task()
+        # task = self.task
+        
+        for task in self.tasks:
+            task.timing.cfg_samp_clk_timing(
+                1000,
+                sample_mode = AcquisitionType.CONTINUOUS,
+            )
+            task.out_stream.output_buf_size = 1000
+            task.out_stream.regen_mode = RegenerationMode.DONT_ALLOW_REGENERATION
+        
+        # 4ms pulse
+        self.pulse = [
+            *([1]*4),
+            0
+        ]
+        
+        # pin_list = pins
+        # port = 1
+        # self.task.do_channels.add_do_chan(f"/Dev6/port{port}/line0:7", line_grouping = LineGrouping.CHAN_PER_LINE)
+        for pin, task in zip(pins, self.tasks):
+            task.do_channels.add_do_chan(pin, line_grouping = LineGrouping.CHAN_PER_LINE)
+        
+        
+    
+    def start(self):
+        for task in self.tasks:
+            task.start()
+    
+    def pulse_pin(self, pin):
+        idx = self.pins.index(pin)
+        self.tasks[idx].write(self.pulse)
+
+class GameState:
+    def __init__(self, co_game: COGame):
+        co_game.update_callback = self.progress_gen
+        co_game.state = 'none'
+        self.co_game: COGame = co_game
+        
+        self.game_time = 0
+        self._last_progress_time = time.monotonic()
+        
+        self.event_log = []
+        
+        self.plexon_event_types = {
+            'test': {
+                'nidaq_pin': '',
+                'plexon_channel': 2,
+            },
+        }
+        self.nidaq_enabled = '--test' not in sys.argv
+        pin_list = [x['nidaq_pin'] for x in self.plexon_event_types.values()]
+        if self.nidaq_enabled:
+            self.nidaq = Nidaq(pin_list)
+            self.nidaq.start()
+        else:
+            self.nidaq = None
+        
+        self._gen = self._main_loop()
+    
+    def log_event(self, name: str, *, tags: List[str], info=None):
+        if info is None:
+            info = {}
+        human_time = datetime.datetime.utcnow().isoformat()
+        mono_time = time.perf_counter()
+        out = {
+            'time_human': human_time,
+            'time_m': mono_time,
+            'name': name,
+            'tags': tags,
+            'info': info,
+        }
+        
+        self.event_log.append(out)
+    
+    def send_plexon_event(self, name, *, info=None):
+        tags = ['plexon_send']
+        if info is None:
+            info = {}
+        event_info = self.plexon_event_types[name]
+        if self.nidaq is not None:
+            self.nidaq.pulse_pin(event_info['nidaq_pin'])
+            info['no_hardware'] = True
+        self.log_event(name, tags=tags, info=info)
+    
+    def progress_gen(self):
+        cur_time = time.monotonic()
+        
+        elapsed_time = cur_time - self._last_progress_time
+        self._last_progress_time = cur_time
+        self.game_time += elapsed_time
+        
+        next(self._gen)
+    
+    def _timeout(self, p, timeout: float):
+        timeout_obj = Timeout(p, timeout, lambda: self.game_time)
+        return timeout_obj
+    
+    def _wait(self, t: float):
+        timeout = Timeout(lambda: True, t, lambda: self.game_time)
+        yield from timeout
+    
+    def _until(self, p):
+        while not p():
+            yield
+    
+    def _race(self, **gens):
+        return SelectAny(gens)
+    
+    def _main_loop(self):
+        trial_i = 0
+        while True:
+            if trial_i >= self.co_game.max_trials:
+                break
+            print('main loop')
+            yield from self.run_trial()
+            trial_i += 1
+            # break
+    
+    def run_center(self, center_done):
+        game = self.co_game
+        
+        # self.co_game.state = 'center'
+        game.state = 'none'
+        # game._start_center()
+        Window.clearcolor = (0., 0., 0., 1.)
+        game.center_target.color = (1., 1., 0., 1.)
+        game.exit_target1.color = (.15, .15, .15, 1)
+        game.exit_target2.color = (.15, .15, .15, 1)
+        # self.periph_target.color = (0., 0., 0., 0.) ### Make peripheral target alpha = 0 so doesn't obscure 
+        game._hide_periph()
+        game.indicator_targ.color = (.25, .25, .25, 1.)
+        
+        def check_touch_center():
+            if game.drag_ok:
+                return game.check_if_cursors_in_targ(game.center_target_position, game.center_target_rad)
+            else:
+                return \
+                    game.check_if_cursors_in_targ(game.center_target_position, game.center_target_rad) and \
+                    game.check_if_started_in_targ(game.center_target_position, game.center_target_rad)
+        
+        timeout = self._timeout(lambda: (not check_touch_center()), game.ch_timeout)
+        yield from timeout
+        if timeout.hit_timeout:
+            game.center_target.color = (0., 0., 0., 1.)
+            game._hide_periph()
+            yield from self._wait(game.timeout_error_timeout)
+            return
+        
+        # print('state center_hold')
+        # game.state = 'center_hold'
+        game.state = 'none'
+        game.center_target.color = (0., 1., 0., 1.)
+        game.indicator_targ.color = (0.75, .75, .75, 1.)
+        
+        def on_target():
+            return game.check_if_cursors_in_targ(game.center_target_position, game.center_target_rad)
+        timeout = self._timeout(on_target, game.cht)
+        yield from timeout
+        if not timeout.hit_timeout:
+            # game.state = 'hold_error'
+            game.center_target.color = (0., 0., 0., 1.)
+            game._hide_periph()
+            game.repeat = True
+            return
+        
+        if game.reward_for_center[0]:
+            game.run_small_rew()
+        
+        # game.state = 'target'
+        game.state = 'none'
+        Window.clearcolor = (0., 0., 0., 1.)
+        game.center_target.color = (0., 0., 0., 0.)
+        
+        if game.repeat is False:
+            game.periph_target_position = game.target_list[game.target_index, :]
+            game.target_index += 1
+        game.periph_target.move(game.periph_target_position)
+        game._show_periph()
+        game.repeat = False
+        game.exit_target1.color = (.15, .15, .15, 1)
+        game.exit_target2.color = (.15, .15, .15, 1)
+        game.indicator_targ.color = (.25, .25, .25, 1.)
+        if game.first_target_attempt:
+            game.first_target_attempt_t0 = time.time();
+            game.first_target_attempt = False
+        
+        race = self._race(
+            touch=self._until(lambda: game.periph_target_touched()),
+            anytouch=self._until(lambda: game.anytouch()),
+            timeout=self._wait(game.target_timeout_time)
+        )
+        yield from race
+        
+        if race.first == 'touch':
+            # game.state = 'targ_hold'
+            # game._start_targ_hold()
+            game.state = 'none'
+            game._green_periph()
+            game.indicator_targ.color = (0.75, .75, .75, 1.)
+            
+            race = self._race(
+                early_release=self._until(lambda: not game.periph_target_touched()),
+                drag_out=self._until(lambda: game.targ_drag_out()),
+                timeout=self._wait(game.tht)
+            )
+            yield from race
+            
+            if race.first == 'early_release':
+                yield from self._wait(game.hold_error_timeout)
+                return
+            elif race.first == 'drag_out':
+                yield from self._wait(game.drag_error_timeout)
+                return
+            elif race.first == 'timeout':
+                game._start_reward()
+                
+                while not game.end_reward():
+                    if game.rew_cnt == 1:
+                        game.run_big_rew()
+                        game.rew_cnt += 1
+                    yield
+                
+            else:
+                raise ValueError()
+            
+        elif race.first == 'anytouch':
+            # game.state = 'rew_anytouch'
+            # game._start_rew_anytouch()
+            game.state = 'none'
+            
+            print('anytouch')
+            if game.reward_for_anytouch[0]:
+                game.run_small_rew()
+            else:
+                return
+            while not game.end_rewanytouch():
+                pass
+        elif race.first == 'timeout':
+            game.center_target.color = (0., 0., 0., 1.)
+            game._hide_periph()
+            center_done[0] = True
+            return
+        else:
+            raise ValueError()
+        
+        # yield from self._until(lambda: game.state == 'center')
+        
+        center_done[0] = True
+    
+    def run_trial(self):
+        game = self.co_game
+        with ExitStack() as trial_stack:
+            # ITI_mean + ITI_std
+            Window.clearcolor = (0., 0., 0., 1.)
+            self.co_game.exit_target1.color = (.15, .15, .15, 1.)
+            self.co_game.exit_target2.color = (.15, .15, .15, 1.)
+            
+            if type(self.co_game.cht_type) is str:
+                cht_min, cht_max = self.co_game.cht_type.split('-')
+                self.cht = ((float(cht_max) - float(cht_min)) * np.random.random()) + float(cht_min)
+            
+            if type(self.co_game.tht_type) is str:
+                tht_min, tht_max = self.co_game.tht_type.split('-')
+                self.tht = ((float(tht_max) - float(tht_min)) * np.random.random()) + float(tht_min)
+            
+            self.co_game.center_target.color = (0., 0., 0., 0.)
+            self.co_game._hide_periph()
+            self.co_game.indicator_targ.color = (0., 0., 0., 0.)
+            
+            iti = np.random.random()*self.co_game.ITI_std + self.co_game.ITI_mean
+            yield from self._wait(iti)
+            
+            # game.state = 'vid_trig'
+            game.state = 'none'
+            # game._start_vid_trig()
+            if game.trial_counter == 0:
+                yield from self._wait(1)
+            game.first_target_attempt = True
+            
+            # wait for self.pre_start_vid_ts
+            yield from self._wait(0.1)
+            
+            center_done = [False]
+            while not center_done[0]:
+                yield from self.run_center(center_done)
+            
+            yield from self._wait(2)
+    
 
 def parse_args():
     parser = argparse.ArgumentParser(description='')
