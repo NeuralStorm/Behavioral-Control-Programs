@@ -25,14 +25,23 @@ from numpy import binary_repr
 import struct
 from sys import platform
 import sys
+import os
 import argparse
 from pathlib import Path
+import threading
+import json
 import hjson
 
 # errors will happen if more trials than MAX_TRIALS are done
 # this value is used to generate some fixed size lists used by the program
 # the max_trials config value is checked to ensure it's below or equal to this value
 MAX_TRIALS = 10000
+
+SAFE_MODE = 'safe' in os.environ
+if SAFE_MODE:
+    print('safe mode')
+
+game_state_holder: Any = [None]
 
 Config.set('graphics', 'resizable', False)
 if platform == 'darwin':
@@ -734,7 +743,9 @@ class COGame(Widget):
                 #print(self.reward_generator[:100])
                 self.reward1 = SoundLoader.load('reward1.wav')
                 self.reward1.play()
-
+                
+                if SAFE_MODE:
+                    return
                 if not self.skip_juice:
                     if self.reward_generator[self.trial_counter] > 0:
                         if self.plexon:
@@ -759,7 +770,9 @@ class COGame(Widget):
                 #winsound.PlaySound('beep1.wav', winsound.SND_ASYNC)
                 sound = SoundLoader.load('reward2.wav')
                 sound.play()
-
+                
+                if SAFE_MODE:
+                    return
                 ### To trigger reward make sure reward is > 0:
                 if np.logical_or(np.logical_and(self.reward_for_anytouch[0], self.reward_for_anytouch[1] > 0), 
                     np.logical_and(self.reward_for_center[0], self.reward_for_center[1] > 0)):
@@ -1186,7 +1199,7 @@ class Manager(ScreenManager):
         self.current = 'game_screen'
         game = self.ids['game']
         game.init(**self.params)
-        GameState(game)
+        game_state_holder[0] = GameState(game)
         Clock.schedule_interval(game.update, 1.0 / 60.0)
 
 class COApp(App):
@@ -1274,25 +1287,29 @@ class Nidaq:
         # self.task = nidaqmx.Task()
         # task = self.task
         
-        for task in self.tasks:
-            task.timing.cfg_samp_clk_timing(
-                1000,
-                sample_mode = AcquisitionType.CONTINUOUS,
-            )
-            task.out_stream.output_buf_size = 1000
-            task.out_stream.regen_mode = RegenerationMode.DONT_ALLOW_REGENERATION
+        for pin, task in zip(pins, self.tasks):
+            task.do_channels.add_do_chan(pin, line_grouping = LineGrouping.CHAN_PER_LINE)
+            
+            # print(task.timing.samp_timing_type)
+            # input()
+            # task.timing.cfg_samp_clk_timing(
+            #     1000,
+            #     sample_mode = AcquisitionType.CONTINUOUS,
+            # )
+            # task.out_stream.output_buf_size = 1000
+            # task.out_stream.regen_mode = RegenerationMode.DONT_ALLOW_REGENERATION
         
         # 4ms pulse
-        self.pulse = [
-            *([1]*4),
-            0
-        ]
+        # self.pulse = [
+        #     *([1]*4),
+        #     0
+        # ]
         
         # pin_list = pins
         # port = 1
         # self.task.do_channels.add_do_chan(f"/Dev6/port{port}/line0:7", line_grouping = LineGrouping.CHAN_PER_LINE)
-        for pin, task in zip(pins, self.tasks):
-            task.do_channels.add_do_chan(pin, line_grouping = LineGrouping.CHAN_PER_LINE)
+        
+        
         
         
     
@@ -1300,9 +1317,21 @@ class Nidaq:
         for task in self.tasks:
             task.start()
     
+    def stop(self):
+        for task in self.tasks:
+            task.stop()
+    
     def pulse_pin(self, pin):
         idx = self.pins.index(pin)
-        self.tasks[idx].write(self.pulse)
+        # self.tasks[idx].write(self.pulse)
+        self.tasks[idx].write(True)
+        def pulse_end():
+            time.sleep(0.004) # 4ms wait
+            self.tasks[idx].write(False)
+        thread = threading.Thread(target=pulse_end)
+        thread.start()
+        # time.sleep(0.006)
+        # self.tasks[idx].write(False)
 
 class GameState:
     def __init__(self, co_game: COGame):
@@ -1315,10 +1344,55 @@ class GameState:
         
         self.event_log = []
         
+        dev = 'Dev3'
         self.plexon_event_types = {
-            'test': {
-                'nidaq_pin': '',
-                'plexon_channel': 2,
+            'center_show': {
+                'nidaq_pin': f'/{dev}/port0/line0',
+                'plexon_channel': 17,
+            },
+            'center_touch': {
+                'nidaq_pin': f'/{dev}/port0/line1',
+                'plexon_channel': 18,
+            },
+            'center_hide': {
+                'nidaq_pin': f'/{dev}/port0/line2',
+                'plexon_channel': 19,
+            },
+            'periph_show': {
+                'nidaq_pin': f'/{dev}/port0/line3',
+                'plexon_channel': 20,
+            },
+            'periph_touch': {
+                'nidaq_pin': f'/{dev}/port0/line4',
+                'plexon_channel': 21,
+            },
+            'periph_hide': {
+                'nidaq_pin': f'/{dev}/port0/line5',
+                'plexon_channel': 22,
+            },
+            'top_left': {
+                'nidaq_pin': f'/{dev}/port0/line6',
+                'plexon_channel': 23,
+            },
+            'top_right': {
+                'nidaq_pin': f'/{dev}/port0/line7',
+                'plexon_channel': 24,
+            },
+            'bottom_left': {
+                'nidaq_pin': f'/{dev}/port1/line0',
+                'plexon_channel': 25,
+            },
+            'bottom_right': {
+                'nidaq_pin': f'/{dev}/port1/line1',
+                'plexon_channel': 26,
+            },
+            'trial_correct': {
+                'nidaq_pin': f'/{dev}/port1/line2',
+                'plexon_channel': 27,
+            },
+            'trial_incorrect': {
+                'nidaq_pin': f'/{dev}/port1/line3',
+                'plexon_channel': 28,
             },
         }
         self.nidaq_enabled = '--test' not in sys.argv
@@ -1347,12 +1421,16 @@ class GameState:
         self.event_log.append(out)
     
     def send_plexon_event(self, name, *, info=None):
+        print(name)
         tags = ['plexon_send']
         if info is None:
             info = {}
         event_info = self.plexon_event_types[name]
+        info['nidaq_pin'] = event_info['nidaq_pin']
+        info['plexon_channel'] = event_info['plexon_channel']
         if self.nidaq is not None:
             self.nidaq.pulse_pin(event_info['nidaq_pin'])
+        else:
             info['no_hardware'] = True
         self.log_event(name, tags=tags, info=info)
     
@@ -1385,7 +1463,7 @@ class GameState:
         while True:
             if trial_i >= self.co_game.max_trials:
                 break
-            print('main loop')
+            # print('main loop')
             yield from self.run_trial()
             trial_i += 1
             # break
@@ -1394,13 +1472,15 @@ class GameState:
         game = self.co_game
         
         # self.co_game.state = 'center'
-        game.state = 'none'
+        # game.state = 'none'
         # game._start_center()
         Window.clearcolor = (0., 0., 0., 1.)
+        self.send_plexon_event('center_show')
         game.center_target.color = (1., 1., 0., 1.)
         game.exit_target1.color = (.15, .15, .15, 1)
         game.exit_target2.color = (.15, .15, .15, 1)
         # self.periph_target.color = (0., 0., 0., 0.) ### Make peripheral target alpha = 0 so doesn't obscure 
+        self.send_plexon_event('periph_hide')
         game._hide_periph()
         game.indicator_targ.color = (.25, .25, .25, 1.)
         
@@ -1412,26 +1492,33 @@ class GameState:
                     game.check_if_cursors_in_targ(game.center_target_position, game.center_target_rad) and \
                     game.check_if_started_in_targ(game.center_target_position, game.center_target_rad)
         
+        # wait for touch to be on center
         timeout = self._timeout(lambda: (not check_touch_center()), game.ch_timeout)
         yield from timeout
         if timeout.hit_timeout:
+            self.send_plexon_event('trial_incorrect')
+            self.send_plexon_event('center_hide')
             game.center_target.color = (0., 0., 0., 1.)
             game._hide_periph()
             yield from self._wait(game.timeout_error_timeout)
             return
+        self.send_plexon_event('center_touch')
         
         # print('state center_hold')
         # game.state = 'center_hold'
-        game.state = 'none'
+        # game.state = 'none'
         game.center_target.color = (0., 1., 0., 1.)
         game.indicator_targ.color = (0.75, .75, .75, 1.)
         
+        # check that touch remains on center for "cht"
         def on_target():
             return game.check_if_cursors_in_targ(game.center_target_position, game.center_target_rad)
         timeout = self._timeout(on_target, game.cht)
         yield from timeout
         if not timeout.hit_timeout:
+            self.send_plexon_event('trial_incorrect')
             # game.state = 'hold_error'
+            self.send_plexon_event('center_hide')
             game.center_target.color = (0., 0., 0., 1.)
             game._hide_periph()
             game.repeat = True
@@ -1440,15 +1527,28 @@ class GameState:
         if game.reward_for_center[0]:
             game.run_small_rew()
         
+        self.send_plexon_event('center_hide')
         # game.state = 'target'
-        game.state = 'none'
+        # game.state = 'none'
         Window.clearcolor = (0., 0., 0., 1.)
         game.center_target.color = (0., 0., 0., 0.)
         
         if game.repeat is False:
+            # print('target idx', game.target_index)
             game.periph_target_position = game.target_list[game.target_index, :]
+            # print(game.periph_target_position)
+            x, y = game.periph_target_position
+            if x < 0 and y > 0:
+                self.send_plexon_event('top_left')
+            elif x > 0 and y > 0:
+                self.send_plexon_event('top_right')
+            elif x < 0 and y < 0:
+                self.send_plexon_event('bottom_left')
+            elif x > 0 and y < 0:
+                self.send_plexon_event('bottom_right')
             game.target_index += 1
         game.periph_target.move(game.periph_target_position)
+        self.send_plexon_event('periph_show')
         game._show_periph()
         game.repeat = False
         game.exit_target1.color = (.15, .15, .15, 1)
@@ -1460,15 +1560,17 @@ class GameState:
         
         race = self._race(
             touch=self._until(lambda: game.periph_target_touched()),
-            anytouch=self._until(lambda: game.anytouch()),
+            # anytouch=self._until(lambda: game.anytouch()),
             timeout=self._wait(game.target_timeout_time)
         )
         yield from race
         
         if race.first == 'touch':
+            self.send_plexon_event('periph_touch')
+            
             # game.state = 'targ_hold'
             # game._start_targ_hold()
-            game.state = 'none'
+            # game.state = 'none'
             game._green_periph()
             game.indicator_targ.color = (0.75, .75, .75, 1.)
             
@@ -1481,11 +1583,15 @@ class GameState:
             
             if race.first == 'early_release':
                 yield from self._wait(game.hold_error_timeout)
+                self.send_plexon_event('trial_incorrect')
                 return
             elif race.first == 'drag_out':
                 yield from self._wait(game.drag_error_timeout)
+                self.send_plexon_event('trial_incorrect')
                 return
             elif race.first == 'timeout':
+                self.send_plexon_event('periph_hide')
+                self.send_plexon_event('trial_correct')
                 game._start_reward()
                 
                 while not game.end_reward():
@@ -1500,16 +1606,15 @@ class GameState:
         elif race.first == 'anytouch':
             # game.state = 'rew_anytouch'
             # game._start_rew_anytouch()
-            game.state = 'none'
+            # game.state = 'none'
             
             print('anytouch')
             if game.reward_for_anytouch[0]:
                 game.run_small_rew()
             else:
                 return
-            while not game.end_rewanytouch():
-                pass
         elif race.first == 'timeout':
+            self.send_plexon_event('periph_hide')
             game.center_target.color = (0., 0., 0., 1.)
             game._hide_periph()
             center_done[0] = True
@@ -1537,6 +1642,8 @@ class GameState:
                 tht_min, tht_max = self.co_game.tht_type.split('-')
                 self.tht = ((float(tht_max) - float(tht_min)) * np.random.random()) + float(tht_min)
             
+            self.send_plexon_event('center_hide')
+            self.send_plexon_event('periph_hide')
             self.co_game.center_target.color = (0., 0., 0., 0.)
             self.co_game._hide_periph()
             self.co_game.indicator_targ.color = (0., 0., 0., 0.)
@@ -1580,7 +1687,19 @@ def main():
     config_path = Path(args.config)
     assert config_path.is_file()
     
-    COApp(config_path).run()
+    try:
+        COApp(config_path).run()
+    finally:
+        if game_state_holder[0] is not None:
+            state: GameState = game_state_holder[0]
+            # print(state.co_game.filename)
+            out = {
+                'events': state.event_log,
+            }
+            with open(f"{state.co_game.filename}_meta.json", 'w') as f:
+                json.dump(out, f, indent=4)
+            if state.nidaq is not None:
+                state.nidaq.stop()
 
 if __name__ == '__main__':
     main()
