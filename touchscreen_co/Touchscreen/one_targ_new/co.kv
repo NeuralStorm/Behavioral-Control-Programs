@@ -984,6 +984,7 @@
     exit_target1: target_e1
     exit_target2: target_e2
     indicator_targ: indicator
+    photo_marker: photo_marker
 
     Target:
         id: indicator
@@ -1088,9 +1089,18 @@
         center_x: root.width * 5/8
         top: root.top - 670
         text: root.nudge_param
+    
+    PhotoMarker:
+        id: photo_marker
 
 
-
+<PhotoMarker>:
+    canvas:
+        Color:
+            rgba: self.color
+        Rectangle:
+            size: (100, 100)
+            pos: self.pos
 
 
 <Target>:

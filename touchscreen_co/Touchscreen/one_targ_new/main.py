@@ -44,6 +44,7 @@ if SAFE_MODE:
 game_state_holder: Any = [None]
 
 Config.set('graphics', 'resizable', False)
+# Config.set('graphics', 'resizable', True)
 if platform == 'darwin':
     fixed_window_size = (3072, 1920)
     pix_per_cm = 89.
@@ -132,7 +133,9 @@ class COGame(Widget):
 
     center_target = ObjectProperty(None)
     periph_target = ObjectProperty(None)
-
+    
+    photo_marker = ObjectProperty(None)
+    
     done_init = False
     prev_exit_ts = np.array([0,0])
 
@@ -190,6 +193,8 @@ class COGame(Widget):
         self.plexon = '--test' not in sys.argv
         
         self.update_callback: Optional[Any] = None
+        
+        self.width, self.height = Window.size
         
         assert peripheral_target is not None
         self.peripheral_target_param = peripheral_target
@@ -520,6 +525,23 @@ class COGame(Widget):
                 self._init_plex_do()
         # except:
         #     pass
+        
+        self.handle_reposition()
+        self.bind(
+            on_rezise=self.handle_reposition,
+            # on_size=self.handle_reposition,
+            on_pos=self.handle_reposition
+        )
+        Window.bind(on_resize=self.handle_window_resize)
+    
+    def handle_window_resize(self, _root, width, height):
+        # self.width = width
+        # self.height = height
+        self.size = (width, height)
+        self.handle_reposition()
+    
+    def handle_reposition(self):
+        self.photo_marker.reposition(self)
     
     def _init_plex_do(self):
         from pyplexdo import PyPlexDO
@@ -546,6 +568,9 @@ class COGame(Widget):
             print("Couldn't initialize device. Exiting.")
             sys.exit(1)
         self.plex_do.clear_all_bits(device_number)
+    
+    def hide_center(self):
+        self.center_target.color = 0, 0, 0, 0
     
     def _set_periph_color(self, color):
         shape, _ = self.peripheral_target_param
@@ -980,6 +1005,47 @@ class Target(Widget):
         ]
         # self.center = 0, 0
 
+class PhotoMarker(Widget):
+    color = ListProperty((0, 0, 0, 0))
+    photo_marker = ObjectProperty(None)
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # color = ListProperty((0, 0, 0, 0))
+    pass
+    
+    def bright(self):
+        self.color = 1, 1, 1, 1
+    
+    def dim(self):
+        self.color = 0.5, 0.5, 0.5, 1
+    
+    def off(self):
+        self.color = 0, 0, 0, 0
+    
+    def set_color(self, r, g, b):
+        _, _, _, a = self.color
+        self.color = r, g, b, a
+    
+    def show(self):
+        r, g, b, _ = self.color
+        self.color = r, g, b, 1
+    
+    def hide(self):
+        r, g, b, _ = self.color
+        self.color = r, g, b, 0
+    
+    def reposition(self, root):
+        # print(root)
+        # print(root.width, root.height)
+        # print(Window.size)
+        # sys.exit(1)
+        # self.top = root.height
+        # self.top = root.top
+        # self.right = root.width
+        self.bottom = root.y
+        self.left = root.x
+
 class Manager(ScreenManager):
     _splash = ObjectProperty(None)
     
@@ -1013,6 +1079,8 @@ class Manager(ScreenManager):
         
         self.store_co_game_params_config_file(config_path)
         self.current = 'splash_start'
+        
+        # self.bind(on_resize=print, on_size=print)
     
     def store_co_game_params_config_file(self, config_path: Path):
         with open(config_path) as f:
@@ -1206,6 +1274,10 @@ class COApp(App):
     def __init__(self, config_path: Path):
         super(COApp, self).__init__()
         self._config_path = config_path
+        
+        # self.bind(on_resize=print, on_size=print, size=print)
+        # Window.bind(size=print)
+        Window.bind(on_resize=print)
     
     def build(self, **kwargs):
         if platform == 'darwin':
@@ -1470,12 +1542,14 @@ class GameState:
     
     def run_center(self, center_done):
         game = self.co_game
+        pm = game.photo_marker
         
         # self.co_game.state = 'center'
         # game.state = 'none'
         # game._start_center()
         Window.clearcolor = (0., 0., 0., 1.)
         self.send_plexon_event('center_show')
+        pm.bright()
         game.center_target.color = (1., 1., 0., 1.)
         game.exit_target1.color = (.15, .15, .15, 1)
         game.exit_target2.color = (.15, .15, .15, 1)
@@ -1507,6 +1581,10 @@ class GameState:
         # print('state center_hold')
         # game.state = 'center_hold'
         # game.state = 'none'
+        
+        # center turns green while touched
+        pm.dim()
+        # pm.off()
         game.center_target.color = (0., 1., 0., 1.)
         game.indicator_targ.color = (0.75, .75, .75, 1.)
         
@@ -1531,7 +1609,8 @@ class GameState:
         # game.state = 'target'
         # game.state = 'none'
         Window.clearcolor = (0., 0., 0., 1.)
-        game.center_target.color = (0., 0., 0., 0.)
+        # game.center_target.color = (0., 0., 0., 0.)
+        game.hide_center()
         
         if game.repeat is False:
             # print('target idx', game.target_index)
@@ -1549,6 +1628,7 @@ class GameState:
             game.target_index += 1
         game.periph_target.move(game.periph_target_position)
         self.send_plexon_event('periph_show')
+        pm.off()
         game._show_periph()
         game.repeat = False
         game.exit_target1.color = (.15, .15, .15, 1)
@@ -1644,7 +1724,8 @@ class GameState:
             
             self.send_plexon_event('center_hide')
             self.send_plexon_event('periph_hide')
-            self.co_game.center_target.color = (0., 0., 0., 0.)
+            # self.co_game.center_target.color = (0., 0., 0., 0.)
+            game.hide_center()
             self.co_game._hide_periph()
             self.co_game.indicator_targ.color = (0., 0., 0., 0.)
             
