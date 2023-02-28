@@ -578,13 +578,38 @@ class GameFrame(tk.Frame):
             background = bgc('#F0B000'), bd = 0, relief = tk.FLAT,
             highlightthickness=0,)
         self.cv1.pack(side = tk.BOTTOM, expand=True, fill=tk.BOTH)
+        # self.cv1.grid(column=0, row=0, columnspan=2, rowspan=2, sticky='nsew')
+        # self.frame1.columnconfigure(0, weight=1)
+        # self.frame1.columnconfigure(1, weight=1)
+        # self.frame1.rowconfigure(0, weight=1)
+        # self.frame1.rowconfigure(1, weight=1)
         
         btn_frame = tk.Frame(parent,
             # width = canvas_x, height = canvas_y,
+            # height=0 if hide_buttons else 100,
             bd = 0, bg=bgc('green'),
             highlightthickness=0)
+        # btn_frame.pack_propagate(False)
         btn_frame.pack(side = tk.TOP, expand=False, fill=tk.BOTH)
         self._button_frame = btn_frame
+        
+        # top left
+        # pm_parent = self._button_frame
+        # pm_side = tk.LEFT
+        # bottom right
+        # pm_parent = self.frame1
+        pm_parent = parent
+        # pm_side = tk.BOTTOM
+        
+        self.photo_marker = tk.Canvas(pm_parent,
+            height=100, width=100,
+            background='#000000',
+            bd=0, relief=tk.FLAT,
+            highlightthickness=0,
+        )
+        # self.photo_marker.pack(side=pm_side, expand=False)
+        self.photo_marker.place(x=0, y=-100, rely=1)
+        # self.photo_marker.grid(column=0, row=1)
     
     def _bgc(self, color: str) -> str:
         return color if self._layout_debug else 'black'
@@ -606,6 +631,13 @@ class GameFrame(tk.Frame):
             highlightbackground='grey',
         )
         b.pack(side = tk.LEFT)
+        # b.pack(side = tk.LEFT, fill=tk.BOTH)
+    
+    def set_marker_level(self, level):
+        # self.photo_marker.create_rectangle(0, 0, 100, 100, fill='white')
+        component = f"{round(level*255):2<0x}"
+        color = '#' + component*3
+        self.photo_marker.create_rectangle(0, 0, 100, 100, fill=color)
 
 ##############################################################################################
 ###M onkey Images Class set up for Tkinter GUI
@@ -922,6 +954,7 @@ class MonkeyImages:
     
     def run_trial(self):
         with ExitStack() as trial_stack:
+            trial_stack.callback(lambda: self.game_frame.set_marker_level(0))
             discrim_delay = random.uniform(*self.config.discrim_delay_range)
             go_cue_delay = random.uniform(*self.config.go_cue_delay_range)
             
@@ -1028,6 +1061,8 @@ class MonkeyImages:
                 self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event7,None,None)
                 self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
             
+            self.game_frame.set_marker_level(1)
+            
             gc_hand_removed_early = False
             # yield from waiter.wait(t=discrim_delay, event='homezone_exit')
             yield from waiter.wait(t=discrim_delay, cond=lambda: not in_zone())
@@ -1050,6 +1085,7 @@ class MonkeyImages:
                 cb.clear()
             
             if not gc_hand_removed_early:
+                self.game_frame.set_marker_level(0.7)
                 # display image without red box
                 self.show_image(selected_image_key)
                 self.log_event('discrim_shown', tags=['game_flow'], info={
@@ -1072,6 +1108,7 @@ class MonkeyImages:
             if gc_hand_removed_early:
                 in_zone_at_go_cue = False
             else:
+                self.game_frame.set_marker_level(0.5)
                 # display image with box
                 self.show_image(selected_image_key, boxed=True)
                 self.log_event('go_cue_shown', tags=['game_flow'], info={
@@ -1110,6 +1147,7 @@ class MonkeyImages:
                     yield
                 
                 pull_start = trial_t()
+                self.game_frame.set_marker_level(0.2)
                 
                 while self.joystick_pulled:
                     yield
@@ -1143,6 +1181,7 @@ class MonkeyImages:
                 
                 exit_time = trial_t()
                 exit_delay = exit_time - cue_time
+                self.game_frame.set_marker_level(0.2)
                 
                 reward_duration = self.ChooseReward(exit_delay, cue=selected_image_key)
                 
@@ -1160,6 +1199,8 @@ class MonkeyImages:
                 action_duration = pull_duration
             else:
                 assert False, f"invalid task_type {task_type}"
+            
+            self.game_frame.set_marker_level(0)
             
             self.log_event('task_completed', tags=['game_flow'], info={
                 'reward_duration': reward_duration,
@@ -1457,7 +1498,7 @@ class MonkeyImages:
         self.game_frame.cv1.delete("all")
     
     def gathering_data_omni_new(self):
-        self.client.opx_wait(1000)
+        self.client.opx_wait(5)
         new_data = self.client.get_new_data()
         
         # joystick threshold
