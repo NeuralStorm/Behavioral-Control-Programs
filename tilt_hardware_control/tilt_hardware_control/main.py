@@ -25,8 +25,9 @@ from psth_tilt import PsthTiltPlatform
 from util import hash_file
 from util_multiprocess import spawn_process
 from util_nidaq import line_wait
-from classifier import Classifier, classifier_map, RandomClassifier
-from classifier.psth_new import EuclClassifier, build_template_file
+from classifier import Classifier
+import behavioral_classifiers
+from behavioral_classifiers.eucl_classifier import build_template_file
 from stimulation import spawn_random_stimulus_process, State as StimState, TiltStimulation
 
 from grf_data import record_data, RecordState
@@ -123,7 +124,7 @@ def run_psth_loop(platform: PsthTiltPlatform, tilt_sequence, *,
             sham_decodes.append(p_tilt_type)
             sham_delays.append(tilt['delay'])
     
-    input_queue: 'Queue[str]' = Queue(1)
+    input_queue: 'Queue[Any]' = Queue(1)
     def input_thread():
         while True:
             input("")
@@ -268,7 +269,10 @@ def run_psth_loop(platform: PsthTiltPlatform, tilt_sequence, *,
         for a, p in zip(actual, predicted):
             if a == p:
                 correct_trials += 1
-        decoder_accuracy = correct_trials / len(actual)
+        if len(actual) == 0:
+            decoder_accuracy = 0
+        else:
+            decoder_accuracy = correct_trials / len(actual)
         print(f"Accuracy = {correct_trials} / {len(actual)} = {decoder_accuracy}")
         output_extra['accuracy'] = {
             'correct': correct_trials,
@@ -399,7 +403,7 @@ def load_config(path: Path, labels_path: Optional[Path]) -> Config:
         config.sequence_shuffle = data['sequence_shuffle']
         assert type(config.sequence_shuffle) == bool
     else:
-        config.sequence_repeat = None
+        config.sequence_repeat = 1
         config.sequence_shuffle = False
     
     config.num_tilts = data['num_tilts']
@@ -637,7 +641,7 @@ def main():
         if stim_mode != 'random':
             print(f'invalid stim mode {stim_mode}')
             return
-        stim_state = spawn_random_stimulus_process(config.stim_params, mock=args.mock, verbose=os.environ.get('print_stim'))
+        stim_state = spawn_random_stimulus_process(config.stim_params, mock=args.mock, verbose=bool(os.environ.get('print_stim')))
         input('press enter to exit')
         stim_state.stop()
         record_state.stop_recording()
@@ -666,7 +670,7 @@ def main():
     with ExitStack() as stack:
         
         if stim_mode == 'random':
-            stim_state = spawn_random_stimulus_process(config.stim_params, mock=args.mock, verbose=os.environ.get('print_stim'))
+            stim_state = spawn_random_stimulus_process(config.stim_params, mock=args.mock, verbose=bool(os.environ.get('print_stim')))
             _recording_check_event['stim'] = stim_state.failed
             stim_handler = None
         elif stim_mode == 'classifier':
@@ -728,37 +732,23 @@ def main():
             record_state.stop_recording()
         
         if mode == 'closed_loop':
-            classifier: Optional[Classifier]
-            if config.classifier in ['psth', 'eucl']:
-                classifier = EuclClassifier(
-                    post_time = post_time,
-                    bin_size = bin_size,
-                )
-                
-                if not baseline_recording:
-                    assert args.template_in is not None
-                if args.template_in is not None:
-                    with open(args.template_in, encoding='utf8') as f:
-                        template_in = json.load(f)
-                    assert classifier.post_time == template_in['info']['post_time'], f"{classifier.post_time} {template_in['info']['post_time']}"
-                    assert classifier.bin_size == template_in['info']['bin_size'], f"{classifier.bin_size} {template_in['info']['bin_size']}"
-                    classifier.templates = template_in['templates']
-                    # events_path = template_in.get('events_path')
-                    # if events_path is not None:
-                    #     events_path = Path(events_path)
-                    #     if not events_path.is_absolute():
-                    #         events_path = Path(args.template_in).parent / events_path
-                    #     with open(events_path, encoding='utf8') as f:
-                    #         events_record = json.load(f)
-                    #     classifier.build_template_from_events(template_in['tilts'], events_record)
-                    # else:
-                    #     classifier.build_template_from_record(template_in['tilts'])
-            elif config.classifier == 'random':
-                assert config.tilt_sequence is not None
-                random_choices = list(set(config.tilt_sequence))
-                classifier = RandomClassifier(random_choices)
+            assert baseline_recording is not None
+            # if not baseline_recording:
+            #     assert args.template_in is not None
+            if args.template_in is not None:
+                template_in_path = Path(args.template_in)
             else:
-                raise ValueError(f"unknown classifier `{config.classifier}`")
+                template_in_path = None
+            
+            classifier_config = {
+                'type': config.classifier,
+                'post_time': post_time,
+                'bin_size': bin_size,
+                # 'template': templates,
+                'event_types': list(set(tilt_sequence)),
+            }
+            
+            classifier: Optional[Classifier] = behavioral_classifiers.from_config(classifier_config, template_in_path, baseline=baseline_recording)
         else:
             classifier = None
             baseline_recording = True
@@ -799,7 +789,7 @@ def main():
         stack.callback(stop_recording)
         
         if args.events_out is not None:
-            events_file = stack.enter_context(open(args.events_out, 'w', encoding='utf8'))
+            events_file = stack.enter_context(open(args.events_out, 'w', encoding='utf8', newline='\n'))
             events_file.write('[\n')
             def finish_write_events():
                 events_file.write('\n]\n')
@@ -815,7 +805,7 @@ def main():
         
         run_psth_loop(
             platform, tilt_sequence,
-            yoked = config.yoked, retry_failed = args.retry,
+            yoked = bool(config.yoked), retry_failed = args.retry,
             output_extra = output_extra,
             template_in_path = args.template_in,
             stim_state = stim_state,

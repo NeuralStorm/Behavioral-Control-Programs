@@ -3,6 +3,7 @@ from typing import List, Literal, Any, TypedDict, Dict
 import time
 from math import floor
 from multiprocessing import Pipe, Event
+from multiprocessing.synchronize import Event as EventT
 from multiprocessing.connection import Connection
 from contextlib import ExitStack
 
@@ -267,7 +268,7 @@ class SerialMotorProcessError(Exception):
 class SerialMotorProcessStuck(Exception):
     """Thrown if the motor control process does not exit in a timely mannery after being sent a stop command"""
 
-def _wrapper_inner(pipe: Connection, start_event: Event, mid_event: Event, *, collect_positions: bool = False):
+def _wrapper_inner(pipe: Connection, start_event: EventT, mid_event: EventT, *, collect_positions: bool = False):
     with ExitStack() as stack:
         class ErrorHandler:
             def __enter__(self):
@@ -291,8 +292,8 @@ def _wrapper_inner(pipe: Connection, start_event: Event, mid_event: Event, *, co
         
         out_list_off = [False for _ in channels]
         
-        import nidaqmx
-        from nidaqmx.constants import LineGrouping
+        import nidaqmx # type: ignore
+        from nidaqmx.constants import LineGrouping # type: ignore
         task = stack.enter_context(nidaqmx.Task())
         task.do_channels.add_do_chan(','.join(channels), line_grouping = LineGrouping.CHAN_PER_LINE)
         task.start()
@@ -387,8 +388,8 @@ class SerialMotorOutputWrapper:
     """wraps SerialMotorControl and sets nidaq output based on state"""
     def __init__(self):
         pipe, child_pipe = Pipe()
-        self._start_event = Event()
-        self._mid_event = Event()
+        self._start_event: EventT = Event()
+        self._mid_event: EventT = Event()
         self._proc = spawn_process(_wrapper_inner, child_pipe, self._start_event, self._mid_event)
         self._pipe: Connection = pipe
     
@@ -397,6 +398,9 @@ class SerialMotorOutputWrapper:
         self._proc.join(5)
         if self._proc.exitcode is None:
             raise SerialMotorProcessStuck()
+    
+    def wait_for_tilt_start(self):
+        self._start_event.wait(timeout=5)
     
     def wait_for_tilt_finish(self):
         res = self._pipe.recv()
@@ -420,14 +424,20 @@ class SerialMotorOutputWrapper:
         return out
     
     def tilt(self, tilt_type: str):
+        self._start_event.clear()
+        self._mid_event.clear()
         if tilt_type == 'stop':
             return
         self._pipe.send(['tilt', tilt_type])
     
     def tilt_return(self):
+        self._start_event.set()
+        self._mid_event.set()
         self._pipe.send(['return'])
     
     def tilt_punish(self):
+        self._start_event.set()
+        self._mid_event.set()
         self._pipe.send(['punish'])
     
     def stop(self):
@@ -438,9 +448,9 @@ class MotorControl:
         self.mock: bool = mock
         
         if mock:
-            self.task = None
+            self.task: Any = None
         else:
-            import nidaqmx
+            import nidaqmx # type: ignore
             task = nidaqmx.Task()
             task.do_channels.add_do_chan(f"/Dev6/port{port}/line0:7")
             

@@ -498,6 +498,7 @@ def _live_view(
             
             y_max = graph_info.get('y_max')
             view_box = plot.getViewBox()
+            assert view_box is not None
             if y_max:
                 view_box.disableAutoRange(axis=ViewBox.YAxis)
                 view_box.setRange(yRange=(0, y_max))
@@ -732,9 +733,9 @@ def record_data(*,
             )
         
         if not mock:
-            import nidaqmx # pylint: disable=import-error
+            import nidaqmx # type: ignore # pylint: disable=import-error
             # pylint: disable=import-error
-            from nidaqmx.constants import LineGrouping, Edge, AcquisitionType, WAIT_INFINITELY
+            from nidaqmx.constants import LineGrouping, Edge, AcquisitionType, WAIT_INFINITELY # type: ignore
             
             task: Any = stack.enter_context(nidaqmx.Task())
             digital_task: Any = stack.enter_context(nidaqmx.Task())
@@ -825,6 +826,8 @@ def record_data(*,
                 writer.writerow([json.dumps(output_meta, indent=2)])
             
             writer.writerow(csv_headers + ['Timestamp'])
+        else:
+            writer = None
         
         task.start()
         digital_task.start()
@@ -932,7 +935,7 @@ def record_data(*,
                     #             yield val
                     yield sample_i / clock_rate
                 
-                if csv_path is not None:
+                if writer is not None:
                     writer.writerow(gen_row())
                 
                 sample_i += 1

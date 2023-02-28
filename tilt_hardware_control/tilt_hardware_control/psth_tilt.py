@@ -59,8 +59,8 @@ class PsthTiltPlatform(AbstractContextManager):
         if not mock and reward_enabled:
             assert not isinstance(self.motor, MotorControl)
             
-            import nidaqmx
-            from nidaqmx.constants import LineGrouping
+            import nidaqmx # type: ignore
+            from nidaqmx.constants import LineGrouping # type: ignore
             
             self.water_task = nidaqmx.Task()
             self.water_task.do_channels.add_do_chan(f"/Dev6/port1/line4", line_grouping = LineGrouping.CHAN_PER_LINE)
@@ -165,6 +165,7 @@ class PsthTiltPlatform(AbstractContextManager):
             self.event_callback(rec)
     
     def _add_local_event(self, event_type, extra = None):
+        assert self._tilt_record is not None
         if extra is None:
             extra = {}
         rec = {
@@ -177,6 +178,7 @@ class PsthTiltPlatform(AbstractContextManager):
     def _collect_events(self,
         tilt_name: str,
         send_tilt_time: float,
+        secondary_tilt_time: Optional[float] = None,
     ):
         """collect events 
             """
@@ -220,8 +222,12 @@ class PsthTiltPlatform(AbstractContextManager):
                 
                 self._add_event_to_record(evt, relevent=is_relevent)
             
-            if time.perf_counter() - tilt_time >= self._post_time_ms:
-                break
+            if secondary_tilt_time is not None:
+                if time.perf_counter() - secondary_tilt_time >= self._post_time_ms:
+                    break
+            else:
+                if time.perf_counter() - tilt_time >= self._post_time_ms:
+                    break
         
         print('found event and collected ts')
         if tilt_time is not None:
@@ -229,6 +235,10 @@ class PsthTiltPlatform(AbstractContextManager):
         else:
             post_tilt_wait_time = None
         print('post tilt wait time', post_tilt_wait_time, 'send', time.perf_counter() - send_tilt_time)
+        if secondary_tilt_time is not None:
+            post_secondary_wait_time = time.perf_counter() - secondary_tilt_time
+            print(f"  secondary: {post_secondary_wait_time}")
+            print(f"    diff from plexon: {post_secondary_wait_time - (post_tilt_wait_time or 0)}")
         # print('post send tilt time', time.time() - send_tilt_time)
         
         got_response = found_event and collected_ts
@@ -240,6 +250,7 @@ class PsthTiltPlatform(AbstractContextManager):
     
     def tilt(self, *, tilt_name, yoked_prediction=None, delay=None):
         self._init_record()
+        assert self._tilt_record is not None
         tilt_record = self._tilt_record
         add_event_to_record = self._add_event_to_record
         
@@ -259,9 +270,18 @@ class PsthTiltPlatform(AbstractContextManager):
         self.motor.tilt(tilt_name)
         send_tilt_time = time.perf_counter()
         self._add_local_event('send_tilt')
+        if isinstance(self.motor, SerialMotorOutputWrapper):
+            self.motor.wait_for_tilt_start()
+            tilt_start_time = time.perf_counter()
+        else:
+            tilt_start_time = None
+        self._add_local_event('local_tilt_start')
         
         if self.collect_events and self.classifier is not None:
-            collect_result = self._collect_events(tilt_name, send_tilt_time)
+            collect_result = self._collect_events(
+                tilt_name, send_tilt_time,
+                secondary_tilt_time = tilt_start_time,
+            )
             got_response = collect_result['got_response']
         else:
             if self.tilt_duration is None:
@@ -272,7 +292,7 @@ class PsthTiltPlatform(AbstractContextManager):
         if not self.baseline_recording:
             if yoked_prediction is not None:
                 d_source = 'yoked'
-                predicted_tilt_type: str = yoked_prediction
+                predicted_tilt_type: Optional[str] = yoked_prediction
                 decoder_result = yoked_prediction == tilt_name
             elif got_response:
                 assert self.classifier is not None
@@ -288,6 +308,13 @@ class PsthTiltPlatform(AbstractContextManager):
             
             if self.stim_handler is not None and predicted_tilt_type is not None:
                 self.stim_handler.prediction_made(predicted_tilt_type, tilt_name)
+            
+            # global gdecoder_result
+            # try:
+            #     gdecoder_result = not gdecoder_result
+            # except NameError:
+            #     gdecoder_result = False
+            # decoder_result = gdecoder_result
             
             tilt_record['decoder_result_source'] = d_source
             tilt_record['decoder_result'] = decoder_result

@@ -113,7 +113,7 @@ class OpxSource(Source):
         self.EVENT_TYPE = EVENT_TYPE
         
         dll_path = Path(__file__).parent / 'bin'
-        self._opx_client = PyOPXClientAPI(opxclient_dll_path=dll_path)
+        self._opx_client = PyOPXClientAPI(opxclient_dll_path=str(dll_path))
         self._opx_client.connect()
         if not self._opx_client.connected:
             msg = "Client isn't connected. Error code: {}".format(self._opx_client.last_result)
@@ -222,7 +222,7 @@ class PyPlexSource(Source):
     def __init__(self):
         from pyplexclientts import PyPlexClientTSAPI, PL_SingleWFType, PL_ExtEventType
         dll_path = Path(__file__).parent / 'bin'
-        client = PyPlexClientTSAPI(plexclient_dll_path=dll_path)
+        client = PyPlexClientTSAPI(plexclient_dll_path=str(dll_path))
         client.init_client()
         self._PL_SingleWFType = PL_SingleWFType
         self._PL_ExtEventType = PL_ExtEventType
