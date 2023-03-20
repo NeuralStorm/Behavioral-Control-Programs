@@ -1041,9 +1041,9 @@ class PhotoMarker(Widget):
         # print(Window.size)
         # sys.exit(1)
         # self.top = root.height
-        # self.top = root.top
+        self.top = root.top
         # self.right = root.width
-        self.bottom = root.y
+        # self.bottom = root.y
         self.left = root.x
 
 class Manager(ScreenManager):
