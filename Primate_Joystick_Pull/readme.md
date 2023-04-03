@@ -1,13 +1,21 @@
 
 # Dependencies
 
+targets python 3.8
+
 Windows  
 get numpy and Pillow installed somehow
 
 Ubuntu  
 `sudo apt-get install python3 python3-pip python3-tk python3-pil.imagetk python3-numpy`
 
-tested with numpy version 1.19.4 but it isn't used heavily so a lot of versions probably work
+tested with numpy version 1.22.4 but it isn't used heavily so a lot of versions probably work
+
+install dependencies
+`pip install -r requirements.txt`
+`pip install -r requirements_hw.txt`
+`pip install -r requirements_histogram.txt`
+`pip install -e ../cassifiers`
 
 Optional parameters are considered unspecified if they are ommited, have no values, or have a single empty string value  
 The following lines are consided unspecified and will use the default value for `key`

@@ -12,7 +12,10 @@ class EuclClassifier(Classifier):
     """classifies tilts using a euclidian distance classifier
         """
     
-    def __init__(self, *, post_time: int, bin_size: int):
+    def __init__(self, *,
+        post_time: int, bin_size: int,
+        labels: Optional[Dict[str, List[int]]] = None,
+    ):
         """
             post_time: time after event to classify in in ms
             bin_size: in ms
@@ -32,12 +35,14 @@ class EuclClassifier(Classifier):
         
         # event_type -> psth dict
         self.templates: Dict[str, PsthDict] = {}
+        
+        self.labels: Optional[Dict[str, List[int]]] = labels
     
     def clear(self):
         self._current_event = None
         self.event_spike_list = []
     
-    def event(self, event_type: str, timestamp: float):
+    def event(self, *, event_type: str = '', timestamp: float):
         # convert to integer ms
         timestamp_ms = round(timestamp * 1000)
         
@@ -45,6 +50,12 @@ class EuclClassifier(Classifier):
         # self.event_spike_list = []
     
     def spike(self, channel: int, unit: int, timestamp: float):
+        if self.labels is not None:
+            if str(channel) in self.labels and unit in self.labels[str(channel)]:
+                pass
+            else:
+                return
+        
         timestamp_ms = round(timestamp * 1000)
         key = f"{channel}_{unit}"
         self.event_spike_list.append((key, timestamp_ms))
@@ -165,7 +176,7 @@ def build_templates(tilt_record, *, post_time: int, bin_size: int, events_record
         tilt_type = tilt['tilt_name']
         
         builder = EuclClassifier(post_time=post_time, bin_size=bin_size)
-        builder.event(tilt_type, tilt_time)
+        builder.event(timestamp = tilt_time)
         
         if events_record is not None:
             events = events_record
@@ -229,4 +240,122 @@ def build_template_file(meta_path: Path, events_path: Path, template_path: Path,
     }
     
     with open(template_path, 'w') as f:
+        json.dump(out_data, f, indent=2)
+
+def _build_templates_from_psths(
+    psths: Dict[str, List[EuclClassifier]],
+    builder: EuclClassifier,
+):
+    # builder = EuclClassifier(post_time=post_time, bin_size=bin_size)
+    # build_psth will create a list of zeros of the correct size since no event was created
+    
+    def average_psths(psths: List[List[int]]) -> List[float]:
+        acc = builder.zero_psth()
+        n = 0
+        
+        for psth in psths:
+            assert len(psth) == len(acc)
+            for i, x in enumerate(psth):
+                acc[i] += x
+                n += 1
+        return [x / n for x in acc]
+        # return [x for x in acc]
+    
+    templates = {}
+    for tilt_type, classifiers in psths.items():
+        chans = {}
+        chan_keys = set()
+        for classifier in classifiers:
+            chan_keys |= classifier.get_keys()
+        
+        for chan_key in chan_keys:
+            chan_psths = [c.build_key_psth(chan_key) for c in classifiers]
+            chans[chan_key] = average_psths(chan_psths)
+        
+        templates[tilt_type] = chans
+    
+    return templates
+
+def build_templates_from_new_events_file(*,
+    events_path: Path,
+    template_path: Path,
+    event_class: Optional[str],
+    post_time: int, bin_size: int,
+    labels: Optional[Dict[str, List[int]]],
+):
+    with open(events_path, 'r', encoding='utf8', newline='\n') as f:
+        events_data = json.load(f)
+    
+    def get_events():
+        with open(events_path, 'r', encoding='utf8', newline='\n') as f:
+            try:
+                next(f) # skip [
+            except StopIteration:
+                assert False
+            while True:
+                try:
+                    l = next(f)
+                except StopIteration:
+                    break
+                l = l.rstrip('\r\n')
+                if l == ']':
+                    break
+                l = l.rstrip(',')
+                yield json.loads(l)
+    
+    psths: Dict[str, List[EuclClassifier]] = {}
+    
+    def is_rel_event(rec):
+        if rec['type'] != 'event':
+            return False
+        
+        correct_class = rec.get('event_class') == event_class
+        if not correct_class:
+            return False
+        
+        return True
+    
+    def get_spikes_near(t):
+        # convert to seconds and double
+        max_dist = post_time/1000*2
+        for rec in events_data:
+        # for rec in get_events():
+            if rec['type'] != 'spike':
+                continue
+            # print(abs(t - rec['ext_t']))
+            if abs(t - rec['ext_t']) < max_dist:
+                yield rec
+    
+    event_recs = (x for x in events_data if is_rel_event(x))
+    # event_recs = (x for x in get_events() if is_rel_event(x))
+    # print(list(event_recs))
+    for event_rec in event_recs:
+        builder = EuclClassifier(post_time=post_time, bin_size=bin_size, labels=labels)
+        
+        builder.event(timestamp = event_rec['ext_t'])
+        
+        # print(list(get_spikes_near(event_rec['ext_t'])))
+        for rec in get_spikes_near(event_rec['ext_t']):
+            builder.spike(rec['channel'], rec['unit'], rec['ext_t'])
+        
+        et = event_rec['event_type']
+        if et not in psths:
+            psths[et] = []
+        psths[et].append(builder)
+    
+    templates = _build_templates_from_psths(
+        psths = psths,
+        builder = EuclClassifier(post_time=post_time, bin_size=bin_size, labels=labels),
+    )
+    
+    out_data = {
+        'info': {
+            'post_time': post_time,
+            'bin_size': bin_size,
+            'event_class': event_class,
+        },
+        'templates': templates,
+    }
+    
+    with open(template_path, 'w', encoding='utf8', newline='\n') as f:
         json.dump(out_data, f, indent=2)

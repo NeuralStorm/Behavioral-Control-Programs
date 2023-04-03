@@ -2,7 +2,7 @@
 
 
 class Classifier:
-    def event(self, event_type: str, timestamp: float):
+    def event(self, *, event_type: str = '', timestamp: float):
         pass
     
     def spike(self, channel: int, unit: int, timestamp: float):

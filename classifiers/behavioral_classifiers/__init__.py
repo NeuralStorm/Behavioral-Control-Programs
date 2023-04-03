@@ -6,6 +6,7 @@ import json
 from .classifier import Classifier
 from .eucl_classifier import EuclClassifier
 from .random_classifier import RandomClassifier
+from .events_file import EventsFileWriter
 
 classifier_map = {
     'eucl': EuclClassifier,
@@ -22,6 +23,7 @@ def from_config(config: Dict[str, Any], template_path: Optional[Path], baseline:
         classifier = EuclClassifier(
             post_time = post_time,
             bin_size = bin_size,
+            labels = config.get('labels'),
         )
         
         if template_path is not None:
