@@ -1038,7 +1038,7 @@ class MonkeyImages:
             pmin, pmax = self.config.photodiode_range
             self._photodiode.set_range(pmin, pmax)
         
-        self.classifier_events_path = self.config.save_path / f"{self.config.log_file_name_base}_classifier_events.json"
+        self.classifier_events_path = self.config.save_path / f"{self.config.log_file_name_base}_classifier_events.json.bz2"
         self.template_out_path = self.config.save_path / f"{self.config.log_file_name_base}_templates.json"
         self.events_file: EventsFileWriter = EventsFileWriter(path=self.classifier_events_path)
         

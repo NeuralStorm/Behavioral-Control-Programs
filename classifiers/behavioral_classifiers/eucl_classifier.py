@@ -4,6 +4,7 @@ from .classifier import Classifier
 from typing import Optional, Tuple, List, Dict, Set, Union
 from pathlib import Path
 import json
+import bz2
 
 # chan -> spike frequency
 PsthDict = Dict[str, List[Union[float, int]]]
@@ -283,7 +284,7 @@ def build_templates_from_new_events_file(*,
     post_time: int, bin_size: int,
     labels: Optional[Dict[str, List[int]]],
 ):
-    with open(events_path, 'r', encoding='utf8', newline='\n') as f:
+    with bz2.open(events_path, 'rt', encoding='utf8', newline='\n') as f:
         events_data = json.load(f)
     
     def get_events():

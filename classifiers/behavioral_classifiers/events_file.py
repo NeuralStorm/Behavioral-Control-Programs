@@ -12,12 +12,21 @@ from typing import Optional
 import json
 from pathlib import Path
 import time
+from contextlib import ExitStack
+import gzip
+import bz2
 
 class EventsFileWriter:
     def __init__(self, *, file_obj=None, path: Optional[Path]):
+        self._stack = ExitStack()
         if path is not None:
             assert file_obj is None
-            self._f = open(path, 'a', encoding='utf8', newline='\n')
+            if path.name.endswith('.gz'):
+                self._f = self._stack.enter_context(gzip.open(path, 'at', encoding='utf8', newline='\n'))
+            elif path.name.endswith('.bz2'):
+                self._f = self._stack.enter_context(bz2.open(path, 'at', encoding='utf8', newline='\n'))
+            else:
+                self._f = self._stack.enter_context(open(path, 'a', encoding='utf8', newline='\n'))
             # self._f.seek(0, 2) # seek to end of file (append while having in readable mode)
             self._managing_file = True
         elif file_obj is not None:
@@ -32,8 +41,9 @@ class EventsFileWriter:
     
     def finish(self):
         self._f.write('\n]\n')
-        if self._managing_file:
-            self._f.close()
+        # if self._managing_file:
+        #     self._f.close()
+        self._stack.close()
     
     def _write_record(self, data):
         if self._first_event:
