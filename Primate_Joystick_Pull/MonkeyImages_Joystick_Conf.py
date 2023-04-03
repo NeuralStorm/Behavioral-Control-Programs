@@ -527,6 +527,7 @@ class GameConfig:
             self.baseline = True
             self.classify_wait_time = 0.2
             self.classify_reward_duration = None
+            self.labels = None
     
     def load_images(self, config_images: List[str], image_ratios: Optional[List[int]]):
         # config_images = config_dict['images']
