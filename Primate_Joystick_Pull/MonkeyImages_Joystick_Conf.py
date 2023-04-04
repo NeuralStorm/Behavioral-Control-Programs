@@ -485,16 +485,16 @@ class GameConfig:
                 assert self.template_in_path.is_file()
             
             baseline = config_dict.get('baseline')
-            if baseline == ['true']:
+            if baseline in [None, [], [''], ['true']]:
                 self.baseline: bool = True
-            elif baseline in [None, [], [''], ['false']]:
+            elif baseline in [['false']]:
                 self.baseline = False
             else:
                 raise ValueError(f"invalid setting for baseline `{baseline}`")
             
             classify_wait_time = config_dict.get('classify_wait_time')
             if classify_wait_time in [None, [], ['']]:
-                self.classify_wait_time: float = 0.2
+                self.classify_wait_time: float = self.post_time / 1000
             else:
                 assert classify_wait_time is not None
                 self.classify_wait_time = float(classify_wait_time[0])
@@ -507,7 +507,9 @@ class GameConfig:
                 self.classify_wait_timeout = float(classify_wait_timeout[0])
             
             # local, plexon
-            self.classify_wait_mode: Literal['local', 'plexon'] = config_dict['classify_wait_mode'][0]
+            wait_mode: Literal['local', 'plexon'] = config_dict.get('classify_wait_mode', ['plexon'])[0] # type: ignore
+            assert wait_mode in ['local', 'plexon']
+            self.classify_wait_mode: Literal['local', 'plexon'] = wait_mode
             
             self.classify_reward_duration: Optional[float] = float(config_dict['correct_reward_dur'][0])
             

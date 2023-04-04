@@ -11,10 +11,10 @@ Ubuntu
 
 tested with numpy version 1.22.4 but it isn't used heavily so a lot of versions probably work
 
-install dependencies
-`pip install -r requirements.txt`
-`pip install -r requirements_hw.txt`
-`pip install -r requirements_histogram.txt`
+install dependencies  
+`pip install -r requirements.txt`  
+`pip install -r requirements_hw.txt`  
+`pip install -r requirements_histogram.txt`  
 `pip install -e ../cassifiers`
 
 Optional parameters are considered unspecified if they are ommited, have no values, or have a single empty string value  
@@ -138,6 +138,94 @@ The channel (direction) of the joystick to use. Default 3.
 ### `no_trials` (optional)
 
 Number of trials to run before stopping. If unspecified or "0" an unlimited number of trials will be performed.
+
+---
+### `photodiode_range` (optional)
+
+Voltage levels read by the photodiode at minimum and maximum screen brightness.
+
+If `photodiode_range` is unspecified a calibration routine will be run when the game is started. Ensure the game window is maximized and the photodiode is correctly positioned before starting the game.
+
+When calibration is run it will create a `photodiode_calibration` event with the found min and max values in the events.json output file.
+```json
+{
+    "time_human": "2023-03-28T08:13:27.957032",
+    "time_m": 9.49143193,
+    "name": "photodiode_calibration",
+    "tags": [],
+    "info": {
+        "min": 0.0,
+        "max": 0.03663898562081158
+    }
+}
+```
+
+Example: `photodiode_range,0,0.0366`
+
+# Classifier config
+
+If `classification_event` is not specified classification will be disabled and all classifier config options become optional.
+
+---
+### `classification_event`
+
+Which event to perform classification around.
+
+Example: `classification_event,joystick_pull`
+
+---
+### `post_time_ms`
+
+Period after event to use in classification.
+
+---
+### `bin_size_ms`
+
+Bin size used for classification.
+
+---
+### `correct_reward_dur`
+
+Duration of the water reward when classification is correct in seconds.
+
+---
+### `classify_wait_time` (optional)
+
+Period of time to wait for spikes after the event type specified by `classification_event` occures in seconds. Defaults to `post_time_ms` converted to seconds.
+
+---
+### `classify_wait_mode` (optional)
+
+One of `local`, `plexon`. Defaults to `plexon`.
+
+`local` uses the computers local clock to deterimne how long to wait after the classification event occures.  
+`plexon` waits for an event to be received from plexon that is at least `classify_wait_time` after the classification event.
+
+---
+### `classify_wait_timeout` (optional)
+
+Amount of time, based on the computer's local time, to wait before failing classification.
+
+If not specified the program will wait an indefinite amount of time for the event to occur.
+
+---
+### `baseline` (optional)
+
+If `true`, events will be collected and the game will run normally. If `false`, classification will occur instead of waiting for a joystick pull or homezone exit. Defaults to `true`.
+
+---
+### `template_in` (optional)
+
+Required when baseline is `false`. The path of the template file to load.
+
+---
+### `labels` (optional)
+
+Path of the labels file to load. If not specified all channels and units will be used for classification.
+
+Example labels file: https://github.com/NeuralStorm/Behavioral-Control-Programs/blob/75f3f6e869c1c8869a93ab25f6270787049ab98c/tilt_hardware_control/tilt_hardware_control/example_labels.hjson
+
+The labels file has one parameter `channels`. The parameters of the dict are plexon channels and the values are plexon units within that channel.
 
 # Histogram generation
 
