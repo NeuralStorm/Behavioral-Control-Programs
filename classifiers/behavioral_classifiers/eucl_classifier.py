@@ -1,10 +1,11 @@
 
-from .classifier import Classifier
-
-from typing import Optional, Tuple, List, Dict, Set, Union
+from typing import Optional, Tuple, List, Dict, Set, Union, Any
 from pathlib import Path
 import json
 import bz2
+from collections import deque
+
+from .classifier import Classifier
 
 # chan -> spike frequency
 PsthDict = Dict[str, List[Union[float, int]]]
@@ -284,11 +285,11 @@ def build_templates_from_new_events_file(*,
     post_time: int, bin_size: int,
     labels: Optional[Dict[str, List[int]]],
 ):
-    with bz2.open(events_path, 'rt', encoding='utf8', newline='\n') as f:
-        events_data = json.load(f)
+    # with bz2.open(events_path, 'rt', encoding='utf8', newline='\n') as f:
+    #     events_data = json.load(f)
     
     def get_events():
-        with open(events_path, 'r', encoding='utf8', newline='\n') as f:
+        with bz2.open(events_path, 'rt', encoding='utf8', newline='\n') as f:
             try:
                 next(f) # skip [
             except StopIteration:
@@ -316,33 +317,58 @@ def build_templates_from_new_events_file(*,
         
         return True
     
-    def get_spikes_near(t):
-        # convert to seconds and double
-        max_dist = post_time/1000*2
-        for rec in events_data:
-        # for rec in get_events():
-            if rec['type'] != 'spike':
-                continue
-            # print(abs(t - rec['ext_t']))
-            if abs(t - rec['ext_t']) < max_dist:
-                yield rec
-    
-    event_recs = (x for x in events_data if is_rel_event(x))
-    # event_recs = (x for x in get_events() if is_rel_event(x))
-    # print(list(event_recs))
-    for event_rec in event_recs:
+    def build_psth(buf: 'deque[Dict[str, Any]]', event: Dict[str, Any]) -> EuclClassifier:
         builder = EuclClassifier(post_time=post_time, bin_size=bin_size, labels=labels)
         
-        builder.event(timestamp = event_rec['ext_t'])
+        builder.event(timestamp = event['ext_t'])
         
-        # print(list(get_spikes_near(event_rec['ext_t'])))
-        for rec in get_spikes_near(event_rec['ext_t']):
+        for rec in buf:
+            if rec['type'] != 'spike':
+                continue
             builder.spike(rec['channel'], rec['unit'], rec['ext_t'])
         
-        et = event_rec['event_type']
-        if et not in psths:
-            psths[et] = []
-        psths[et].append(builder)
+        return builder
+    
+    max_dist = post_time/1000*1.1
+    buf: 'deque[Dict[str, Any]]' = deque()
+    for event in get_events():
+        buf.append(event)
+        while event['ext_t'] - buf[0]['ext_t'] > max_dist:
+            event = buf.popleft()
+            if is_rel_event(event):
+                et = event['event_type']
+                psth = build_psth(buf, event)
+                if et not in psths:
+                    psths[et] = []
+                psths[et].append(psth)
+    
+    # def get_spikes_near(t):
+    #     # convert to seconds and double
+    #     max_dist = post_time/1000*2
+    #     for rec in events_data:
+    #     # for rec in get_events():
+    #         if rec['type'] != 'spike':
+    #             continue
+    #         # print(abs(t - rec['ext_t']))
+    #         if abs(t - rec['ext_t']) < max_dist:
+    #             yield rec
+    
+    # event_recs = (x for x in events_data if is_rel_event(x))
+    # # event_recs = (x for x in get_events() if is_rel_event(x))
+    # # print(list(event_recs))
+    # for event_rec in event_recs:
+    #     builder = EuclClassifier(post_time=post_time, bin_size=bin_size, labels=labels)
+        
+    #     builder.event(timestamp = event_rec['ext_t'])
+        
+    #     # print(list(get_spikes_near(event_rec['ext_t'])))
+    #     for rec in get_spikes_near(event_rec['ext_t']):
+    #         builder.spike(rec['channel'], rec['unit'], rec['ext_t'])
+        
+    #     et = event_rec['event_type']
+    #     if et not in psths:
+    #         psths[et] = []
+    #     psths[et].append(builder)
     
     templates = _build_templates_from_psths(
         psths = psths,
@@ -354,6 +380,7 @@ def build_templates_from_new_events_file(*,
             'post_time': post_time,
             'bin_size': bin_size,
             'event_class': event_class,
+            'labels': labels,
         },
         'templates': templates,
     }
