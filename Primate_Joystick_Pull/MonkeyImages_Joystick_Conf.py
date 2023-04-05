@@ -754,7 +754,7 @@ class PhotoDiode:
         self.changed = False
         
         # using high % change since plexon seems to see oscilations in the signal
-        self._cal_perc = 0.20
+        self._cal_perc = 0.10
         
         self._change_threshold: float = 0.0
     
@@ -776,8 +776,9 @@ class PhotoDiode:
         set_marker_level(1)
         yield from wait(wait_t)
         max_val = self.last_value
-        # set_marker_level(0.5)
-        # yield from wait(wait_t)
+        set_marker_level(0.5)
+        yield from wait(wait_t)
+        mid_val = self.last_value
         # print(self.last_value)
         set_marker_level(0)
         yield from wait(wait_t)
@@ -794,6 +795,7 @@ class PhotoDiode:
         
         return {
             'min': min_val,
+            'mid': mid_val,
             'max': max_val,
         }
     
@@ -1360,12 +1362,12 @@ class MonkeyImages:
                 cb.clear()
             
             if not gc_hand_removed_early:
-                self.game_frame.set_marker_level(0.7)
-                # display image without red box
-                self.show_image(selected_image_key)
                 self.log_event('discrim_shown', tags=['game_flow'], info={
                     'selected_image': selected_image_key,
                 })
+                # display image without red box
+                self.show_image(selected_image_key)
+                self.game_frame.set_marker_level(0.6)
             
             if not gc_hand_removed_early:
                 yield from waiter.wait(t=go_cue_delay, cond=lambda: not in_zone())
@@ -1383,12 +1385,12 @@ class MonkeyImages:
             if gc_hand_removed_early:
                 in_zone_at_go_cue = False
             else:
-                self.game_frame.set_marker_level(0.5)
                 # display image with box
-                self.show_image(selected_image_key, boxed=True)
                 self.log_event('go_cue_shown', tags=['game_flow'], info={
                     'selected_image': selected_image_key,
                 })
+                self.show_image(selected_image_key, boxed=True)
+                self.game_frame.set_marker_level(0.2)
                 
                 in_zone_at_go_cue = in_zone()
             
@@ -1422,7 +1424,7 @@ class MonkeyImages:
                     yield
                 
                 pull_start = trial_t()
-                self.game_frame.set_marker_level(0.2)
+                # self.game_frame.set_marker_level(0.2)
                 
                 while self.joystick_pulled:
                     yield
@@ -1456,7 +1458,7 @@ class MonkeyImages:
                 
                 exit_time = trial_t()
                 exit_delay = exit_time - cue_time
-                self.game_frame.set_marker_level(0.2)
+                # self.game_frame.set_marker_level(0.2)
                 
                 reward_duration = self.ChooseReward(exit_delay, cue=selected_image_key)
                 
