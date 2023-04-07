@@ -396,8 +396,8 @@ class GameConfig:
         # PARAMETERS META DATA
         self.study_id: str = config_dict['Study ID'][0]       # 3 letter study code
         self.session_id: str = config_dict['Session ID'][0] # Type of Session
-        self.experimental_group: str = get('experimental_group', 'NOT_SET')
-        self.experimental_condition: str = get('experimental_condition', 'NOT_SET')
+        self.experimental_group: str = get('experimental_group', 'NOTSET')
+        self.experimental_condition: str = get('experimental_condition', 'NOTSET')
         self.animal_id: str = config_dict['Animal ID'][0]   # 3 digit number
         start_dt = datetime.now()
         self.start_time: str = start_dt.strftime('%Y%m%d_%H%M%S')
@@ -1954,7 +1954,10 @@ class MonkeyImages:
                 else:
                     self.log_hw('plexon_event', plexon_ts=ts, info={'channel': chan})
             elif num_or_type == self.other_event_source:
-                if chan == 2:
+                if chan == 1:
+                    # not sure what this is but plexon sends them every 10ms or so
+                    pass
+                elif chan == 2:
                     self.log_hw('plexon_recording_start', plexon_ts=ts)
                 else:
                     self.log_hw('plexon_other_event', plexon_ts=ts, info={'channel': chan})
