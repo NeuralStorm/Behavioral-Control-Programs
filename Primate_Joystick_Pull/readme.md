@@ -103,7 +103,7 @@ The max amount of time after the go cue that will be waited before the pull is c
 Directory to which log csv files are saved
 
 ---
-### `Study ID`, `Animal ID`, `Session ID`, `Task Type`
+### `Study ID`, `Animal ID`, `Session ID`, `Task Type`, `experimental_group`, `experimental_condition`
 
 Included in the name of the output csv log file
 

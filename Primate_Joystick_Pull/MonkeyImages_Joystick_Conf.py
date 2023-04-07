@@ -375,12 +375,34 @@ class GameConfig:
             return csvreaderdict
         
         config_dict = load_csv()
+        
+        NO_DEFAULT = object()
+        def get(key, default=NO_DEFAULT, *, multi=False) -> Any:
+            val = config_dict.get(key)
+            if val in [None, [], ['']]:
+                if default is NO_DEFAULT:
+                    raise KeyError(key)
+                return default
+            else:
+                if multi:
+                    return val
+                else:
+                    assert val is not None
+                    return val[0]
+            
+            assert False
+        
         self.raw_config = config_dict
         # PARAMETERS META DATA
         self.study_id: str = config_dict['Study ID'][0]       # 3 letter study code
         self.session_id: str = config_dict['Session ID'][0] # Type of Session
+        self.experimental_group: str = get('experimental_group', 'NOT_SET')
+        self.experimental_condition: str = get('experimental_condition', 'NOT_SET')
         self.animal_id: str = config_dict['Animal ID'][0]   # 3 digit number
-        self.start_time: str = time.strftime('%Y%m%d_%H%M%S')
+        start_dt = datetime.now()
+        self.start_time: str = start_dt.strftime('%Y%m%d_%H%M%S')
+        start_date_str = start_dt.strftime('%Y%m%d')
+        start_time_str = start_dt.strftime('%H%M%S')
         
         self.TaskType: str = config_dict['Task Type'][0]
         
@@ -388,7 +410,7 @@ class GameConfig:
         if os.environ.get('out_file_name'):
             self.log_file_name_base = os.environ['out_file_name']
         else:
-            self.log_file_name_base: str = f"{self.study_id}_{self.animal_id}_{self.session_id}_{self.start_time}_{self.TaskType}"
+            self.log_file_name_base: str = f"{self.study_id}{self.animal_id}_{self.experimental_group}_{self.experimental_condition}_{self.session_id}_{start_date_str}_{start_time_str}{self.TaskType}"
         
         self.discrim_delay_range: Tuple[float, float] = (
             float(config_dict['Pre Discriminatory Stimulus Min delta t1'][0]),
@@ -1095,6 +1117,7 @@ class MonkeyImages:
                         print ("Recording start detected. All timestamps will be relative to a start time of {} seconds.".format(new_data.timestamp[i]))
                         WaitForStart = False
                         self.RecordingStartTimestamp = new_data.timestamp[i]
+                        self.log_hw('plexon_recording_start', plexon_ts=new_data.timestamp[i], info={'wait': True})
         
         if self.classifier_dbg:
             thread_stop = [False]
@@ -1930,6 +1953,11 @@ class MonkeyImages:
                         self.handle_classification_event('joystick_zone_exit', ts)
                 else:
                     self.log_hw('plexon_event', plexon_ts=ts, info={'channel': chan})
+            elif num_or_type == self.other_event_source:
+                if chan == 2:
+                    self.log_hw('plexon_recording_start', plexon_ts=ts)
+                else:
+                    self.log_hw('plexon_other_event', plexon_ts=ts, info={'channel': chan})
     
     def get_log_file_paths(self) -> Tuple[Path, Path]:
         base = self.config.log_file_name_base
