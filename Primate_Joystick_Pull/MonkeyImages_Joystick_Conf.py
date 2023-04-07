@@ -776,7 +776,7 @@ class PhotoDiode:
         self.changed = False
         
         # using high % change since plexon seems to see oscilations in the signal
-        self._cal_perc = 0.10
+        self._cal_perc = 0.25
         
         self._change_threshold: float = 0.0
     
