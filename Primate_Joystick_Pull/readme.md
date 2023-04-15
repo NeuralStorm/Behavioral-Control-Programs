@@ -17,31 +17,31 @@ install dependencies
 `pip install -r requirements_histogram.txt`  
 `pip install -e ../cassifiers`
 
-Optional parameters are considered unspecified if they are ommited, have no values, or have a single empty string value  
-The following lines are consided unspecified and will use the default value for `key`
+# Config
+
+Optional parameters are considered unspecified if they are omitted, have no values, or have a single empty string value  
+The following lines are considered unspecified and will use the default value for `parameter`
 ```csv
-key
-key,
+parameter
+parameter,
 
 ```
-
-# Config
 
 ### `reward_thresholds`
 
 example: `low=0'high=4'type=linear'reward_min=0'reward_max=1'cue=bOval`
 
-Each value in the csv is a collection of key value pairs separated by `'`. Each key value pair is of the form `key=value`. Leading and trailing whitespace is removed from keys and values.
+Each value in the csv is a collection of parameter value pairs separated by `'`. Each parameter value pair is of the form `parameter=value`. Leading and trailing whitespace is removed from parameters and values.
 
 The first reward duration where `low < pull duration < high` and `cue` is not set or matches the displayed cue is used.
 
-**General Keys**
+**General Parameters**
 
 `low`, `mid`, `high`: Two of `low` `mid` and `high` must be specified, the last will be computed. Specifies the duration of pull that triggers the reward.
 
 `cue`: If specified only the specified cue will trigger the reward. Must match an entry in images (without the extension).
 
-`type`: Changes the reward scaling. See below for descriptions and additional keys for each type.
+`type`: Changes the reward scaling. See below for descriptions and additional parameters for each type.
 
 **Types**
 
