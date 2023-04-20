@@ -26,16 +26,6 @@ try:
 except ImportError:
     winsound = None # type: ignore
 
-try:
-    from pyopxclient import PyOPXClientAPI, OPX_ERROR_NOERROR, SPIKE_TYPE, CONTINUOUS_TYPE, EVENT_TYPE, OTHER_TYPE
-    from pyplexdo import PyPlexDO, DODigitalOutputInfo
-    import PyDAQmx
-    from PyDAQmx import Task
-except ImportError:
-    plexon_import_failed = True
-else:
-    plexon_import_failed = False
-
 import tkinter as tk
 from tkinter import filedialog
 import numpy
@@ -50,13 +40,6 @@ from config import GameConfig
 logger = logging.getLogger(__name__)
 
 debug = logger.debug
-
-# This will be filled in later. Better to store these once rather than have to call the functions
-# to get this information on every returned data block
-source_numbers_types = {}
-source_numbers_names = {}
-source_numbers_rates = {}
-source_numbers_voltage_scalers = {}
 
 def sgroup(data, key):
     return groupby(sorted(data, key=key), key=key)
@@ -132,10 +115,6 @@ class MonkeyImages:
         
         # self.nidaq = use_hardware
         self.nidaq = False
-        self.plexon = use_hardware
-        
-        if self.plexon:
-            assert not plexon_import_failed
         
         # delay for how often state is updated, only used for new loop
         self.cb_delay_ms: int = 1
@@ -167,75 +146,12 @@ class MonkeyImages:
         self.trial_log = []
         self.event_log = []
         
-        if self.plexon == True:
-            ## Setup Plexon Server
-            # Initialize the API class
-            self.client = PyOPXClientAPI()
-            # Connect to OmniPlex Server, check for success
-            self.client.connect()
-            if not self.client.connected:
-                print("Client isn't connected, exiting.\n")
-                print("Error code: {}\n".format(self.client.last_result))
-                self.plexon = False
-
-            print("Connected to OmniPlex Server\n")
-            # Get global parameters
-            global_parameters = self.client.get_global_parameters()
-
-            for source_id in global_parameters.source_ids:
-                source_name, _, _, _ = self.client.get_source_info(source_id)
-                print('source', source_name, source_id)
-                if source_name == 'KBD':
-                    self.keyboard_event_source = source_id
-                if source_name == 'AI':
-                    self.ai_source = source_id
-                if source_name == 'Single-bit events':
-                    self.event_source = source_id
-                if source_name == 'Other events':
-                    self.other_event_source = source_id
-                    print ("Other event source is {}".format(self.other_event_source))
-            # Print information on each source
-            
-            ##### Need to include information here about getting Digital signals ############
-            for index in range(global_parameters.num_sources):
-                # Get general information on the source
-                source_name, source_type, num_chans, linear_start_chan = self.client.get_source_info(global_parameters.source_ids[index])
-                # Store information about the source types and names for later use.
-                source_numbers_types[global_parameters.source_ids[index]] = source_type
-                source_numbers_names[global_parameters.source_ids[index]] = source_name
-                if source_name == 'AI':
-                    print("----- Source {} -----".format(global_parameters.source_ids[index]))
-                    source_types = { SPIKE_TYPE: "Spike", EVENT_TYPE: "Event", CONTINUOUS_TYPE: "Continuous", OTHER_TYPE: "Other" }
-                    print("Name: {}, Type: {}, Channels: {}, Linear Start Channel: {}".format(source_name,
-                                                                                    source_types[source_type],
-                                                                                    num_chans,
-                                                                                    linear_start_chan))
-                if source_type == CONTINUOUS_TYPE and source_name == 'AI':
-                    # Get information specific to a continuous source
-                    _, rate, voltage_scaler = self.client.get_cont_source_info(source_name)
-                    # Store information about the source rate and voltage scaler for later use.
-                    source_numbers_rates[global_parameters.source_ids[index]] = rate
-                    source_numbers_voltage_scalers[global_parameters.source_ids[index]] = voltage_scaler
-                    print("Digitization Rate: {}, Voltage Scaler: {}".format(rate, voltage_scaler))
-            ## Setup for Plexon DO
-            compatible_devices = ['PXI-6224', 'PXI-6259']
-            self.plexdo = PyPlexDO()
-            doinfo = self.plexdo.get_digital_output_info()
-            self.device_number = 1
-            for k in range(doinfo.num_devices):
-                if self.plexdo.get_device_string(doinfo.device_numbers[k]) in compatible_devices:
-                    device_number = doinfo.device_numbers[k]
-            if device_number == None:
-                print("No compatible devices found. Exiting.")
-                sys.exit(1)
-            else:
-                print("{} found as device {}".format(self.plexdo.get_device_string(device_number), device_number))
-            res = self.plexdo.init_device(device_number)
-            if res != 0:
-                print("Couldn't initialize device. Exiting.")
-                sys.exit(1)
-            self.plexdo.clear_all_bits(device_number)
-            ## End Setup for Plexon DO
+        if use_hardware:
+            from plexon import Plexon
+            self.plexon: Optional[Plexon] = Plexon()
+        else:
+            self.plexon = None
+        
         self.begin   = numpy.array([0,0,0,0,0,0,0,0], dtype=numpy.uint8) # Connector Currently on Port A, When switched to port B, Events = Event + 16
         self.event0  = numpy.array([1,0,0,0,0,0,0,0], dtype=numpy.uint8) #task: EV30    #task2: NC
         self.event1  = numpy.array([0,1,0,0,0,0,0,0], dtype=numpy.uint8) #task: EV29    #task2: NC
@@ -263,9 +179,6 @@ class MonkeyImages:
         
         self.auto_water_reward_enabled = True
         
-        self.reward_nidaq_bit = 17 # DO Channel
-        
-        # self._test_config = test_config
         if test_config and 'config_path' not in os.environ:
             self.config_path = 'dev_config.csv'
         else:
@@ -303,7 +216,7 @@ class MonkeyImages:
             events_file_path = self.classifier_events_path,
         ))
         
-        print("ready for plexon:" , self.plexon)
+        print("ready for plexon:" , bool(self.plexon))
         self.root = parent
         self.root.wm_title("MonkeyImages")
         
@@ -336,23 +249,12 @@ class MonkeyImages:
         else:
             self.info_view = None
         
-        if self.plexon == True:
-            WaitForStart = not no_wait_for_start
-            if WaitForStart:
+        if self.plexon is not None:
+            if not no_wait_for_start:
                 print('Start Plexon Recording now')
-            while WaitForStart == True:
-                #self.client.opx_wait(1)
-                new_data = self.client.get_new_data()
-                # if new_data.num_data_blocks < max_block_output:
-                #     num_blocks_to_output = new_data.num_data_blocks
-                # else:
-                #     num_blocks_to_output = max_block_output
-                for i in range(new_data.num_data_blocks):
-                    if new_data.source_num_or_type[i] == self.other_event_source and new_data.channel[i] == 2: # Start event timestamp is channel 2 in 'Other Events' source
-                        print ("Recording start detected. All timestamps will be relative to a start time of {} seconds.".format(new_data.timestamp[i]))
-                        WaitForStart = False
-                        self.RecordingStartTimestamp = new_data.timestamp[i]
-                        self.log_hw('plexon_recording_start', plexon_ts=new_data.timestamp[i], info={'wait': True})
+                wait_res = self.plexon.wait_for_start()
+                self.log_hw('plexon_recording_start', plexon_ts=wait_res['ts'], info={'wait': True})
+                print ("Recording start detected.")
         
         if self.classifier_dbg:
             from behavioral_classifiers.helpers.debug_tools import DebugSpikeSource
@@ -364,7 +266,7 @@ class MonkeyImages:
     def __exit__(self, *exc):
         if self.plexon:
             try:
-                self.plexdo.clear_bit(self.device_number, self.reward_nidaq_bit)
+                self.plexon.water_off()
             except:
                 traceback.print_exc()
         self._stack.__exit__(*exc)
@@ -833,13 +735,12 @@ class MonkeyImages:
                         self.task.WriteDigitalLines(1, 1, 10.0, PyDAQmx.DAQmx_Val_GroupByChannel, self.event7, None, None)
                         self.task.WriteDigitalLines(1, 1, 10.0, PyDAQmx.DAQmx_Val_GroupByChannel, self.begin, None, None)
                     if self.plexon:
-                        # turn water on
-                        self.plexdo.set_bit(self.device_number, self.reward_nidaq_bit)
+                        self.plexon.water_on()
                 
                 yield from wait(reward_duration)
                 
                 if self.plexon:
-                    self.plexdo.clear_bit(self.device_number, self.reward_nidaq_bit)
+                    self.plexon.water_off()
                 
                 self.clear_image()
             
@@ -871,13 +772,13 @@ class MonkeyImages:
                 self.task.WriteDigitalLines(1, 1, 10.0, PyDAQmx.DAQmx_Val_GroupByChannel, self.event7, None, None)
                 self.task.WriteDigitalLines(1, 1, 10.0, PyDAQmx.DAQmx_Val_GroupByChannel, self.begin, None, None)
             if self.plexon:
-                self.plexdo.set_bit(self.device_number, self.reward_nidaq_bit)
+                self.plexon.water_on()
             t = time.perf_counter()
             while time.perf_counter() - t < self.config.manual_reward_time:
                 yield
             print("water off")
             if self.plexon:
-                self.plexdo.clear_bit(self.device_number, self.reward_nidaq_bit)
+                self.plexon.water_off()
         
         loop_iter = gen()
         def inner():
@@ -946,8 +847,8 @@ class MonkeyImages:
         print('pause')
         if winsound is not None:
             winsound.PlaySound(None, winsound.SND_PURGE)
-        if self.plexon == True:
-            self.plexdo.clear_bit(self.device_number, self.reward_nidaq_bit)
+        if self.plexon:
+            self.plexon.water_off()
         
         self.save_log_files(partial=True)
     
@@ -960,8 +861,8 @@ class MonkeyImages:
         self.stopped = True
         self._clear_callbacks()
         
-        if self.plexon == True:
-            self.plexdo.clear_bit(self.device_number, self.reward_nidaq_bit)
+        if self.plexon:
+            self.plexon.water_off()
         self.clear_image()
         if winsound is not None:
             winsound.PlaySound(None, winsound.SND_PURGE)
@@ -1068,97 +969,79 @@ class MonkeyImages:
             self.handle_classification_event(event_class, time.perf_counter())
     
     def gathering_data_omni_new(self):
-        self.client.opx_wait(5)
-        new_data = self.client.get_new_data()
-        
         # joystick threshold
         js_thresh = self.joystick_pull_threshold
         
-        for i in range(new_data.num_data_blocks):
-            num_or_type = new_data.source_num_or_type[i]
-            block_type = source_numbers_types[new_data.source_num_or_type[i]]
-            source_name = source_numbers_names[new_data.source_num_or_type[i]]
-            chan = new_data.channel[i]
-            ts = new_data.timestamp[i]
+        assert self.plexon
+        for d in self.plexon.get_data():
+            self._cl_helper.any_event(d.ts)
             
-            self._cl_helper.any_event(ts)
-            
-            if block_type == CONTINUOUS_TYPE and source_name == 'AI':
-                # Convert the samples from AD units to voltage using the voltage scaler, use tmp_samples[0] because it could be a list.
-                voltage_scaler = source_numbers_voltage_scalers[num_or_type]
-                samples = new_data.waveform[i]
-                samples = [s * voltage_scaler for s in samples]
-                val = samples[-1]
-                
-                if chan == self.config.joystick_channel:
+            if d.type == d.ANALOG:
+                if d.chan == self.config.joystick_channel:
                     if self.joystick_last_state is None:
-                        self.joystick_last_state = val
+                        self.joystick_last_state = d.value
                     
                     # joystick has transitioned from not pulled to pulled
-                    if self.joystick_last_state < js_thresh and val >= js_thresh:
-                        self.log_hw('joystick_pulled', plexon_ts=ts)
+                    if self.joystick_last_state < js_thresh and d.value >= js_thresh:
+                        self.log_hw('joystick_pulled', plexon_ts=d.ts)
                         self.joystick_pulled = True
-                        self.joystick_pull_remote_ts = ts
+                        self.joystick_pull_remote_ts = d.ts
                         
-                        self.handle_classification_event('joystick_pull', ts)
+                        self.handle_classification_event('joystick_pull', d.ts)
                     
                     # joystick has transitioned from pulled to not pulled
-                    elif self.joystick_last_state >= js_thresh and val < js_thresh:
-                        self.log_hw('joystick_released', plexon_ts=ts)
+                    elif self.joystick_last_state >= js_thresh and d.value < js_thresh:
+                        self.log_hw('joystick_released', plexon_ts=d.ts)
                         self.joystick_pulled = False
-                        self.joystick_release_remote_ts = ts
+                        self.joystick_release_remote_ts = d.ts
                         
-                        self.handle_classification_event('joystick_released', ts)
+                        self.handle_classification_event('joystick_released', d.ts)
                     
-                    self.joystick_last_state = val
-                
-                elif chan == 1: # photodiode?
-                    self._photodiode.handle_value(val, ts)
+                    self.joystick_last_state = d.value
+                elif d.chan == 1: # photodiode
+                    self._photodiode.handle_value(d.value, d.ts)
                     if self._photodiode.changed:
-                        self.log_hw('photodiode_changed', plexon_ts=ts, info={'value': val})
-                
-            elif block_type == SPIKE_TYPE:
-                unit = new_data.unit[i]
-                
+                        self.log_hw('photodiode_changed', plexon_ts=d.ts, info={'value': d.value})
+            elif d.type == d.SPIKE:
                 self._cl_helper.spike(
-                    channel = chan,
-                    unit = unit,
-                    timestamp = ts,
+                    channel = d.chan,
+                    unit = d.unit,
+                    timestamp = d.ts,
                 )
-            elif num_or_type == self.event_source:
-                if chan == 14: # enter home zone
-                    self.log_hw('homezone_enter', plexon_ts=ts)
+            elif d.type == d.EVENT:
+                if d.chan == 14: # enter home zone
+                    self.log_hw('homezone_enter', plexon_ts=d.ts)
                     self.Area1_right_pres = True
                     self._trigger_event('homezone_enter')
                     
-                    self.handle_classification_event('homezone_enter', ts)
-                elif chan == 11: # enter joystick zone
-                    self.log_hw('joystick_zone_enter', plexon_ts=ts)
+                    self.handle_classification_event('homezone_enter', d.ts)
+                elif d.chan == 11: # enter joystick zone
+                    self.log_hw('joystick_zone_enter', plexon_ts=d.ts)
                     if self.joystick_zone_enter is None:
-                        self.joystick_zone_enter = ts
+                        self.joystick_zone_enter = d.ts
                     
-                    self.handle_classification_event('joystick_zone_enter', ts)
-                elif chan == 12: # exit either zone
-                    self.log_hw('zone_exit', plexon_ts=ts)
+                    self.handle_classification_event('joystick_zone_enter', d.ts)
+                elif d.chan == 12: # exit either zone
+                    self.log_hw('zone_exit', plexon_ts=d.ts)
                     if self.Area1_right_pres:
                         self.Area1_right_pres = False
                         self._trigger_event('homezone_exit')
                         
-                        self.handle_classification_event('homezone_exit', ts)
+                        self.handle_classification_event('homezone_exit', d.ts)
                     if self.joystick_zone_enter is not None and self.joystick_zone_exit is None:
-                        self.joystick_zone_exit = ts
+                        self.joystick_zone_exit = d.ts
                         
-                        self.handle_classification_event('joystick_zone_exit', ts)
+                        self.handle_classification_event('joystick_zone_exit', d.ts)
                 else:
-                    self.log_hw('plexon_event', plexon_ts=ts, info={'channel': chan})
-            elif num_or_type == self.other_event_source:
-                if chan == 1:
+                    self.log_hw('plexon_event', plexon_ts=d.ts, info={'channel': d.chan})
+            elif d.type == d.OTHER_EVENT:
+                if d.chan == 1:
                     # not sure what this is but plexon sends them every 10ms or so
                     pass
-                elif chan == 2:
-                    self.log_hw('plexon_recording_start', plexon_ts=ts)
+                elif d.chan == 2:
+                    self.log_hw('plexon_recording_start', plexon_ts=d.ts)
                 else:
-                    self.log_hw('plexon_other_event', plexon_ts=ts, info={'channel': chan})
+                    self.log_hw('plexon_other_event', plexon_ts=d.ts, info={'channel': d.chan})
     
     def get_log_file_paths(self) -> Tuple[Path, Path]:
         base = self.config.log_file_name_base
