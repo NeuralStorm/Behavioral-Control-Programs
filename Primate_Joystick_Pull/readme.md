@@ -186,12 +186,14 @@ Bin size used for classification.
 ---
 ### `correct_reward_dur`
 
-Duration of the water reward when classification is correct in seconds.
+Duration of the water reward when classification is correct in seconds. Can be specified for specific cues by prefixing the value with the cue name and `:`. The unprefixed value is used as the default if no cue specific value is specified.
+
+Example: `correct_reward_dur,bOval:1,bRectangle:2,3`
 
 ---
 ### `classify_wait_time` (optional)
 
-Period of time to wait for spikes after the event type specified by `classification_event` occures in seconds. Defaults to `post_time_ms` converted to seconds.
+Period of time to wait for spikes after the event type specified by `classification_event` occurs in seconds. Defaults to `post_time_ms` converted to seconds.
 
 ---
 ### `classify_wait_mode` (optional)

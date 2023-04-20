@@ -591,7 +591,11 @@ class MonkeyImages:
                 })
                 
                 if correct:
-                    return self.config.classify_reward_duration, 0, 0
+                    assert self.config.classify_reward_duration is not None
+                    if self._classifier_event_type in self.config.classify_reward_duration:
+                        return self.config.classify_reward_duration[self._classifier_event_type], 0, 0
+                    else:
+                        return self.config.classify_reward_duration[None], 0, 0
                 else:
                     return None, 0, 0
             

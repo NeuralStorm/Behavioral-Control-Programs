@@ -192,7 +192,7 @@ class GameConfig:
             assert wait_mode in ['local', 'plexon']
             self.classify_wait_mode: Literal['local', 'plexon'] = wait_mode
             
-            self.classify_reward_duration: Optional[float] = float(config_dict['correct_reward_dur'][0])
+            self.classify_reward_duration: Optional[Dict[Optional[str], float]] = self.parse_reward_durations(config_dict['correct_reward_dur'])
             
             labels_path: Optional[str] = config_dict.get('labels', [None])[0]
             if labels_path is None:
@@ -329,6 +329,25 @@ class GameConfig:
                 assert any(x['cue'] == img for x in rw_thr), f"cue {img} has no reward threshold"
         
         self.reward_thresholds = rw_thr
+    
+    def parse_reward_durations(self, raw) -> Dict[Optional[str], float]:
+        out = {}
+        for cell in raw:
+            cell = cell.strip()
+            if not cell:
+                continue
+            if ':' in cell:
+                a, b = cell.split(':')
+                out[a] = float(b)
+            else:
+                out[None] = float(cell)
+        
+        # ensure there is either a default or all cues have durations
+        if None not in out:
+            for cue in self.selectable_images:
+                assert cue in out, f"cue {cue} has no classify reward duration"
+        
+        return out
     
     def classifier_config(self):
         assert self.classification_event is not None
