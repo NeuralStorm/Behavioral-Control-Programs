@@ -4,7 +4,27 @@
 # For keypad controls, search "def KeyPress"
 
 from typing import List, Tuple, Optional, Literal, Dict, Any
+import os
+import os.path
+import sys
 import logging
+import traceback
+from contextlib import ExitStack
+from itertools import groupby
+import random
+import statistics
+import csv
+import json
+from pathlib import Path
+import time
+from datetime import datetime, timedelta
+from collections import defaultdict, Counter
+from pprint import pprint
+
+try:
+    import winsound
+except ImportError:
+    winsound = None # type: ignore
 
 try:
     from pyopxclient import PyOPXClientAPI, OPX_ERROR_NOERROR, SPIKE_TYPE, CONTINUOUS_TYPE, EVENT_TYPE, OTHER_TYPE
@@ -18,27 +38,7 @@ else:
 
 import tkinter as tk
 from tkinter import filedialog
-import csv
-import json
-import os
-import os.path
-from pathlib import Path
-import time
-from datetime import datetime, timedelta
-import random
-import sys
-from contextlib import ExitStack
-try:
-    import winsound
-except ImportError:
-    winsound = None # type: ignore
-import statistics
-from collections import defaultdict, Counter
-import sys, traceback
-from pprint import pprint
 import numpy
-from itertools import groupby
-import random
 
 import behavioral_classifiers
 
@@ -57,14 +57,6 @@ source_numbers_types = {}
 source_numbers_names = {}
 source_numbers_rates = {}
 source_numbers_voltage_scalers = {}
-
-# To avoid overwhelming the console output, set the maximum number of data
-# blocks to print information about
-max_block_output = 1
-
-# To avoid overwhelming the console output, set the maximum number of continuous
-# samples or waveform samples to output
-max_samples_output = 1
 
 def sgroup(data, key):
     return groupby(sorted(data, key=key), key=key)
@@ -1094,9 +1086,9 @@ class MonkeyImages:
             if block_type == CONTINUOUS_TYPE and source_name == 'AI':
                 # Convert the samples from AD units to voltage using the voltage scaler, use tmp_samples[0] because it could be a list.
                 voltage_scaler = source_numbers_voltage_scalers[num_or_type]
-                samples = new_data.waveform[i][:max_samples_output]
+                samples = new_data.waveform[i]
                 samples = [s * voltage_scaler for s in samples]
-                val = samples[0]
+                val = samples[-1]
                 
                 if chan == self.config.joystick_channel:
                     if self.joystick_last_state is None:
