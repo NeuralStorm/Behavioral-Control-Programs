@@ -28,7 +28,6 @@ except ImportError:
 
 import tkinter as tk
 from tkinter import filedialog
-import numpy
 
 import behavioral_classifiers
 
@@ -113,9 +112,6 @@ class MonkeyImages:
         
         self.classifier_dbg = 'clsdbg' in sys.argv
         
-        # self.nidaq = use_hardware
-        self.nidaq = False
-        
         # delay for how often state is updated, only used for new loop
         self.cb_delay_ms: int = 1
         
@@ -151,29 +147,6 @@ class MonkeyImages:
             self.plexon: Optional[Plexon] = Plexon()
         else:
             self.plexon = None
-        
-        self.begin   = numpy.array([0,0,0,0,0,0,0,0], dtype=numpy.uint8) # Connector Currently on Port A, When switched to port B, Events = Event + 16
-        self.event0  = numpy.array([1,0,0,0,0,0,0,0], dtype=numpy.uint8) #task: EV30    #task2: NC
-        self.event1  = numpy.array([0,1,0,0,0,0,0,0], dtype=numpy.uint8) #task: EV29    #task2: NC
-        self.event2  = numpy.array([0,0,1,0,0,0,0,0], dtype=numpy.uint8) #task: EV28    #task2: EV31
-        self.event3  = numpy.array([0,0,0,1,0,0,0,0], dtype=numpy.uint8) #task: EV27    #task2: EV32
-        self.event4  = numpy.array([0,0,0,0,1,0,0,0], dtype=numpy.uint8) #task: EV26    #task2: NC
-        self.event5  = numpy.array([0,0,0,0,0,1,0,0], dtype=numpy.uint8) #task: EV25    #task2: EV21
-        self.event6  = numpy.array([0,0,0,0,0,0,1,0], dtype=numpy.uint8) #task: EV24    #task2: EV20
-        self.event7  = numpy.array([0,0,0,0,0,0,0,1], dtype=numpy.uint8) #task: EV23    #task2: EV19
-        
-        if self.nidaq == True:
-            self.task = Task()
-            self.task.CreateDOChan("/Dev2/port2/line0:7","",PyDAQmx.DAQmx_Val_ChanForAllLines)
-            self.task.StartTask()
-            self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
-            
-            self.task2 = Task()
-            self.task2.CreateDOChan("/Dev2/port1/line0:7","",PyDAQmx.DAQmx_Val_ChanForAllLines)
-            self.task2.StartTask()
-            self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
-        else: # For testing without plexon, initialize vars here
-            self.RecordingStartTimestamp = 0
         
         self.joystick_pull_threshold = 4
         
@@ -476,11 +449,6 @@ class MonkeyImages:
             # if winsound is not None:
             #     winsound.PlaySound(winsound.Beep(100,0), winsound.SND_PURGE) #Purge looping sounds
             
-            # EV19 Ready # TODO: Take this out when finish the connector since new start of trial comes from hand in home zone
-            if self.nidaq:
-                self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event7,None,None)
-                self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
-            
             self.game_frame.set_marker_level(1)
             
             gc_hand_removed_early = False
@@ -492,13 +460,6 @@ class MonkeyImages:
             # show image
             selected_image = self.config.images[selected_image_key]
             image_i = selected_image['nidaq_event_index']
-            
-            # EV25 , EV27, EV29, EV31
-            if image_i in [1,2,3,4]:
-                event_array = [None, self.event5, self.event3, self.event1, self.event2][image_i]
-                if self.nidaq:
-                    self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,event_array,None,None)
-                    self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
             
             for cb in in_zone_cbs:
                 cb.clear()
@@ -515,14 +476,6 @@ class MonkeyImages:
                 yield from waiter.wait(t=go_cue_delay, cond=lambda: not in_zone())
                 if waiter.trigger != 'time':
                     gc_hand_removed_early = True
-            
-            # EV26, EV28, EV30 EV32
-            if image_i in [1,2,3,4]:
-                # should this have duplicates with the list of event arrays above?
-                event_array = [None, self.event4, self.event2, self.event0, self.event3][image_i]
-                if self.nidaq:
-                    self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,event_array,None,None)
-                    self.task.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
             
             if gc_hand_removed_early:
                 in_zone_at_go_cue = False
@@ -679,10 +632,6 @@ class MonkeyImages:
                 traceback.print_exc()
             
             if reward_duration is None: # pull failed
-                # EV21 Pull failure
-                if self.nidaq:
-                    self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.event5,None,None)
-                    self.task2.WriteDigitalLines(1,1,10.0,PyDAQmx.DAQmx_Val_GroupByChannel,self.begin,None,None)
                 if self.config.EnableBlooperNoise:
                     if winsound is not None:
                         winsound.PlaySound(
@@ -712,10 +661,6 @@ class MonkeyImages:
                         'color': 'white',
                     })
                 
-                #EV20
-                if self.nidaq:
-                    self.task2.WriteDigitalLines(1, 1, 10.0, PyDAQmx.DAQmx_Val_GroupByChannel, self.event6, None, None)
-                    self.task2.WriteDigitalLines(1, 1, 10.0, PyDAQmx.DAQmx_Val_GroupByChannel, self.begin, None, None)
                 if winsound is not None:
                     winsound.PlaySound(
                         str(Path('./TaskSounds/zapsplat_multimedia_game_sound_kids_fun_cheeky_layered_mallets_complete_66202.wav')),
@@ -730,10 +675,6 @@ class MonkeyImages:
                 
                 if self.auto_water_reward_enabled and reward_duration > 0:
                     self.log_event("water_dispense", tags=['game_flow'], info={'duration': reward_duration})
-                    if self.nidaq:
-                        #EV23
-                        self.task.WriteDigitalLines(1, 1, 10.0, PyDAQmx.DAQmx_Val_GroupByChannel, self.event7, None, None)
-                        self.task.WriteDigitalLines(1, 1, 10.0, PyDAQmx.DAQmx_Val_GroupByChannel, self.begin, None, None)
                     if self.plexon:
                         self.plexon.water_on()
                 
@@ -743,11 +684,6 @@ class MonkeyImages:
                     self.plexon.water_off()
                 
                 self.clear_image()
-            
-            # EV24
-            if self.nidaq:
-                self.task.WriteDigitalLines(1, 1, 10.0, PyDAQmx.DAQmx_Val_GroupByChannel, self.event6, None, None)
-                self.task.WriteDigitalLines(1, 1, 10.0, PyDAQmx.DAQmx_Val_GroupByChannel, self.begin, None, None)
             
             log_entry = {
                 'discrim': selected_image_key, # str
@@ -767,10 +703,6 @@ class MonkeyImages:
         self.log_event("manual_water_dispense", tags=[], info={'duration': self.config.manual_reward_time})
         def gen():
             print("water on")
-            if self.nidaq:
-                #EV23
-                self.task.WriteDigitalLines(1, 1, 10.0, PyDAQmx.DAQmx_Val_GroupByChannel, self.event7, None, None)
-                self.task.WriteDigitalLines(1, 1, 10.0, PyDAQmx.DAQmx_Val_GroupByChannel, self.begin, None, None)
             if self.plexon:
                 self.plexon.water_on()
             t = time.perf_counter()
