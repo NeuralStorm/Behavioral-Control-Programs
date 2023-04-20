@@ -38,9 +38,16 @@ class EventsFileWriter:
         self._first_event = True
         
         self._f.write('[\n')
+        self._stack.callback(lambda: self._f.write('\n]\n'))
+    
+    def __enter__(self):
+        return self
+    
+    def __exit__(self, *exc):
+        self._stack.__exit__(*exc)
     
     def finish(self):
-        self._f.write('\n]\n')
+        # self._f.write('\n]\n')
         # if self._managing_file:
         #     self._f.close()
         self._stack.close()

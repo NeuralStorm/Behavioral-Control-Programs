@@ -70,6 +70,9 @@ import hjson
 import behavioral_classifiers
 from behavioral_classifiers import Classifier, EventsFileWriter
 
+from gen_templates import gen_templates_main
+from config import GameConfig
+
 logger = logging.getLogger(__name__)
 
 debug = logger.debug
@@ -116,7 +119,7 @@ def recolor(img, color, *, two_tone=False):
     
     return img
 
-def _screenshot_region(x: int, y: int, w: int, h: int) -> Image:
+def _screenshot_region(x: int, y: int, w: int, h: int) -> Image.Image:
     import pyscreenshot as ImageGrab
     # x //= 2
     # y //= 2
@@ -125,6 +128,7 @@ def _screenshot_region(x: int, y: int, w: int, h: int) -> Image:
     
     # img = ImageGrab.grab(bbox=bbox, backend='grim')
     img = ImageGrab.grab(bbox=bbox)
+    assert isinstance(img, Image.Image)
     return img
 
 def screenshot_widgets(widgets, path):
@@ -349,328 +353,6 @@ class InfoView:
             
             self.rows.append(frame)
 
-class GameConfig:
-    def __init__(self, *,
-        config_path: str,
-        load_images: bool = True,
-    ):
-        def load_csv():
-            data = []
-            with open(config_path, newline='') as csvfile:
-                spamreader = csv.reader(csvfile) #, delimiter=' ', quotechar='|')
-                for row in spamreader:
-                    #data = list(spamreader)
-                    data.append(row)
-            csvreaderdict = {}
-            for row in data:
-                if not row:
-                    continue
-                k = row[0].strip()
-                vs = [v.strip() for v in row[1:]]
-                # remove empty cells after the key and first value column
-                vs[1:] = [v for v in vs[1:] if v]
-                if not k or k.startswith('#'):
-                    continue
-                csvreaderdict[k] = vs
-            return csvreaderdict
-        
-        config_dict = load_csv()
-        
-        NO_DEFAULT = object()
-        def get(key, default=NO_DEFAULT, *, multi=False) -> Any:
-            val = config_dict.get(key)
-            if val in [None, [], ['']]:
-                if default is NO_DEFAULT:
-                    raise KeyError(key)
-                return default
-            else:
-                if multi:
-                    return val
-                else:
-                    assert val is not None
-                    return val[0]
-            
-            assert False
-        
-        self.raw_config = config_dict
-        # PARAMETERS META DATA
-        self.study_id: str = config_dict['Study ID'][0]       # 3 letter study code
-        self.session_id: str = config_dict['Session ID'][0] # Type of Session
-        self.experimental_group: str = get('experimental_group', 'NOTSET')
-        self.experimental_condition: str = get('experimental_condition', 'NOTSET')
-        self.animal_id: str = config_dict['Animal ID'][0]   # 3 digit number
-        start_dt = datetime.now()
-        self.start_time: str = start_dt.strftime('%Y%m%d_%H%M%S')
-        start_date_str = start_dt.strftime('%Y%m%d')
-        start_time_str = start_dt.strftime('%H%M%S')
-        
-        self.TaskType: str = config_dict['Task Type'][0]
-        
-        self.save_path: Path = Path(config_dict['Task Data Save Dir'][0])
-        if os.environ.get('out_file_name'):
-            self.log_file_name_base = os.environ['out_file_name']
-        else:
-            self.log_file_name_base: str = f"{self.study_id}{self.animal_id}_{self.experimental_group}_{self.experimental_condition}_{self.session_id}_{start_date_str}_{start_time_str}{self.TaskType}"
-        
-        self.discrim_delay_range: Tuple[float, float] = (
-            float(config_dict['Pre Discriminatory Stimulus Min delta t1'][0]),
-            float(config_dict['Pre Discriminatory Stimulus Max delta t1'][0]),
-        )
-        self.go_cue_delay_range: Tuple[float, float] = (
-            float(config_dict['Pre Go Cue Min delta t2'][0]),
-            float(config_dict['Pre Go Cue Max delta t2'][0]),
-        )
-        
-        self.MaxTimeAfterSound: int = int(config_dict['Maximum Time After Sound'][0])
-        self.InterTrialTime: float = float(config_dict['Inter Trial Time'][0])
-        self.manual_reward_time: float = float(config_dict['manual_reward_time'][0])
-        self.TimeOut: float = float(config_dict['Time Out'][0])
-        self.EnableTimeOut: bool = bool(self.TimeOut)
-        self.EnableBlooperNoise: bool = config_dict['Enable Blooper Noise'][0] == 'TRUE'
-        
-        self.task_type: Literal['homezone_exit', 'joystick_pull']
-        num_events: int = int(config_dict['Number of Events'][0])
-        if num_events == 0:
-            self.task_type = 'homezone_exit'
-        else:
-            self.task_type = 'joystick_pull'
-        
-        pspd = config_dict.get('post_succesful_pull_delay')
-        if pspd in [[''], []]:
-            pspd = None
-        if pspd is not None:
-            pspd = float(pspd[0])
-        self.post_succesful_pull_delay: Optional[float] = pspd
-        
-        jc = config_dict.get('joystick_channel')
-        if jc in [[''], [], None]:
-            jc = [3]
-        jc = int(jc[0])
-        self.joystick_channel: int = jc
-        
-        num_trials = config_dict.get('no_trials')
-        if num_trials == ['true']:
-            num_trials = [0]
-        elif num_trials in [[''], [], ['0']]:
-            num_trials = None
-        if num_trials is not None:
-            num_trials = int(num_trials[0])
-        self.max_trials: Optional[int] = num_trials
-        
-        image_ratios = config_dict.get('image_ratios')
-        if image_ratios is not None:
-            if len(image_ratios) == 0:
-                image_ratios = None
-            else:
-                image_ratios = [int(x.strip()) for x in image_ratios]
-        
-        if load_images:
-            self.load_images(config_dict['images'], image_ratios)
-        self.selectable_images: List[str]
-        # image selection list has keys duplicated based on image_ratios
-        self.image_selection_list: List[str]
-        self.images: Dict[str, Dict[str, Any]]
-        
-        self.load_thresholds(config_dict['reward_thresholds'])
-        self.reward_thresholds: List[Dict[str, Any]]
-        
-        photodiode_range = config_dict.get('photodiode_range')
-        if photodiode_range in [None, [], ['']]:
-            self.photodiode_range: Optional[Tuple[float, float]] = None
-        else:
-            assert photodiode_range is not None
-            pmin, pmax = config_dict['photodiode_range']
-            self.photodiode_range = float(pmin), float(pmax)
-        
-        allowed_event_classes = [
-            'joystick_pull',
-            'joystick_released',
-            'homezone_enter',
-            'joystick_zone_enter',
-            'homezone_exit',
-            'homezone_exit',
-        ]
-        evt, = config_dict.get('classification_event', (None,))
-        evt = evt or None
-        assert evt is None or evt in allowed_event_classes
-        self.classification_event: Optional[str] = evt
-        if evt is not None:
-            self.post_time = int(config_dict['post_time_ms'][0])
-            self.bin_size = int(config_dict['bin_size_ms'][0])
-            
-            template_in_path = config_dict.get('template_in')
-            if template_in_path in [None, [], ['']]:
-                self.template_in_path: Optional[Path] = None
-            else:
-                assert template_in_path is not None
-                self.template_in_path = Path(template_in_path[0])
-                assert self.template_in_path.is_file()
-            
-            baseline = config_dict.get('baseline')
-            if baseline in [None, [], [''], ['true']]:
-                self.baseline: bool = True
-            elif baseline in [['false']]:
-                self.baseline = False
-            else:
-                raise ValueError(f"invalid setting for baseline `{baseline}`")
-            
-            classify_wait_time = config_dict.get('classify_wait_time')
-            if classify_wait_time in [None, [], ['']]:
-                self.classify_wait_time: float = self.post_time / 1000
-            else:
-                assert classify_wait_time is not None
-                self.classify_wait_time = float(classify_wait_time[0])
-            
-            classify_wait_timeout: Optional[List[str]] = config_dict.get('classify_wait_timeout')
-            if classify_wait_timeout in [None, [], ['']]:
-                self.classify_wait_timeout: Optional[float] = None
-            else:
-                assert classify_wait_timeout is not None
-                self.classify_wait_timeout = float(classify_wait_timeout[0])
-            
-            # local, plexon
-            wait_mode: Literal['local', 'plexon'] = config_dict.get('classify_wait_mode', ['plexon'])[0] # type: ignore
-            assert wait_mode in ['local', 'plexon']
-            self.classify_wait_mode: Literal['local', 'plexon'] = wait_mode
-            
-            self.classify_reward_duration: Optional[float] = float(config_dict['correct_reward_dur'][0])
-            
-            labels_path: Optional[str] = config_dict.get('labels', [None])[0]
-            if labels_path is None:
-                self.labels: Optional[Dict[str, List[int]]] = None
-            else:
-                p = Path(labels_path)
-                assert p.exists(), "labels file must exist if specified"
-                with open(p) as f:
-                    labels_data = hjson.load(f)
-                self.labels = labels_data['channels']
-        else:
-            self.post_time = 1
-            self.bin_size = 1
-            self.template_in_path = None
-            self.baseline = True
-            self.classify_wait_time = 0.2
-            self.classify_reward_duration = None
-            self.labels = None
-    
-    def load_images(self, config_images: List[str], image_ratios: Optional[List[int]]):
-        # config_images = config_dict['images']
-        def build_image_entry(i, name):
-            name = name.strip()
-            assert '.' not in name, f"{name}"
-            
-            obj = {}
-            
-            for color in ['white', 'red', 'green']:
-                img = Image.open(f"./images_gen/{color}/{name}.png")
-                width = img.size[0]
-                height = img.size[1]
-                obj[color] = img
-            
-            obj[None] = obj['green']
-            
-            return name, {
-                'width': width,
-                'height': height,
-                'img': obj,
-                'nidaq_event_index': i+1,
-            }
-        
-        images = dict(
-            build_image_entry(i, x)
-            for i, x in enumerate(config_images)
-        )
-        
-        self.selectable_images = list(images)
-        if image_ratios is None:
-            self.image_selection_list = self.selectable_images
-        else:
-            assert len(image_ratios) == len(self.selectable_images)
-            sel_list: List[str] = []
-            for count, key in zip(image_ratios, self.selectable_images):
-                sel_list.extend(key for _ in range(count))
-            assert len(sel_list) == sum(image_ratios)
-            self.image_selection_list = sel_list
-        
-        img = Image.open('./images_gen/prepare.png')
-        
-        images['yPrepare'] = {
-            'width': img.size[0],
-            'height': img.size[1],
-            'img': {None: img},
-        }
-        
-        red = Image.open('./images_gen/box_red.png')
-        green = Image.open('./images_gen/box_green.png')
-        white = Image.open('./images_gen/box_white.png')
-        
-        images['box'] = {
-            'width': green.size[0],
-            'height': green.size[1],
-            'img': {
-                'red': red,
-                'green': green,
-                'white': white,
-                None: green,
-            }
-        }
-        
-        for image in images.values():
-            image['tk'] = {
-                k: ImageTk.PhotoImage(img)
-                for k, img in image['img'].items()
-            }
-        
-        self.images = images
-    
-    def parse_threshold(self, s):
-        s = s.strip()
-        s = s.split('\'')
-        s = [x.split('=') for x in s]
-        rwd = {k.strip(): v.strip() for k, v in s}
-        
-        if 'cue' in rwd:
-            assert rwd['cue'] in self.selectable_images, f"unknown cue {rwd['cue']}"
-        else:
-            rwd['cue'] = None
-        
-        for x in ['low', 'mid', 'high']:
-            if x in rwd:
-                rwd[x] = float(rwd[x])
-        
-        if 'mid' not in rwd:
-            rwd['mid'] = rwd['low'] + (rwd['high'] - rwd['low']) / 2
-        elif 'low' not in rwd:
-            rwd['low'] = rwd['mid'] - (rwd['high'] - rwd['mid'])
-        elif 'high' not in rwd:
-            rwd['high'] = rwd['mid'] + (rwd['mid'] - rwd['low'])
-        
-        assert rwd['low'] < rwd['mid'] < rwd['high']
-        
-        if rwd['type'] == 'linear':
-            for x in ['reward_max', 'reward_min']:
-                rwd[x] = float(rwd[x])
-        elif rwd['type'] == 'trapezoid':
-            for x in ['reward_max', 'reward_min']:
-                rwd[x] = float(rwd[x])
-        elif rwd['type'] == 'flat':
-            rwd['reward_duration'] = float(rwd['reward_duration'])
-        else:
-            raise ValueError(f"invalid reward type {rwd['type']}")
-        
-        return rwd
-    
-    def load_thresholds(self, raw_thresholds):
-        
-        rw_thr = [self.parse_threshold(x) for x in raw_thresholds]
-        
-        # ensure that there are reward thresholds for all images or a threshold for all cues
-        if all(x['cue'] is not None for x in rw_thr):
-            for img in self.selectable_images:
-                assert any(x['cue'] == img for x in rw_thr), f"cue {img} has no reward threshold"
-        
-        self.reward_thresholds = rw_thr
-
 class GameFrame(tk.Frame):
     def __init__(self, parent, *,
         layout_debug: bool,
@@ -876,6 +558,8 @@ class PhotoDiode:
 
 class MonkeyImages:
     def __init__(self, parent):
+        self._stack = ExitStack()
+        
         test_config = 'test' in sys.argv or 'tc' in sys.argv
         no_wait_for_start = 'nw' in sys.argv
         use_hardware = 'test' not in sys.argv and 'nohw' not in sys.argv
@@ -1038,25 +722,8 @@ class MonkeyImages:
         # self.Area2_left_pres = False    # Joystick Area
         self.ImageReward = True        # Default Image Reward set to True
         
-        self.classifier: Classifier = behavioral_classifiers.from_config(
-            # {'type': 'random', 'event_types': self.config.image_selection_list},
-            {
-                'type': 'eucl',
-                'post_time': self.config.post_time,
-                'bin_size': self.config.bin_size,
-                'labels': self.config.labels,
-            },
-            template_path = self.config.template_in_path,
-            baseline = self.config.baseline,
-        )
-        
         # set to the selected image key at the start of the trial for use in classification event log
         self._classifier_event_type: Optional[str] = None
-        # set to the timestamp of the last recieved event from plexon
-        self._last_external_ts: Optional[float] = None
-        # set to the last timestamp of the last recieved classification event of each type
-        # e.g. {'joystick_pull': 10}
-        self._last_classification_events: Dict[str, float] = {}
         
         self._current_photodiode_value: Optional[float] = None
         self._photodiode = PhotoDiode()
@@ -1066,7 +733,15 @@ class MonkeyImages:
         
         self.classifier_events_path = self.config.save_path / f"{self.config.log_file_name_base}_classifier_events.json.bz2"
         self.template_out_path = self.config.save_path / f"{self.config.log_file_name_base}_templates.json"
-        self.events_file: EventsFileWriter = EventsFileWriter(path=self.classifier_events_path)
+        
+        # save log files must be added to the stack first so the classifier events
+        # file will be closed before template generation is attempted
+        self._stack.callback(self.save_log_files)
+        
+        self._cl_helper = self._stack.enter_context(behavioral_classifiers.helpers.Helper(
+            config = self.config.classifier_config(),
+            events_file_path = self.classifier_events_path,
+        ))
         
         print("ready for plexon:" , self.plexon)
         self.root = parent
@@ -1120,36 +795,19 @@ class MonkeyImages:
                         self.log_hw('plexon_recording_start', plexon_ts=new_data.timestamp[i], info={'wait': True})
         
         if self.classifier_dbg:
-            thread_stop = [False]
-            def gen_dbg_spikes():
-                while not thread_stop[0]:
-                    self.events_file.write_spike(
-                        channel = random.choice([1, 2, 3]),
-                        unit = random.choice([1, 2]),
-                        timestamp = time.perf_counter(),
-                    )
-                    self._last_external_ts = time.perf_counter()
-                    time.sleep(random.choice([0.001, 0.004, 0.008]))
-            thread = Thread(target=gen_dbg_spikes)
-            thread.daemon = True
-            thread.start()
-            self.classifier_dbg_thread = (thread, thread_stop)
-        else:
-            self.classifier_dbg_thread = None
+            from behavioral_classifiers.helpers.debug_tools import DebugSpikeSource
+            self._stack.enter_context(DebugSpikeSource(self._cl_helper))
     
     def __enter__(self):
         pass
     
     def __exit__(self, *exc):
         if self.plexon:
-            self.plexdo.clear_bit(self.device_number, self.reward_nidaq_bit)
-        if self.classifier_dbg_thread is not None:
-            thread, thread_stop = self.classifier_dbg_thread
-            thread_stop[0] = True
-            thread.join()
-        # events file needs to be closed first so save_log_files can use it to generate templates
-        self.events_file.finish()
-        self.save_log_files()
+            try:
+                self.plexdo.clear_bit(self.device_number, self.reward_nidaq_bit)
+            except:
+                traceback.print_exc()
+        self._stack.__exit__(*exc)
     
     def load_config(self):
         self.config = GameConfig(config_path=self.config_path)
@@ -1256,7 +914,7 @@ class MonkeyImages:
             selected_image_key = random.choice(self.config.image_selection_list)
             self._classifier_event_type = selected_image_key
             
-            self.classifier.clear()
+            self._cl_helper.trial_start()
             
             # print(self.normalized_time)
             
@@ -1265,7 +923,6 @@ class MonkeyImages:
             self.joystick_release_remote_ts = None
             self.joystick_zone_enter = None
             self.joystick_zone_exit = None
-            self._last_classification_events = {}
             
             trial_start = self.normalized_time
             
@@ -1495,36 +1152,20 @@ class MonkeyImages:
                 if self.config.classify_wait_mode == 'local':
                     yield from wait(self.config.classify_wait_time)
                 elif self.config.classify_wait_mode == 'plexon':
-                    # assert self._last_external_ts is not None
                     assert self.config.classification_event is not None
-                    local_start = time.perf_counter()
-                    while True:
-                        # print(self._last_external_ts, self._last_classification_events.get(self.config.classification_event))
-                        if self.config.classify_wait_timeout is not None:
-                            if time.perf_counter() - local_start > self.config.classify_wait_timeout:
-                                logger.warning("plexon event wait timed out")
-                                self.log_event('classification_timeout')
-                                # if the correct classification event hasn't been recieved
-                                # the classifier will still be using an event from a previous trial
-                                # and produce incorrect results
-                                return None, 0, 0
-                        
-                        if self._last_external_ts is None:
-                            yield
-                            continue
-                        if self.config.classification_event not in self._last_classification_events:
-                            yield
-                            continue
-                        time_since_evt = self._last_external_ts - self._last_classification_events[self.config.classification_event]
-                        
-                        if time_since_evt >= self.config.classify_wait_time:
-                            break
-                        yield
+                    
+                    wait_res = yield from self._cl_helper.external_wait(self.config.classify_wait_time, self.config.classify_wait_timeout)
+                    if wait_res is None:
+                        # if the correct classification event hasn't been received
+                        # the classifier will still be using an event from a previous trial
+                        # and produce incorrect results
+                        return None, 0, 0
                 else:
                     raise ValueError(f"Unknown classify wait mode `{self.config.classify_wait_mode}`")
                 
-                debug("before classisfy")
-                res = self.classifier.classify()
+                debug("before classify")
+                assert self._cl_helper.classifier is not None
+                res = self._cl_helper.classifier.classify()
                 debug("after classify")
                 correct = self._classifier_event_type == res
                 
@@ -1781,8 +1422,9 @@ class MonkeyImages:
             self.manual_water_dispense()
         elif key == 'p':
             screenshot_widget(self.root, 'test.png')
-            screenshot_widget(self.info_view.window, 'test2.png')
-            screenshot_widgets(self.info_view.rows, 'test3.png')
+            if self.info_view is not None:
+                screenshot_widget(self.info_view.window, 'test2.png')
+                screenshot_widgets(self.info_view.rows, 'test3.png')
         elif key == '`':
             self.Stop()
             self.root.quit()
@@ -1854,11 +1496,8 @@ class MonkeyImages:
         self.game_frame.cv1.delete("all")
     
     def handle_classification_event(self, event_class, timestamp):
-        self._last_classification_events[event_class] = timestamp
-        if self.config.classification_event == event_class:
-            self.classifier.event(timestamp=timestamp)
         if self._classifier_event_type is not None:
-            self.events_file.write_event(
+            self._cl_helper.event(
                 event_type = self._classifier_event_type,
                 timestamp = timestamp,
                 event_class = event_class,
@@ -1882,7 +1521,7 @@ class MonkeyImages:
             chan = new_data.channel[i]
             ts = new_data.timestamp[i]
             
-            self._last_external_ts = ts
+            self._cl_helper.any_event(ts)
             
             if block_type == CONTINUOUS_TYPE and source_name == 'AI':
                 # Convert the samples from AD units to voltage using the voltage scaler, use tmp_samples[0] because it could be a list.
@@ -1921,8 +1560,7 @@ class MonkeyImages:
             elif block_type == SPIKE_TYPE:
                 unit = new_data.unit[i]
                 
-                self.classifier.spike(channel = chan, unit = unit, timestamp = ts)
-                self.events_file.write_spike(
+                self._cl_helper.spike(
                     channel = chan,
                     unit = unit,
                     timestamp = ts,
@@ -2210,17 +1848,6 @@ class MonkeyImages:
         
         return info
 
-class TestFrame(tk.Frame,):
-    def __init__(self, parent, *args, **kwargs):
-        tk.Frame.__init__(self, parent, *args, **kwargs)
-        
-        def x():
-            pass
-        
-        startbutton = tk.Button(parent, text = "Start-'a'", fg='white', height = 5, width = 6, command = x)
-        startbutton.pack(side = tk.LEFT)
-    
-
 def generate_histograms(overwrite=False):
     from gen_histogram import gen_histogram
     
@@ -2352,25 +1979,6 @@ def gen_images():
     #     out_path / 'white/monkey3.png',
     # )
 
-def gen_templates():
-    ep, tp, ec, pt, bs, labels_path = sys.argv[2:]
-    
-    if labels_path == '-':
-        labels = None
-    else:
-        with open(labels_path) as f:
-            label_data = hjson.load(f)
-        labels = label_data['channels']
-    
-    behavioral_classifiers.eucl_classifier.build_templates_from_new_events_file(
-        events_path = Path(ep),
-        template_path = Path(tp),
-        event_class = ec,
-        post_time = int(pt),
-        bin_size = int(bs),
-        labels = labels,
-    )
-
 def main():
     FORMAT = "%(levelname)s:%(message)s"
     if os.environ.get('log'):
@@ -2396,14 +2004,11 @@ def main():
         return
     
     if cmd == 'gen_templates':
-        gen_templates()
+        gen_templates_main(sys.argv[2:])
         return
     
     root = tk.Tk()
     root.configure(bg='black', bd=0)
-    
-    # MonkeyTest = MonkeyImages(root)
-    # MonkeyTest = TestFrame(root)
     
     with MonkeyImages(root):
         tk.mainloop()

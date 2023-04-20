@@ -130,6 +130,7 @@ class EuclClassifier(Classifier):
             for event_type, template_psth in self.templates.items()
         }
         
+        assert dists
         closest_event_type, _ = min(dists.items(), key=lambda x: x[1])
         
         return closest_event_type
@@ -302,6 +303,8 @@ def build_templates_from_new_events_file(*,
                 l = l.rstrip('\r\n')
                 if l == ']':
                     break
+                if l == '':
+                    continue
                 l = l.rstrip(',')
                 yield json.loads(l)
     
