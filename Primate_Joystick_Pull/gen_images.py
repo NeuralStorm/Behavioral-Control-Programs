@@ -1,4 +1,10 @@
 
+from pathlib import Path
+from copy import copy
+import shutil
+
+from PIL import Image
+
 # img: output of pillow Image
 # color: (r, g, b)
 def recolor(img, color, *, two_tone=False):
@@ -13,8 +19,10 @@ def recolor(img, color, *, two_tone=False):
         for y in range(img.size[1]):
             r, g, b, a = data[x, y]
             
-            v = (r + g + b) // 3
+            v = (r + g + b) / 3
             v = 255 - v
+            v *= (255/a if a else 0)
+            v = int(v)
             
             if two_tone and v > 0:
                 v = 255
@@ -34,14 +42,17 @@ def gen_images():
     src = Path('./TaskImages_Joystick')
     
     prep_path = out_path / 'prepare.png'
-    img = Image.open(src / 'yPrepare.png')
+    # img = Image.open(src / 'yPrepare.png')
+    img = Image.open(src / 'yPrepare_hollow.png')
     img.thumbnail(CANVAS_SIZE)
-    img = recolor(img, (0, SAT, 0))
+    # img = recolor(img, (0, SAT, 0))
+    img = recolor(img, (114, 114, 114))
     img.save(prep_path, 'PNG')
     
     img = Image.open(src / 'eBlank.png')
     img.thumbnail(CANVAS_SIZE)
-    cimg = recolor(img, (0, SAT, 0), two_tone=True)
+    # cimg = recolor(img, (0, SAT, 0), two_tone=True)
+    cimg = recolor(img, (57, 255, 20), two_tone=True)
     p = out_path / 'box_green.png'
     cimg.save(p, 'PNG')
     
@@ -57,7 +68,8 @@ def gen_images():
     red_dir = out_path / 'red'
     white_dir = out_path / 'white'
     colors = [
-        (green_dir, (0, SAT, 0)),
+        # (green_dir, (0, SAT, 0)),
+        (green_dir, (255, 255, 0)),
         (red_dir, (SAT, 0, 0)),
         (white_dir, (SAT, SAT, SAT)),
     ]
@@ -137,3 +149,6 @@ def gen_images():
     #     out_path / 'white/bRectangle.png',
     #     out_path / 'white/monkey3.png',
     # )
+
+if __name__ == '__main__':
+    gen_images()
