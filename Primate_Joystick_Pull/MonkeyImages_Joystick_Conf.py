@@ -184,10 +184,13 @@ class MonkeyImages:
         # file will be closed before template generation is attempted
         self._stack.callback(self.save_log_files)
         
-        self._cl_helper = self._stack.enter_context(behavioral_classifiers.helpers.Helper(
-            config = self.config.classifier_config(),
-            events_file_path = self.classifier_events_path,
-        ))
+        if self.config.classification_event is not None:
+            self._cl_helper = self._stack.enter_context(behavioral_classifiers.helpers.Helper(
+                config = self.config.classifier_config(),
+                events_file_path = self.classifier_events_path,
+            ))
+        else:
+            self._cl_helper = None
         
         print("ready for plexon:" , bool(self.plexon))
         self.root = parent
@@ -230,6 +233,7 @@ class MonkeyImages:
                 print ("Recording start detected.")
         
         if self.classifier_dbg:
+            assert self._cl_helper is not None
             from behavioral_classifiers.helpers.debug_tools import DebugSpikeSource
             self._stack.enter_context(DebugSpikeSource(self._cl_helper))
     
@@ -349,7 +353,8 @@ class MonkeyImages:
             selected_image_key = random.choice(self.config.image_selection_list)
             self._classifier_event_type = selected_image_key
             
-            self._cl_helper.trial_start()
+            if self._cl_helper is not None:
+                self._cl_helper.trial_start()
             
             # print(self.normalized_time)
             
@@ -564,6 +569,7 @@ class MonkeyImages:
             
             def get_classification_info():
                 debug("waiting to classify")
+                assert self._cl_helper is not None
                 if self.config.classify_wait_mode == 'local':
                     yield from wait(self.config.classify_wait_time)
                 elif self.config.classify_wait_mode == 'plexon':
@@ -893,7 +899,8 @@ class MonkeyImages:
         self.game_frame.cv1.delete("all")
     
     def handle_classification_event(self, event_class, timestamp):
-        if self._classifier_event_type is not None:
+        if self._cl_helper is not None:
+            assert self._classifier_event_type is not None
             self._cl_helper.event(
                 event_type = self._classifier_event_type,
                 timestamp = timestamp,
@@ -910,7 +917,8 @@ class MonkeyImages:
         
         assert self.plexon
         for d in self.plexon.get_data():
-            self._cl_helper.any_event(d.ts)
+            if self._cl_helper is not None:
+                self._cl_helper.any_event(d.ts)
             
             if d.type == d.ANALOG:
                 if d.chan == self.config.joystick_channel:
@@ -939,11 +947,12 @@ class MonkeyImages:
                     if self._photodiode.changed:
                         self.log_hw('photodiode_changed', plexon_ts=d.ts, info={'value': d.value})
             elif d.type == d.SPIKE:
-                self._cl_helper.spike(
-                    channel = d.chan,
-                    unit = d.unit,
-                    timestamp = d.ts,
-                )
+                if self._cl_helper is not None:
+                    self._cl_helper.spike(
+                        channel = d.chan,
+                        unit = d.unit,
+                        timestamp = d.ts,
+                    )
             elif d.type == d.EVENT:
                 if d.chan == 14: # enter home zone
                     self.log_hw('homezone_enter', plexon_ts=d.ts)
