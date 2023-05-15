@@ -128,7 +128,7 @@ class Plexon:
             # else:
             #     num_blocks_to_output = max_block_output
             for i in range(new_data.num_data_blocks):
-                if new_data.source_num_or_type[i] == self.other_event_source and new_data.channel[i] == self.other_event_source: # Start event timestamp is channel 2 in 'Other Events' source
+                if new_data.source_num_or_type[i] == self.other_event_source and new_data.channel[i] == 2: # Start event timestamp is channel 2 in 'Other Events' source
                     # print ("Recording start detected. All timestamps will be relative to a start time of {} seconds.".format(new_data.timestamp[i]))
                     # WaitForStart = False
                     # self.RecordingStartTimestamp = new_data.timestamp[i]
