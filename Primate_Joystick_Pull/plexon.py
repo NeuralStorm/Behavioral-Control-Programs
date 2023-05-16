@@ -161,7 +161,7 @@ class Plexon:
                 samples = [s * voltage_scaler for s in samples]
                 val = samples[-1]
                 
-                yield PlexonEvent(ts, PlexonEvent.ANALOG, value=val)
+                yield PlexonEvent(ts, PlexonEvent.ANALOG, value=val, chan=chan)
             elif block_type == SPIKE_TYPE:
                 unit = new_data.unit[i]
                 yield PlexonEvent(ts, PlexonEvent.SPIKE, chan=chan, unit=unit)
