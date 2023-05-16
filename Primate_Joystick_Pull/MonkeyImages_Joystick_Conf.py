@@ -480,10 +480,16 @@ class MonkeyImages:
             if not gc_hand_removed_early:
                 yield from waiter.wait(t=go_cue_delay, cond=lambda: not in_zone())
                 if waiter.trigger != 'time':
-                    gc_hand_removed_early = True
+                    # gc_hand_removed_early = True
+                    in_zone_at_go_cue = False
+                else:
+                    in_zone_at_go_cue = True
+            else:
+                in_zone_at_go_cue = False
             
             if gc_hand_removed_early:
-                in_zone_at_go_cue = False
+                # in_zone_at_go_cue = False
+                pass
             else:
                 # display image with box
                 self.log_event('go_cue_shown', tags=['game_flow'], info={
@@ -492,7 +498,7 @@ class MonkeyImages:
                 self.show_image(selected_image_key, boxed=True)
                 self.game_frame.set_marker_level(0.2)
                 
-                in_zone_at_go_cue = in_zone()
+                # in_zone_at_go_cue = in_zone()
             
             if in_zone_at_go_cue:
                 if winsound is not None:
