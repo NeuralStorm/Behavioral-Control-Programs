@@ -507,8 +507,11 @@ class MonkeyImages:
                 log_failure_reason[0] = s
             
             def get_pull_info():
+                if gc_hand_removed_early:
+                    fail_r('hand removed from homezone before discriminandum')
+                    return None, 0, 0
                 if not in_zone_at_go_cue:
-                    fail_r('hand removed from homezone before cue')
+                    fail_r('hand removed from homezone before go cue')
                     return None, 0, 0
                 
                 if self.joystick_pulled: # joystick pulled before prompt
@@ -545,8 +548,11 @@ class MonkeyImages:
             
             def get_homezone_exit_info():
                 # hand removed from home zone before cue
+                if gc_hand_removed_early:
+                    fail_r('hand removed from homezone before discriminandum')
+                    return None, 0, 0
                 if not in_zone_at_go_cue:
-                    fail_r('hand removed before cue')
+                    fail_r('hand removed from homezone before go cue')
                     return None, 0, 0
                 
                 # wait up to MaxTimeAfterSound for the hand to exit the homezone
