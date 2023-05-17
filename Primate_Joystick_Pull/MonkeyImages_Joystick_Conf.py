@@ -40,6 +40,17 @@ logger = logging.getLogger(__name__)
 
 debug = logger.debug
 
+class Sentinel:
+    """used to check if callbacks have been called"""
+    def __init__(self):
+        self.triggered: bool = False
+    
+    def __bool__(self) -> bool:
+        return self.triggered
+    
+    def set(self):
+        self.triggered = True
+
 def sgroup(data, key):
     return groupby(sorted(data, key=key), key=key)
 
@@ -266,6 +277,8 @@ class MonkeyImages:
         }
         
         self.event_log.append(out)
+        
+        self._trigger_event(name)
     
     def log_hw(self, name, *, sim: bool = False, info=None, plexon_ts: Optional[float] = None):
         tags = ['hw']
@@ -278,6 +291,8 @@ class MonkeyImages:
         self.log_event(name, tags=tags, info=info)
     
     def _register_callback(self, event_key, cb):
+        if event_key not in self._callbacks:
+            self._callbacks[event_key] = set()
         self._callbacks[event_key].add(cb)
         cb_obj = RegisteredCallback(cb, self._clear_callback)
         return cb_obj
@@ -293,6 +308,8 @@ class MonkeyImages:
     # call callbacks registered for event key
     def _trigger_event(self, key):
         if self.paused:
+            return
+        if key not in self._callbacks:
             return
         for cb in self._callbacks[key]:
             cb()
@@ -380,6 +397,7 @@ class MonkeyImages:
                     yield
             
             self.log_event('trial_start', tags=['game_flow'], info={
+                'discrim': selected_image_key,
                 'discrim_delay': discrim_delay,
                 'go_cue_delay': go_cue_delay,
                 'task_type': self.config.task_type,
@@ -454,6 +472,9 @@ class MonkeyImages:
             # if winsound is not None:
             #     winsound.PlaySound(winsound.Beep(100,0), winsound.SND_PURGE) #Purge looping sounds
             
+            joystick_pulled = Sentinel()
+            trial_stack.enter_context(self._register_callback('joystick_pulled', joystick_pulled.set))
+            
             self.game_frame.set_marker_level(1)
             
             gc_hand_removed_early = False
@@ -513,15 +534,15 @@ class MonkeyImages:
                 log_failure_reason[0] = s
             
             def get_pull_info():
+                if joystick_pulled: # joystick pulled before prompt
+                    fail_r('joystick pulled before cue')
+                    return None, 0, 0
+                
                 if gc_hand_removed_early:
                     fail_r('hand removed from homezone before discriminandum')
                     return None, 0, 0
                 if not in_zone_at_go_cue:
                     fail_r('hand removed from homezone before go cue')
-                    return None, 0, 0
-                
-                if self.joystick_pulled: # joystick pulled before prompt
-                    fail_r('joystick pulled before cue')
                     return None, 0, 0
                 
                 # cue_time = trial_t()
@@ -847,11 +868,9 @@ class MonkeyImages:
         elif key == '1':
             self.Area1_right_pres = not self.Area1_right_pres
             if self.Area1_right_pres:
-                self._trigger_event('homezone_enter')
                 self.log_hw('homezone_enter', sim=True)
                 self.dbg_classification_event('homezone_enter')
             else:
-                self._trigger_event('homezone_exit')
                 self.log_hw('zone_exit', sim=True, info={'simulated_zone': 'homezone'})
                 self.dbg_classification_event('homezone_exit')
             print('in zone toggled', self.Area1_right_pres)
@@ -969,7 +988,6 @@ class MonkeyImages:
                 if d.chan == 14: # enter home zone
                     self.log_hw('homezone_enter', plexon_ts=d.ts)
                     self.Area1_right_pres = True
-                    self._trigger_event('homezone_enter')
                     
                     self.handle_classification_event('homezone_enter', d.ts)
                 elif d.chan == 11: # enter joystick zone
