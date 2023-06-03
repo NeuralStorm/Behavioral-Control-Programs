@@ -2,6 +2,7 @@
 import sys
 from pathlib import Path
 import argparse
+import traceback
 
 import plotnine
 
@@ -244,6 +245,8 @@ def parse_args():
     parser.add_argument('--overwrite', action='store_true',
         help="overwrite existing data files instead of skipping them")
     
+    parser.add_argument('--skip-failed', action='store_true')
+    
     parser.add_argument('input', nargs='+', type=Path,
         help='input events json files')
     
@@ -259,7 +262,15 @@ def main():
         if output_path.is_file() and not args.overwrite:
             continue
         
-        gen_histogram(input_path, output_path)
+        try:
+            gen_histogram(input_path, output_path)
+        except:
+            if not args.skip_failed:
+                raise
+            traceback.print_exc()
+            print("exception ocurred processing file", input_path)
+            with open(output_path, 'w') as _f:
+                pass
 
 if __name__ == '__main__':
     main()
