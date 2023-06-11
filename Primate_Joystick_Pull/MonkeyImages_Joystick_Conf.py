@@ -3,7 +3,7 @@
     """
 # For keypad controls, search "def KeyPress"
 
-from typing import List, Tuple, Optional, Literal, Dict, Any
+from typing import List, Tuple, Optional, Literal, Dict, Any, Union
 import os
 import os.path
 import sys
@@ -116,6 +116,9 @@ class MonkeyImages:
         test_config = 'test' in sys.argv or 'tc' in sys.argv
         no_wait_for_start = 'nw' in sys.argv
         use_hardware = 'test' not in sys.argv and 'nohw' not in sys.argv
+        ability_mode = 'ability' in sys.argv
+        if ability_mode:
+            use_hardware = True
         
         show_info_view = 'noinfo' not in sys.argv
         hide_buttons = 'nobtn' in sys.argv
@@ -154,8 +157,12 @@ class MonkeyImages:
         self.event_log = []
         
         if use_hardware:
-            from plexon import Plexon
-            self.plexon: Optional[Plexon] = Plexon()
+            if ability_mode:
+                from data_bridge import DataBridge
+                self.plexon = DataBridge()
+            else:
+                from plexon import Plexon
+                self.plexon: Optional[Plexon] = Plexon()
         else:
             self.plexon = None
         
@@ -985,19 +992,35 @@ class MonkeyImages:
                         timestamp = d.ts,
                     )
             elif d.type == d.EVENT:
+                # negative channels are falling edges from neurokey interface
+                # neuorkey interface won't send channel 12
                 if d.chan == 14: # enter home zone
                     self.log_hw('homezone_enter', plexon_ts=d.ts)
                     self.Area1_right_pres = True
                     
                     self.handle_classification_event('homezone_enter', d.ts)
+                elif d.chan == -14:
+                    self.log_hw('homezone_exit', plexon_ts=d.ts)
+                    self.Area1_right_pres = False
+                    self._trigger_event('homezone_exit')
+                    
+                    self.handle_classification_event('homezone_exit', d.ts)
                 elif d.chan == 11: # enter joystick zone
                     self.log_hw('joystick_zone_enter', plexon_ts=d.ts)
                     if self.joystick_zone_enter is None:
                         self.joystick_zone_enter = d.ts
                     
                     self.handle_classification_event('joystick_zone_enter', d.ts)
+                elif d.chan == -11:
+                    self.log_hw('joystick_zone_exit', plexon_ts=d.ts)
+                    self.joystick_zone_exit = d.ts
+                    
+                    self.handle_classification_event('joystick_zone_exit', d.ts)
                 elif d.chan == 12: # exit either zone
-                    self.log_hw('zone_exit', plexon_ts=d.ts)
+                    self.log_hw('zone_exit', plexon_ts=d.ts, info={
+                        'was_in_homezone': self.Area1_right_pres,
+                        'was_in_joystick_zone': self.joystick_zone_enter is not None and self.joystick_zone_exit is None,
+                    })
                     if self.Area1_right_pres:
                         self.Area1_right_pres = False
                         self._trigger_event('homezone_exit')

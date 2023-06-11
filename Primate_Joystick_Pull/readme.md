@@ -248,7 +248,7 @@ python gen_histogram.py output/TIP_1_001_20220725_180137_Joystick_events.json
 Example to generate histograms for all events files in output directory, assuming the output directory is `./output`. This requires bash, not cmd.
 
 ```sh
-python gen_histogram.py ./output/*
+python gen_histogram.py --skip-failed ./output/*
 ```
 
 This can also be done through MonkeyImages_Joystick_Conf.py by selecting the config file

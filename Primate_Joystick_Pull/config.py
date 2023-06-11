@@ -130,7 +130,8 @@ class GameConfig:
         self.image_selection_list: List[str]
         self.images: Dict[str, Dict[str, Any]]
         
-        self.load_thresholds(config_dict['reward_thresholds'])
+        if load_images:
+            self.load_thresholds(config_dict['reward_thresholds'])
         self.reward_thresholds: List[Dict[str, Any]]
         
         photodiode_range = config_dict.get('photodiode_range')
