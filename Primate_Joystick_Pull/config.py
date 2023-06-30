@@ -142,6 +142,14 @@ class GameConfig:
             pmin, pmax = config_dict['photodiode_range']
             self.photodiode_range = float(pmin), float(pmax)
         
+        record_events = config_dict.get('record_events')
+        if record_events in [None, [], [''], ['false']]:
+            self.record_events: bool = False
+        elif record_events in [['true']]:
+            self.record_events = True
+        else:
+            raise ValueError(f"invalid setting for record_events `{record_events}`")
+        
         allowed_event_classes = [
             'joystick_pull',
             'joystick_released',
@@ -155,6 +163,9 @@ class GameConfig:
         assert evt is None or evt in allowed_event_classes
         self.classification_event: Optional[str] = evt
         if evt is not None:
+            # always record events if classification is enabled
+            self.record_events = True
+            
             self.post_time = int(config_dict['post_time_ms'][0])
             self.bin_size = int(config_dict['bin_size_ms'][0])
             
@@ -351,6 +362,13 @@ class GameConfig:
         return out
     
     def classifier_config(self):
+        if self.baseline:
+            # disable classification for baseline
+            return {
+                'type': '',
+                'event_class': '',
+                'baseline': True,
+            }
         assert self.classification_event is not None
         conf = {
             'type': 'eucl',

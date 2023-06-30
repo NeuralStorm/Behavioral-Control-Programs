@@ -2,6 +2,8 @@
 from pathlib import Path
 import socket
 import json
+import os
+import time
 
 from plexon import PlexonEvent
 
@@ -9,25 +11,32 @@ class ConnectionError(Exception):
     pass
 
 CHAN_MAPPING = {
-    0: 14, # enter homezone
-    1: 11, # enter joystick zone
+    8: 14, # enter homezone
+    9: 11, # enter joystick zone
     # 2: 12, # exit zone
     12: None, # ensure zone exit channel is never sent
 }
 
 class DataBridge:
     def __init__(self):
-        path = Path.home() / 'test/test_socket'
-        if not path.exists():
-            path = Path.home() / 'tasks/test/test_socket'
+        p_key = 'data_bridge_path'
+        if p_key in os.environ:
+            path = Path(os.environ[p_key])
+            # assert path.exists()
+        else:
+            path = Path.home() / 'test/test_socket'
+            if not path.exists():
+                path = Path.home() / 'tasks/test/test_socket'
+            if not path.exists():
+                path = Path.home() / 'tasks/test/bridge_server_rs/test_socket'
+        self._path = path
+        
+        # simulate analog joystick values based on digital events on channel 28 (PB12)
+        self._analog_js_emu = True
         
         self._digital_prev = None
         
-        soc = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        soc.setblocking(False)
-        # soc.settimeout(0.0005)
-        soc.connect(str(path))
-        self._soc = soc
+        self._soc = None
         
         self._buf = None
     
@@ -42,17 +51,56 @@ class DataBridge:
         # assert False
         pass
     
+    def connect(self):
+        soc = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        
+        soc.setblocking(False)
+        # soc.settimeout(0.0005)
+        try:
+            soc.connect(str(self._path))
+        except (ConnectionRefusedError, FileNotFoundError) as e:
+            print(f'data bridge error {e}')
+            self._soc = None
+            time.sleep(0.001)
+            return
+        
+        try:
+            # print('sendall')
+            # soc.sendall(b'd:10:40:b\n')
+            soc.sendall(b'd:10::b\n')
+        except OSError as e:
+            print(f'data bridge error {e}')
+            self._soc = None
+            time.sleep(0.001)
+            return
+        # print('connected')
+        
+        self._soc = soc
+    
     def get_data(self):
-        while True:
-            try:
-                x = self._soc.recv(4096)
-            except BlockingIOError:
-                # time.sleep(1/4000)
-                # continue
-                break
+        # while True:
+            if self._soc is None:
+                x = b''
+            else:
+                try:
+                    x = self._soc.recv(4096)
+                except BlockingIOError:
+                    # time.sleep(1/4000)
+                    # continue
+                    # break
+                    # print('blocking io')
+                    return
+                except OSError as e:
+                    print(f'data bridge error {e}')
+                    x = b''
             
             if not x:
-                raise ConnectionError()
+                if self._soc is not None:
+                    self._soc.close()
+                # raise ConnectionError()
+                self.connect()
+                # continue
+                return
             
             if self._buf:
                 x = self._buf + x
@@ -62,6 +110,10 @@ class DataBridge:
             parts = parts[:-1]
             
             for part in parts:
+                # print(part)
+                part = part.removeprefix(b'b')
+                if part[0] != b'{'[0]:
+                    continue
                 msg = json.loads(part)
                 
                 message_type = msg.get('t')
@@ -79,11 +131,17 @@ class DataBridge:
                     else:
                         for i, (prev, new) in enumerate(zip(self._digital_prev, msg['d'])):
                             if not prev and new: # rising edge
+                                if self._analog_js_emu and i == 28:
+                                    yield PlexonEvent(msg['ts'], PlexonEvent.ANALOG, value=5, chan=3)
+                                
                                 chan = CHAN_MAPPING.get(i, i)
                                 if chan is None:
                                     continue
                                 yield PlexonEvent(msg['ts'], PlexonEvent.EVENT, chan=chan)
                             if not new and prev: # falling edge
+                                if self._analog_js_emu and i == 28:
+                                    yield PlexonEvent(msg['ts'], PlexonEvent.ANALOG, value=0, chan=3)
+                                
                                 chan = CHAN_MAPPING.get(i, i)
                                 if chan is None:
                                     continue

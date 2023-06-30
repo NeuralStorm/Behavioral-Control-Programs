@@ -195,20 +195,20 @@ class MonkeyImages:
             pmin, pmax = self.config.photodiode_range
             self._photodiode.set_range(pmin, pmax)
         
-        self.classifier_events_path = self.config.save_path / f"{self.config.log_file_name_base}_classifier_events.json.bz2"
+        if self.config.record_events:
+            self.classifier_events_path = self.config.save_path / f"{self.config.log_file_name_base}_classifier_events.json.bz2"
+        else:
+            self.classifier_events_path = None
         self.template_out_path = self.config.save_path / f"{self.config.log_file_name_base}_templates.json"
         
         # save log files must be added to the stack first so the classifier events
         # file will be closed before template generation is attempted
         self._stack.callback(self.save_log_files)
         
-        if self.config.classification_event is not None:
-            self._cl_helper = self._stack.enter_context(behavioral_classifiers.helpers.Helper(
-                config = self.config.classifier_config(),
-                events_file_path = self.classifier_events_path,
-            ))
-        else:
-            self._cl_helper = None
+        self._cl_helper = self._stack.enter_context(behavioral_classifiers.helpers.Helper(
+            config = self.config.classifier_config(),
+            events_file_path = self.classifier_events_path,
+        ))
         
         print("ready for plexon:" , bool(self.plexon))
         self.root = parent
@@ -549,7 +549,13 @@ class MonkeyImages:
                     fail_r('hand removed from homezone before discriminandum')
                     return None, 0, 0
                 if not in_zone_at_go_cue:
-                    fail_r('hand removed from homezone before go cue')
+                    # wait one second to detect if joystick is pulled shortly after
+                    # homezone exit
+                    yield from wait(1)
+                    if joystick_pulled:
+                        fail_r('joystick pulled before cue')
+                    else:
+                        fail_r('hand removed from homezone before go cue')
                     return None, 0, 0
                 
                 # cue_time = trial_t()
@@ -938,7 +944,7 @@ class MonkeyImages:
     
     def handle_classification_event(self, event_class, timestamp):
         if self._cl_helper is not None:
-            assert self._classifier_event_type is not None
+            # assert self._classifier_event_type is not None
             self._cl_helper.event(
                 event_type = self._classifier_event_type,
                 timestamp = timestamp,
@@ -1166,16 +1172,16 @@ class MonkeyImages:
         #     self.classifier, self.config.save_path / f"{self.config.log_file_name_base}_templates.json",
         #     event_class = self.config.classification_event,
         # )
-        if not partial:
-            if not os.environ.get('skip_template_gen'):
-                behavioral_classifiers.eucl_classifier.build_templates_from_new_events_file(
-                    events_path = self.classifier_events_path,
-                    template_path = self.template_out_path,
-                    event_class = self.config.classification_event,
-                    post_time = self.config.post_time,
-                    bin_size = self.config.bin_size,
-                    labels = self.config.labels,
-                )
+        # if not partial:
+        #     if not os.environ.get('skip_template_gen'):
+        #         behavioral_classifiers.eucl_classifier.build_templates_from_new_events_file(
+        #             events_path = self.classifier_events_path,
+        #             template_path = self.template_out_path,
+        #             event_class = self.config.classification_event,
+        #             post_time = self.config.post_time,
+        #             bin_size = self.config.bin_size,
+        #             labels = self.config.labels,
+        #         )
         
         # if self.info_view is not None:
         #     screenshot_widgets([*self.info_view.rows, self.info_view.label], histo_path)

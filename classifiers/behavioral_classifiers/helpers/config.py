@@ -60,6 +60,14 @@ def load_config(config: Dict[str, Any]) -> Config:
     event_class = config['event_class']
     assert isinstance(event_class, str)
     
+    if ctype == '':
+        assert baseline
+        nconfig = Config()
+        nconfig.baseline = True
+        nconfig.ctype = ''
+        nconfig.event_class = ''
+        return nconfig
+    
     def get_template_path():
         _template_path = config['template_path']
         assert _template_path is None or isinstance(_template_path, str) or isinstance(_template_path, Path)

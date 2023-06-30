@@ -162,6 +162,15 @@ When calibration is run it will create a `photodiode_calibration` event with the
 
 Example: `photodiode_range,0,0.0366`
 
+---
+### `record_events` (optional)
+
+Enable recording of classification events. Default: false
+
+When `classification_event` is specified recording of classification events will always be enabled.
+
+Example: `record_events,true`
+
 # Classifier config
 
 If `classification_event` is not specified classification will be disabled and all classifier config options become optional.
