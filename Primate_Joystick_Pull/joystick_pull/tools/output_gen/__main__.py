@@ -76,7 +76,12 @@ def gen_from_file(*,
     with open(csv_output_path, 'w', encoding='utf8', newline='\n') as f:
         gen_csv.write_csv(f, out_events)
     
-    gen_histogram.gen_histogram(out_events, histogram_output_path)
+    try:
+        import plotnine
+    except ImportError:
+        pass
+    else:
+        gen_histogram.gen_histogram(out_events, histogram_output_path)
 
 def main():
     args = parse_args()

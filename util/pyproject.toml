@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "behavioral_control_util"
+name = "butil"
 version = "0.1.0"
 description = ""
 authors = ["Ryan <yarnnd@gmail.com>"]

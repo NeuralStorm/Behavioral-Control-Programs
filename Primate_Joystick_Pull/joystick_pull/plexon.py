@@ -1,5 +1,6 @@
 
 import logging
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -46,9 +47,10 @@ class Plexon:
         
         self.reward_nidaq_bit = 17 # DO Channel
         
+        bin_path = Path(__file__).parent / 'pyplex_bin'
         ## Setup Plexon Server
         # Initialize the API class
-        self.client = PyOPXClientAPI()
+        self.client = PyOPXClientAPI(opxclient_dll_path=str(bin_path))
         
         # Connect to OmniPlex Server, check for success
         self.client.connect()
@@ -100,7 +102,7 @@ class Plexon:
         
         ## Setup for Plexon DO
         compatible_devices = ['PXI-6224', 'PXI-6259']
-        self.plexdo = PyPlexDO()
+        self.plexdo = PyPlexDO(plexdo_dll_path=str(bin_path))
         doinfo = self.plexdo.get_digital_output_info()
         self.device_number = 1
         for k in range(doinfo.num_devices):

@@ -4,7 +4,7 @@ from pathlib import Path
 
 from behavioral_classifiers.helpers import generate_template_main
 
-from config import GameConfig
+from .config import GameConfig
 
 def parse_args(args):
     parser = argparse.ArgumentParser(description='')

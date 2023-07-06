@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "primate_joystick_pull"
+name = "joystick_pull"
 version = "0.1.0"
 description = ""
 authors = ["Ryan <yarnnd@gmail.com>"]
@@ -7,14 +7,21 @@ authors = ["Ryan <yarnnd@gmail.com>"]
 [tool.poetry.dependencies]
 python = "^3.8,^3.11"
 # numpy = "1.22.4"
-Pillow = "8.0.1"
+Pillow = "10.0.0"
 # pyscreenshot = "3.0"
 hjson = "3.0.2"
+
+PyDAQmx = { version = "1.4.3", optional = true }
+plotnine = { version = "0.10.1", optional = true }
 
 behavioral_classifiers = { path = "../classifiers", develop = true }
 butil = { path = "../util", develop = true }
 
 [tool.poetry.dev-dependencies]
+
+[tool.poetry.extras]
+hw = ["PyDAQmx"]
+plotting = ["plotnine"]
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

@@ -38,7 +38,7 @@ from plotnine import (
 from plotnine.data import diamonds
 from mizani.formatters import percent_format
 
-from MonkeyImages_Joystick_Conf import InfoView
+from ...MonkeyImages_Joystick_Conf import InfoView
 
 import json
 

@@ -32,14 +32,16 @@ from tkinter import filedialog
 import behavioral_classifiers
 from butil import EventFile
 
-from game_frame import GameFrame, InfoView, screenshot_widgets, screenshot_widget
-from photodiode import PhotoDiode
-from gen_templates import gen_templates_main
-from config import GameConfig
+from .game_frame import GameFrame, InfoView, screenshot_widgets, screenshot_widget
+from .photodiode import PhotoDiode
+from .gen_templates import gen_templates_main
+from .config import GameConfig
 
 logger = logging.getLogger(__name__)
 
 debug = logger.debug
+
+SOUND_PATH_BASE = Path(__file__).parent.parent / 'assets/TaskSounds'
 
 class Sentinel:
     """used to check if callbacks have been called"""
@@ -159,10 +161,10 @@ class MonkeyImages:
         
         if use_hardware:
             if ability_mode:
-                from data_bridge import DataBridge
+                from .data_bridge import DataBridge
                 self.plexon = DataBridge()
             else:
-                from plexon import Plexon
+                from .plexon import Plexon
                 self.plexon: Optional[Plexon] = Plexon()
         else:
             self.plexon = None
@@ -476,7 +478,7 @@ class MonkeyImages:
                         self.show_image('yPrepare')
                         if winsound is not None:
                             winsound.PlaySound(
-                                str(Path('./TaskSounds/mixkit-arcade-bonus-229.wav')),
+                                str(SOUND_PATH_BASE / 'mixkit-arcade-bonus-229.wav'),
                                 winsound.SND_FILENAME + winsound.SND_ASYNC + winsound.SND_NOWAIT)
                     
                     def _exit():
@@ -557,7 +559,7 @@ class MonkeyImages:
             if in_zone_at_go_cue:
                 if winsound is not None:
                     winsound.PlaySound(
-                        str(Path('./TaskSounds/mixkit-unlock-game-notification-253.wav')),
+                        str(SOUND_PATH_BASE / 'mixkit-unlock-game-notification-253.wav'),
                         winsound.SND_FILENAME + winsound.SND_ASYNC + winsound.SND_NOWAIT)
             cue_time = trial_t()
             
@@ -717,7 +719,7 @@ class MonkeyImages:
                 if self.config.EnableBlooperNoise:
                     if winsound is not None:
                         winsound.PlaySound(
-                            str(Path('./TaskSounds/zapsplat_multimedia_game_sound_kids_fun_cheeky_layered_mallets_negative_66204.wav')),
+                            str(SOUND_PATH_BASE / 'zapsplat_multimedia_game_sound_kids_fun_cheeky_layered_mallets_negative_66204.wav'),
                             winsound.SND_FILENAME + winsound.SND_ASYNC + winsound.SND_NOWAIT)
                 
                 if self.ImageReward:
@@ -745,7 +747,7 @@ class MonkeyImages:
                 
                 if winsound is not None:
                     winsound.PlaySound(
-                        str(Path('./TaskSounds/zapsplat_multimedia_game_sound_kids_fun_cheeky_layered_mallets_complete_66202.wav')),
+                        str(SOUND_PATH_BASE / 'zapsplat_multimedia_game_sound_kids_fun_cheeky_layered_mallets_complete_66202.wav'),
                         winsound.SND_FILENAME + winsound.SND_ASYNC + winsound.SND_NOWAIT)
                 
                 if self.ImageReward:
