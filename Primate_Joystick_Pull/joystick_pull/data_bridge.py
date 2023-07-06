@@ -39,6 +39,9 @@ class DataBridge:
         self._soc = None
         
         self._buf = None
+        
+        # time.perf_counter value to reconnect at
+        self._reconnect_after = 0
     
     def wait_for_start(self):
         return {'ts': 0}
@@ -61,7 +64,7 @@ class DataBridge:
         except (ConnectionRefusedError, FileNotFoundError) as e:
             print(f'data bridge error {e}')
             self._soc = None
-            time.sleep(0.001)
+            self._reconnect_after = time.perf_counter() + 1
             return
         
         try:
@@ -71,7 +74,7 @@ class DataBridge:
         except OSError as e:
             print(f'data bridge error {e}')
             self._soc = None
-            time.sleep(0.001)
+            self._reconnect_after = time.perf_counter() + 1
             return
         # print('connected')
         
@@ -98,7 +101,8 @@ class DataBridge:
                 if self._soc is not None:
                     self._soc.close()
                 # raise ConnectionError()
-                self.connect()
+                if time.perf_counter() > self._reconnect_after:
+                    self.connect()
                 # continue
                 return
             
