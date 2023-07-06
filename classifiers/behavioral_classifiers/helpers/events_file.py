@@ -8,7 +8,7 @@ event_type slow left tilt, fast right tilt
 event_class enter homezone, start of tilt
 
 """
-from typing import Optional
+from typing import Optional, Any
 import json
 from pathlib import Path
 import time
@@ -17,7 +17,7 @@ import gzip
 import bz2
 
 class EventsFileWriter:
-    def __init__(self, *, file_obj=None, path: Optional[Path]):
+    def __init__(self, *, file_obj=None, path: Optional[Path] = None, callback: Any = None):
         self._stack = ExitStack()
         if path is not None:
             assert file_obj is None
@@ -33,12 +33,15 @@ class EventsFileWriter:
             self._f = file_obj
             self._managing_file = False
         else:
-            raise ValueError()
+            self._f: Any = None
+            # raise ValueError()
         
+        self._callback = callback
         self._first_event = True
         
-        self._f.write('[\n')
-        self._stack.callback(lambda: self._f.write('\n]\n'))
+        if self._f is not None:
+            self._f.write('[\n')
+            self._stack.callback(lambda: self._f.write('\n]\n'))
     
     def __enter__(self):
         return self
@@ -56,9 +59,14 @@ class EventsFileWriter:
         if self._first_event:
             self._first_event = False
         else:
-            self._f.write(',\n')
+            if self._f is not None:
+                self._f.write(',\n')
         
-        json.dump(data, self._f)
+        if self._callback is not None:
+            self._callback(data)
+        if self._f is not None:
+            json.dump(data, self._f, separators=(',', ':'))
+            self._f.flush()
     
     def write_raw(self, rec):
         assert 'type' in rec

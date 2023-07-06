@@ -12,6 +12,7 @@ class GameConfig:
     def __init__(self, *,
         config_path: Union[Path, str],
         load_images: bool = True,
+        start_dt: Optional[datetime] = None,
     ):
         def load_csv():
             data = []
@@ -51,6 +52,8 @@ class GameConfig:
             
             assert False
         
+        self.enable_old_output = bool(os.environ.get('old_outputs'))
+        
         self.raw_config = config_dict
         # PARAMETERS META DATA
         self.study_id: str = config_dict['Study ID'][0]       # 3 letter study code
@@ -58,7 +61,8 @@ class GameConfig:
         self.experimental_group: str = get('experimental_group', 'NOTSET')
         self.experimental_condition: str = get('experimental_condition', 'NOTSET')
         self.animal_id: str = config_dict['Animal ID'][0]   # 3 digit number
-        start_dt = datetime.now()
+        if start_dt is None:
+            start_dt = datetime.now()
         self.start_time: str = start_dt.strftime('%Y%m%d_%H%M%S')
         start_date_str = start_dt.strftime('%Y%m%d')
         start_time_str = start_dt.strftime('%H%M%S')
@@ -125,6 +129,8 @@ class GameConfig:
         
         if load_images:
             self.load_images(config_dict['images'], image_ratios)
+        else:
+            self.selectable_images = list(set(x.strip() for x in config_dict['images']))
         self.selectable_images: List[str]
         # image selection list has keys duplicated based on image_ratios
         self.image_selection_list: List[str]
@@ -361,8 +367,10 @@ class GameConfig:
         
         return out
     
-    def classifier_config(self):
-        if self.baseline:
+    def classifier_config(self, baseline=None):
+        if baseline is None:
+            baseline = self.baseline
+        if baseline:
             # disable classification for baseline
             return {
                 'type': '',
@@ -380,3 +388,13 @@ class GameConfig:
             'template_path': self.template_in_path,
         }
         return conf
+    
+    def to_json_dict(self):
+        out = {}
+        for k, v in self.__dict__.items():
+            if k in ['raw_config', 'images']:
+                continue
+            if isinstance(v, Path):
+                v = str(v)
+            out[k] = v
+        return out

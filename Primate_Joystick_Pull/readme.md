@@ -16,6 +16,7 @@ install dependencies
 `pip install -r requirements_hw.txt`  
 `pip install -r requirements_histogram.txt`  
 `pip install -e ../cassifiers`
+`pip install -e ../util`
 
 # Config
 

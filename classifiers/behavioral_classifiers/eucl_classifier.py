@@ -7,6 +7,8 @@ from collections import deque
 
 from .classifier import Classifier
 
+from butil import EventReader
+
 # chan -> spike frequency
 PsthDict = Dict[str, List[Union[float, int]]]
 
@@ -279,6 +281,46 @@ def _build_templates_from_psths(
     
     return templates
 
+def group_trials(data):
+    trial_events = None
+    for x in data:
+        if x.get('name') == 'trial_start':
+            if trial_events:
+                yield trial_events
+            trial_events = []
+        if trial_events is not None:
+            trial_events.append(x)
+    
+    if trial_events:
+        yield trial_events
+
+def get_rel_events(data, event_class):
+    """get events to use from each trial that are of event_class"""
+    for trial in group_trials(data):
+        # print(trial)
+        comp = None
+        for e in trial:
+            if e.get('name') == 'task_completed':
+                comp = e
+                break
+        if comp is None:
+            continue
+        # print(comp)
+        if comp['info']['success']:
+            skip_until = None
+            if event_class == 'joystick_pulled':
+                skip_until = 'go_cue_shown'
+            
+            for e in data:
+                if skip_until:
+                    if e.get('name') == skip_until:
+                        skip_until = None
+                elif e.get('event_class') == event_class:
+                    yield e
+                    break
+        
+        # yield None
+
 def build_templates_from_new_events_file(*,
     events_path: Path,
     template_path: Path,
@@ -289,36 +331,45 @@ def build_templates_from_new_events_file(*,
     # with bz2.open(events_path, 'rt', encoding='utf8', newline='\n') as f:
     #     events_data = json.load(f)
     
+    with EventReader(path=events_path) as reader:
+        rel_events = list(get_rel_events(reader.read_records(), event_class))
+        rel_event_times = set(x['ext_t'] for x in rel_events)
+    
     def get_events():
-        with bz2.open(events_path, 'rt', encoding='utf8', newline='\n') as f:
-            try:
-                next(f) # skip [
-            except StopIteration:
-                assert False
-            while True:
-                try:
-                    l = next(f)
-                except StopIteration:
-                    break
-                l = l.rstrip('\r\n')
-                if l == ']':
-                    break
-                if l == '':
-                    continue
-                l = l.rstrip(',')
-                yield json.loads(l)
+        with EventReader(path=events_path) as reader:
+            for rec in reader.read_records():
+                if 'type' in rec and 'ext_t' in rec:
+                    yield rec
+        # with bz2.open(events_path, 'rt', encoding='utf8', newline='\n') as f:
+        #     try:
+        #         next(f) # skip [
+        #     except StopIteration:
+        #         assert False
+        #     while True:
+        #         try:
+        #             l = next(f)
+        #         except StopIteration:
+        #             break
+        #         l = l.rstrip('\r\n')
+        #         if l == ']':
+        #             break
+        #         if l == '':
+        #             continue
+        #         l = l.rstrip(',')
+        #         yield json.loads(l)
     
     psths: Dict[str, List[EuclClassifier]] = {}
     
     def is_rel_event(rec):
-        if rec['type'] != 'event':
-            return False
+        return rec['ext_t'] in rel_event_times and rec['event_class'] == event_class
+        # if rec['type'] != 'event':
+        #     return False
         
-        correct_class = rec.get('event_class') == event_class
-        if not correct_class:
-            return False
+        # correct_class = rec.get('event_class') == event_class
+        # if not correct_class:
+        #     return False
         
-        return True
+        # return True
     
     def build_psth(buf: 'deque[Dict[str, Any]]', event: Dict[str, Any]) -> EuclClassifier:
         builder = EuclClassifier(post_time=post_time, bin_size=bin_size, labels=labels)

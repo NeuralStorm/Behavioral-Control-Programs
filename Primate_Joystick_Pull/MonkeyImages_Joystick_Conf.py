@@ -30,6 +30,7 @@ import tkinter as tk
 from tkinter import filedialog
 
 import behavioral_classifiers
+from butil import EventFile
 
 from game_frame import GameFrame, InfoView, screenshot_widgets, screenshot_widget
 from photodiode import PhotoDiode
@@ -176,8 +177,14 @@ class MonkeyImages:
             self.config_path = get_config_path()
         print(self.config_path)
         
+        # self.new_events_path = self.config.save_path / f"{self.config.log_file_name_base}_new_events.json.gz"
+        # self.new_events_file = EventFile(path=self.new_events_path)
+        self.new_events_path: Path
+        self.new_events_file: EventFile
+        self.start_dt = datetime.now()
+        
         self.config: GameConfig
-        self.load_config() # set self.config
+        self.load_config(first_load=True) # set self.config
         self.ensure_log_file_creatable()
         
         self.Area1_right_pres = False   # Home Area
@@ -199,7 +206,7 @@ class MonkeyImages:
             self.classifier_events_path = self.config.save_path / f"{self.config.log_file_name_base}_classifier_events.json.bz2"
         else:
             self.classifier_events_path = None
-        self.template_out_path = self.config.save_path / f"{self.config.log_file_name_base}_templates.json"
+        # self.template_out_path = self.config.save_path / f"{self.config.log_file_name_base}_templates.json"
         
         # save log files must be added to the stack first so the classifier events
         # file will be closed before template generation is attempted
@@ -207,7 +214,8 @@ class MonkeyImages:
         
         self._cl_helper = self._stack.enter_context(behavioral_classifiers.helpers.Helper(
             config = self.config.classifier_config(),
-            events_file_path = self.classifier_events_path,
+            event_file = self.new_events_file,
+            # events_file_path = self.classifier_events_path,
         ))
         
         print("ready for plexon:" , bool(self.plexon))
@@ -265,18 +273,35 @@ class MonkeyImages:
             except:
                 traceback.print_exc()
         self._stack.__exit__(*exc)
+        self.new_events_file.close()
     
-    def load_config(self):
-        self.config = GameConfig(config_path=self.config_path)
-        self.log_event('config_loaded', tags=[], info={'config': self.config.raw_config})
+    def load_config(self, *, first_load=False):
+        self.config = GameConfig(config_path=self.config_path, start_dt = self.start_dt)
+        
+        new_events_path = self.config.save_path / f"{self.config.log_file_name_base}.json.gz"
+        is_opening = True
+        if not first_load:
+            if self.new_events_path == new_events_path:
+                is_opening = False
+            else:
+                self.new_events_file.close()
+        if is_opening:
+            self.new_events_path = new_events_path
+            self.new_events_file = EventFile(path=self.new_events_path)
+        
+        self.log_event('config_loaded', tags=[], info={
+            'time_utc': datetime.utcnow().isoformat(),
+            'config': self.config.to_json_dict(),
+            'raw': self.config.raw_config,
+        })
     
     def log_event(self, name: str, *, tags: List[str]=[], info=None):
         if info is None:
             info = {}
-        human_time = datetime.utcnow().isoformat()
+        # human_time = datetime.utcnow().isoformat()
         mono_time = time.perf_counter()
         out = {
-            'time_human': human_time,
+            # 'time_human': human_time,
             'time_m': mono_time,
             'name': name,
             'tags': tags,
@@ -284,6 +309,7 @@ class MonkeyImages:
         }
         
         self.event_log.append(out)
+        self.new_events_file.write_record(out)
         
         self._trigger_event(name)
     
@@ -667,13 +693,13 @@ class MonkeyImages:
             self.game_frame.set_marker_level(0)
             
             self.log_event('task_completed', tags=['game_flow'], info={
-                'reward_duration': reward_duration,
-                'remote_pull_duration': remote_pull_duration,
-                'pull_duration': pull_duration,
-                'action_duration': action_duration,
-                'success': reward_duration is not None,
-                'failure_reason': log_failure_reason[0],
-                'discrim': selected_image_key,
+                'reward_duration': reward_duration, # Optional[float]
+                'remote_pull_duration': remote_pull_duration, # float
+                'pull_duration': pull_duration, # float
+                'action_duration': action_duration, # float
+                'success': reward_duration is not None, # bool
+                'failure_reason': log_failure_reason[0], # Optional[str]
+                'discrim': selected_image_key, # str
             })
             
             print('Press Duration: {:.4f} (remote: {:.4f})'.format(action_duration, pull_duration))
@@ -885,6 +911,7 @@ class MonkeyImages:
                 self.dbg_classification_event('homezone_enter')
             else:
                 self.log_hw('zone_exit', sim=True, info={'simulated_zone': 'homezone'})
+                self.log_hw('homezone_exit', sim=True, info={'simulated_zone': 'homezone'})
                 self.dbg_classification_event('homezone_exit')
             print('in zone toggled', self.Area1_right_pres)
         elif key == '2':
@@ -907,6 +934,7 @@ class MonkeyImages:
             elif self.joystick_zone_exit is None:
                 self.joystick_zone_exit = time.perf_counter()
                 self.log_hw('zone_exit', sim=True, info={'simulated_zone': 'joystick_zone'})
+                self.log_hw('joystick_zone_exit', sim=True)
             
             print('joystick zone', self.joystick_zone_enter, self.joystick_zone_exit)
     
@@ -1008,7 +1036,7 @@ class MonkeyImages:
                 elif d.chan == -14:
                     self.log_hw('homezone_exit', plexon_ts=d.ts)
                     self.Area1_right_pres = False
-                    self._trigger_event('homezone_exit')
+                    # self._trigger_event('homezone_exit')
                     
                     self.handle_classification_event('homezone_exit', d.ts)
                 elif d.chan == 11: # enter joystick zone
@@ -1029,10 +1057,12 @@ class MonkeyImages:
                     })
                     if self.Area1_right_pres:
                         self.Area1_right_pres = False
-                        self._trigger_event('homezone_exit')
+                        self.log_hw('homezone_exit', plexon_ts=d.ts)
+                        # self._trigger_event('homezone_exit')
                         
                         self.handle_classification_event('homezone_exit', d.ts)
                     if self.joystick_zone_enter is not None and self.joystick_zone_exit is None:
+                        self.log_hw('joystick_zone_exit', plexon_ts=d.ts)
                         self.joystick_zone_exit = d.ts
                         
                         self.handle_classification_event('joystick_zone_exit', d.ts)
@@ -1058,6 +1088,9 @@ class MonkeyImages:
         """Attempts to create, write to and delete the non partial log files.
             raises an exception if this fails
             raises an exception if any of the files already exist"""
+        if not self.config.enable_old_output:
+            return
+        
         paths = self.get_log_file_paths()
         
         for path in paths:
@@ -1067,6 +1100,8 @@ class MonkeyImages:
             path.unlink()
     
     def save_log_files(self, *, partial: bool = False):
+        if not self.config.enable_old_output:
+            return
         if os.environ.get('no_partial') and partial:
             return
         

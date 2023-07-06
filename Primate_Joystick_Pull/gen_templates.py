@@ -24,7 +24,10 @@ def gen_templates_main(args):
     config = GameConfig(config_path=args.config, load_images=False)
     
     generate_template_main(
-        config = config.classifier_config(),
+        config = config.classifier_config(baseline=False),
         events_file = args.events,
         template_out = args.template_out,
     )
+
+if __name__ == '__main__':
+    gen_templates_main(None)

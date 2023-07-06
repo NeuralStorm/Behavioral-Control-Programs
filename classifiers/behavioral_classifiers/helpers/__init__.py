@@ -9,6 +9,8 @@ from contextlib import ExitStack
 
 logger = logging.getLogger(__name__)
 
+from butil import EventFile
+
 from ..classifier import Classifier
 from ..eucl_classifier import EuclClassifier, build_templates_from_new_events_file
 from ..random_classifier import RandomClassifier
@@ -67,7 +69,8 @@ def generate_template_main(*, config: Dict[str, Any], events_file: Path, templat
 class Helper:
     def __init__(self, *,
         config: Dict[str, Any],
-        events_file_path: Optional[PathLike],
+        event_file: Optional[EventFile] = None,
+        events_file_path: Optional[PathLike] = None,
     ):
         self._stack = ExitStack()
         ec = self._stack.enter_context
@@ -79,7 +82,10 @@ class Helper:
             self.classifier = None
         self.event_class: str = _config.event_class
         
-        if events_file_path is None:
+        if event_file is not None:
+            self.events_file_path = None
+            self.events_file = ec(EventsFileWriter(callback=event_file.write_record))
+        elif events_file_path is None:
             self.events_file_path: Optional[Path] = None
             self.events_file: Optional[EventsFileWriter] = None
         else:
