@@ -231,6 +231,7 @@ class GameConfig:
             self.labels = None
     
     def load_images(self, config_images: List[str], image_ratios: Optional[List[int]]):
+        base = Path(__file__).parent / 'images_gen'
         # config_images = config_dict['images']
         def build_image_entry(i, name):
             name = name.strip()
@@ -239,7 +240,7 @@ class GameConfig:
             obj = {}
             
             for color in ['white', 'red', 'green']:
-                img = Image.open(f"./images_gen/{color}/{name}.png")
+                img = Image.open(base / f"./{color}/{name}.png")
                 width = img.size[0]
                 height = img.size[1]
                 obj[color] = img
@@ -269,7 +270,7 @@ class GameConfig:
             assert len(sel_list) == sum(image_ratios)
             self.image_selection_list = sel_list
         
-        img = Image.open('./images_gen/prepare.png')
+        img = Image.open(base / './prepare.png')
         
         images['yPrepare'] = {
             'width': img.size[0],
@@ -277,9 +278,9 @@ class GameConfig:
             'img': {None: img},
         }
         
-        red = Image.open('./images_gen/box_red.png')
-        green = Image.open('./images_gen/box_green.png')
-        white = Image.open('./images_gen/box_white.png')
+        red = Image.open(base / './box_red.png')
+        green = Image.open(base / './box_green.png')
+        white = Image.open(base / './box_white.png')
         
         images['box'] = {
             'width': green.size[0],
