@@ -1,4 +1,5 @@
 
+import os
 from pathlib import Path
 from copy import copy
 import shutil
@@ -37,9 +38,10 @@ def gen_images():
     # saturation of colors
     SAT = 255 // 2
     
-    out_path = Path('./images_gen')
+    base = Path(__file__).parent.parent / 'assets'
+    out_path = base / 'images_gen'
     out_path.mkdir(exist_ok=True)
-    src = Path('./TaskImages_Joystick')
+    src = base / './TaskImages_Joystick'
     
     prep_path = out_path / 'prepare.png'
     # img = Image.open(src / 'yPrepare.png')

@@ -18,7 +18,7 @@ def parse_args(args):
     
     return parser.parse_args(args=args)
 
-def gen_templates_main(args):
+def gen_templates_main(args=None):
     args = parse_args(args)
     
     config = GameConfig(config_path=args.config, load_images=False)
@@ -30,4 +30,4 @@ def gen_templates_main(args):
     )
 
 if __name__ == '__main__':
-    gen_templates_main(None)
+    gen_templates_main()

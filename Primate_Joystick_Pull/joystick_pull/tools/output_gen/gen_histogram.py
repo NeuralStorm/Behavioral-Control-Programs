@@ -38,6 +38,7 @@ from plotnine import (
 from plotnine.data import diamonds
 from mizani.formatters import percent_format
 
+import butil
 from ...MonkeyImages_Joystick_Conf import InfoView
 
 import json
@@ -240,10 +241,8 @@ def gen_histogram(event_log, output_path):
     # print(output_path)
 
 def gen_from_file(input_path, output_path):
-    with open(input_path, encoding='utf8', newline='\n') as f:
-        data = json.load(f)
-
-    event_log = data['events']
+    with butil.EventReader(path=input_path) as reader:
+        event_log = [x for x in reader.read_records() if 'name' in x]
     
     gen_histogram(event_log, output_path)
 

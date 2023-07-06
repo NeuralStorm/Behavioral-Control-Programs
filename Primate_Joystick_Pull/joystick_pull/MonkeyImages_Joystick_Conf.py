@@ -1332,22 +1332,6 @@ class MonkeyImages:
         
         return info
 
-def generate_histograms(overwrite=False):
-    from gen_histogram import gen_histogram
-    
-    config_path = get_config_path()
-    
-    config = GameConfig(config_path=config_path, load_images=False)
-    output_dir = config.save_path
-    
-    for input_path in output_dir.glob('*_events.json'):
-        output_path = input_path.parent / f"{input_path.stem}_histogram.png"
-        
-        if output_path.is_file() and not overwrite:
-            continue
-        
-        gen_histogram(input_path, output_path)
-
 def main():
     FORMAT = "%(levelname)s:%(message)s"
     if os.environ.get('log'):
@@ -1358,24 +1342,6 @@ def main():
         logging.basicConfig(level=logging.WARNING, format=FORMAT)
     
     debug("program start %s", datetime.now())
-    
-    try:
-        cmd = sys.argv[1]
-    except IndexError:
-        cmd = None
-    
-    if cmd == 'gen':
-        from gen_images import gen_images
-        gen_images()
-        return
-    
-    if cmd == 'gen_histograms':
-        generate_histograms()
-        return
-    
-    if cmd == 'gen_templates':
-        gen_templates_main(sys.argv[2:])
-        return
     
     root = tk.Tk()
     root.configure(bg='black', bd=0)

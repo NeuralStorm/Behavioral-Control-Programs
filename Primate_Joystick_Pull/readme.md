@@ -1,22 +1,54 @@
 
 # Dependencies
 
-targets python 3.8
-
-Windows  
-get numpy and Pillow installed somehow
+targets python 3.11
 
 Ubuntu  
 `sudo apt-get install python3 python3-pip python3-tk python3-pil.imagetk python3-numpy`
 
-tested with numpy version 1.22.4 but it isn't used heavily so a lot of versions probably work
+Installation
+```
+pip install -e .[plotting,hw]
+```
 
-install dependencies  
-`pip install -r requirements.txt`  
-`pip install -r requirements_hw.txt`  
-`pip install -r requirements_histogram.txt`  
-`pip install -e ../cassifiers`
-`pip install -e ../util`
+# Usage
+
+## Running the game
+
+```sh
+js-game
+```
+
+## Output generation
+
+Example to create output csv, json and histogram png files from the initial json.gz output file
+```sh
+js-gen-output gen output/TIP_1_001_20220725_180137_Joystick.json.gz
+```
+
+Example to create outputs for all json.gz files in the `./output` directory
+```sh
+js-gen-output --skip-failed gen output/*.json.gz
+```
+
+## Template generation
+
+```sh
+js-gen-template --config config.csv --events output/test.json.gz --template-out output/template.json
+```
+
+## Histogram generation
+
+Example:
+```sh
+js-histogram output/TIP_1_001_20220725_180137_Joystick.json.gz
+```
+
+Example to generate histograms for all events files in output directory, assuming the output directory is `./output`. This requires bash, not cmd.
+
+```sh
+js-histogram --skip-failed ./output/*.json.gz
+```
 
 # Config
 
@@ -238,31 +270,3 @@ Path of the labels file to load. If not specified all channels and units will be
 Example labels file: https://github.com/NeuralStorm/Behavioral-Control-Programs/blob/75f3f6e869c1c8869a93ab25f6270787049ab98c/tilt_hardware_control/tilt_hardware_control/example_labels.hjson
 
 The labels file has one parameter `channels`. The parameters of the dict are plexon channels and the values are plexon units within that channel.
-
-# Histogram generation
-
-## Setup
-
-Install additional dependencies
-```sh
-pip install -r requirements_histogram.txt
-```
-
-## Usage
-
-Example:
-```sh
-python gen_histogram.py output/TIP_1_001_20220725_180137_Joystick_events.json
-```
-
-Example to generate histograms for all events files in output directory, assuming the output directory is `./output`. This requires bash, not cmd.
-
-```sh
-python gen_histogram.py --skip-failed ./output/*
-```
-
-This can also be done through MonkeyImages_Joystick_Conf.py by selecting the config file
-
-```sh
-python MonkeyImages_Joystick_Conf.py gen_histograms
-```
