@@ -1,6 +1,8 @@
 
 import math
 from collections import Counter
+import statistics
+from itertools import groupby
 
 import tkinter as tk
 from tkinter.font import Font
@@ -61,6 +63,9 @@ def screenshot_widget(widget, path):
     # img = ImageGrab.grab(backend='grim')
     img.save(path, 'PNG')
 
+def sgroup(data, key):
+    return groupby(sorted(data, key=key), key=key)
+
 class InfoView:
     def __init__(self, root, *, monkey_images=None):
         self.monkey_images = monkey_images
@@ -81,8 +86,11 @@ class InfoView:
             self.monkey_images.KeyPress(event)
     
     @staticmethod
-    def gen_histogram(event_log, *, h_range):
-        events = [e for e in event_log if e['name'] == 'task_completed']
+    def gen_histogram(events, *, h_range = None):
+        if h_range is None:
+            h_min = min(x['info']['action_duration'] for x in events)
+            h_max = max(x['info']['action_duration'] for x in events)
+            h_range = h_min, h_max
         
         def get_bin_ranges():
             start, end = h_range
@@ -121,7 +129,87 @@ class InfoView:
         # errors = {errors:str: error_count:int}
         return bins, errors
     
-    def update_info(self, end_info, event_log):
+    @staticmethod
+    def print_histogram(events):
+        bins, errors = InfoView.gen_histogram(events)
+        
+        if errors:
+            print('-'*20)
+            error_col_width = max(len(e) for e in errors)
+            for error, count in errors.items():
+                print(f"{error.rjust(error_col_width)} {count}")
+        
+        for i, ((bin_s, bin_e), bin_events) in enumerate(bins.items()):
+            if i%4==0:
+                print('-'*20)
+            events_str = "".join('O' if e else 'X' for e in bin_events)
+            print(f"{bin_s:>5.1f}-{bin_e:<5.1f} {events_str}")
+    
+    @staticmethod
+    def calc_end_info(events):
+        n = len(events)
+        def perc(count):
+            if n == 0:
+                return 0
+            return count/n
+        
+        error_counts = Counter()
+        for e in events:
+            reason = e['info']['failure_reason']
+            if reason is None:
+                continue
+            error_counts[reason] += 1
+        error_info = {
+            reason: {'count': c, 'percent': perc(c)}
+            for reason, c in error_counts.items()
+        }
+        
+        correct = [e for e in events if e['info']['success']]
+        correct_n = len(correct)
+        
+        pull_durations = [e['info']['action_duration'] for e in events]
+        pull_durations = [x for x in pull_durations if x != 0]
+        
+        def get_discrim_durations():
+            for discrim, d_events in sgroup(events, lambda x: x['info']['discrim']):
+                d_events = list(d_events)
+                d_correct = [e for e in d_events if e['info']['success']]
+                pull_durations = [
+                    e['info']['action_duration']
+                    for e in d_events
+                ]
+                count = len(pull_durations)
+                pull_durations = [x for x in pull_durations if x != 0]
+                out = {
+                    'count': count, # number of times discrim appeared
+                    'pull_count': len(pull_durations), # number of pulls in response to discrim
+                    'correct_count': len(d_correct),
+                    'min': min(pull_durations, default=0),
+                    'max': max(pull_durations, default=0),
+                    'mean': statistics.mean(pull_durations) if pull_durations else 0,
+                    'stdev': statistics.pstdev(pull_durations) if pull_durations else 0,
+                }
+                yield discrim, out
+        
+        info = {
+            'count': n,
+            'correct_count': len(correct),
+            'percent_correct': perc(correct_n),
+            'action_duration': {
+                'min': min(pull_durations, default=0),
+                'max': max(pull_durations, default=0),
+                'mean': statistics.mean(pull_durations) if pull_durations else 0,
+                'stdev': statistics.pstdev(pull_durations) if pull_durations else 0,
+            },
+            'discrim_action_duration': dict(get_discrim_durations()),
+            'errors': error_info,
+        }
+        
+        return info
+    
+    def update_info(self, event_log):
+        end_info = self.calc_end_info(event_log)
+        
         out = []
         
         ad = end_info['action_duration']

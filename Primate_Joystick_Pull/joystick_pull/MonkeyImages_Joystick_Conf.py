@@ -10,15 +10,10 @@ import sys
 import logging
 import traceback
 from contextlib import ExitStack
-from itertools import groupby
 import random
-import statistics
-import csv
-import json
 from pathlib import Path
 import time
-from datetime import datetime, timedelta
-from collections import defaultdict, Counter
+from datetime import datetime
 from pprint import pprint
 
 try:
@@ -34,7 +29,6 @@ from butil import EventFile
 
 from .game_frame import GameFrame, InfoView, screenshot_widgets, screenshot_widget
 from .photodiode import PhotoDiode
-from .gen_templates import gen_templates_main
 from .config import GameConfig
 
 logger = logging.getLogger(__name__)
@@ -53,9 +47,6 @@ class Sentinel:
     
     def set(self):
         self.triggered = True
-
-def sgroup(data, key):
-    return groupby(sorted(data, key=key), key=key)
 
 def get_config_path() -> Path:
     if 'config_path' in os.environ:
@@ -156,7 +147,8 @@ class MonkeyImages:
             'homezone_exit': set(),
         }
         
-        self.trial_log = []
+        # event_log currently only holds task_completed events
+        # for info view/histogram generation
         self.event_log = []
         
         if use_hardware:
@@ -187,7 +179,6 @@ class MonkeyImages:
         
         self.config: GameConfig
         self.load_config(first_load=True) # set self.config
-        self.ensure_log_file_creatable()
         
         self.Area1_right_pres = False   # Home Area
         # self.Area2_right_pres = False   # Joystick Area
@@ -209,10 +200,6 @@ class MonkeyImages:
         else:
             self.classifier_events_path = None
         # self.template_out_path = self.config.save_path / f"{self.config.log_file_name_base}_templates.json"
-        
-        # save log files must be added to the stack first so the classifier events
-        # file will be closed before template generation is attempted
-        self._stack.callback(self.save_log_files)
         
         self._cl_helper = self._stack.enter_context(behavioral_classifiers.helpers.Helper(
             config = self.config.classifier_config(),
@@ -310,7 +297,6 @@ class MonkeyImages:
             'info': info,
         }
         
-        self.event_log.append(out)
         self.new_events_file.write_record(out)
         
         self._trigger_event(name)
@@ -447,6 +433,7 @@ class MonkeyImages:
             prep_flash = False
             
             if prep_flash:
+                in_zone_cbs = []
                 icon_flash_freq = 2
                 # icon period = 1 / freq
                 # change period = 0.5 * period
@@ -694,7 +681,7 @@ class MonkeyImages:
             
             self.game_frame.set_marker_level(0)
             
-            self.log_event('task_completed', tags=['game_flow'], info={
+            task_completed_info = {
                 'reward_duration': reward_duration, # Optional[float]
                 'remote_pull_duration': remote_pull_duration, # float
                 'pull_duration': pull_duration, # float
@@ -702,6 +689,12 @@ class MonkeyImages:
                 'success': reward_duration is not None, # bool
                 'failure_reason': log_failure_reason[0], # Optional[str]
                 'discrim': selected_image_key, # str
+            }
+            self.log_event('task_completed', tags=['game_flow'], info=task_completed_info)
+            self.event_log.append({
+                'time_m': time.perf_counter(),
+                'name': 'task_completed',
+                'info':task_completed_info,
             })
             
             print('Press Duration: {:.4f} (remote: {:.4f})'.format(action_duration, pull_duration))
@@ -709,9 +702,9 @@ class MonkeyImages:
             if log_failure_reason[0]:
                 print(log_failure_reason[0])
             try:
-                self.print_histogram()
+                InfoView.print_histogram(self.event_log)
                 if self.info_view is not None:
-                    self.info_view.update_info(self.get_end_info(), self.event_log)
+                    self.info_view.update_info(self.event_log)
             except:
                 traceback.print_exc()
             
@@ -769,19 +762,8 @@ class MonkeyImages:
                 
                 self.clear_image()
             
-            log_entry = {
-                'discrim': selected_image_key, # str
-                'reward_duration': reward_duration, # Optional[float]
-                'pull_duration': pull_duration, # float
-                'discrim_delay': discrim_delay,
-                'go_cue_delay': go_cue_delay,
-                'failure_reason': log_failure_reason[0], # Optional[str]
-                'joystick_zone_enter': self.joystick_zone_enter, # Optional[float]
-                'joystick_zone_exit': self.joystick_zone_exit, # Optional[float]
-            }
-            self.trial_log.append(log_entry)
             self.log_event("trial_end", tags=['game_flow'], info={})
-            self.save_log_files(partial=True)
+            
     
     def manual_water_dispense(self):
         self.log_event("manual_water_dispense", tags=[], info={'duration': self.config.manual_reward_time})
@@ -865,8 +847,6 @@ class MonkeyImages:
             winsound.PlaySound(None, winsound.SND_PURGE)
         if self.plexon:
             self.plexon.water_off()
-        
-        self.save_log_files(partial=True)
     
     def Unpause(self):
         self.log_event('game_unpause', tags=['game_flow'], info={'was_paused': self.paused})
@@ -882,8 +862,7 @@ class MonkeyImages:
         self.clear_image()
         if winsound is not None:
             winsound.PlaySound(None, winsound.SND_PURGE)
-        self.save_log_files(partial=True)
-        pprint(self.get_end_info())
+        pprint(InfoView.calc_end_info(self.event_log))
     
     def KeyPress(self, event):
         key = event.char
@@ -1078,259 +1057,6 @@ class MonkeyImages:
                     self.log_hw('plexon_recording_start', plexon_ts=d.ts)
                 else:
                     self.log_hw('plexon_other_event', plexon_ts=d.ts, info={'channel': d.chan})
-    
-    def get_log_file_paths(self) -> Tuple[Path, Path]:
-        base = self.config.log_file_name_base
-        csv_path = Path(self.config.save_path) / f"{base}.csv"
-        event_log_path = Path(self.config.save_path) / f"{base}_events.json"
-        
-        return csv_path, event_log_path
-    
-    def ensure_log_file_creatable(self):
-        """Attempts to create, write to and delete the non partial log files.
-            raises an exception if this fails
-            raises an exception if any of the files already exist"""
-        if not self.config.enable_old_output:
-            return
-        
-        paths = self.get_log_file_paths()
-        
-        for path in paths:
-            assert not path.exists()
-            with open(path, 'x') as f:
-                f.write('_')
-            path.unlink()
-    
-    def save_log_files(self, *, partial: bool = False):
-        if not self.config.enable_old_output:
-            return
-        if os.environ.get('no_partial') and partial:
-            return
-        
-        base = self.config.log_file_name_base
-        if partial:
-            partial_dir = Path(self.config.save_path) / "partial"
-            partial_dir.mkdir(exist_ok=True)
-            gen_time = str(time.perf_counter())
-            csv_path = partial_dir / f"{base}_{gen_time}.csv"
-            event_log_path = partial_dir / f"{base}_{gen_time}_events.json"
-            histo_path = partial_dir / f"{base}_{gen_time}_histogram.png"
-        else:
-            csv_path, event_log_path = self.get_log_file_paths()
-            histo_path = Path(self.config.save_path) / f"{self.config.log_file_name_base}_histogram.png"
-        
-        out = {
-            'events': self.event_log,
-        }
-        
-        with open(event_log_path, 'w') as f:
-            json.dump(out, f, indent=2)
-        
-        with open(csv_path, 'w', newline='\n') as f:
-            writer = csv.writer(f)
-            
-            writer.writerow([
-                'trial',
-                'discrim',
-                'success',
-                'failure reason',
-                'time in homezone',
-                'pull duration',
-                'reward duration',
-                'joystick_zone_enter',
-                'joystick_zone_exit',
-                'discrim_delay',
-                'go_cue_delay',
-            ])
-            
-            for i, entry in enumerate(self.trial_log):
-                is_success = entry['reward_duration'] is not None
-                reason = entry['failure_reason'] or ''
-                if self.config.task_type == 'homezone_exit':
-                    time_in_homezone = entry['pull_duration']
-                    pull_duration = 0
-                elif self.config.task_type == 'joystick_pull':
-                    time_in_homezone = 0
-                    pull_duration = entry['pull_duration']
-                else:
-                    assert False
-                
-                writer.writerow([
-                    i+1,
-                    entry['discrim'],
-                    is_success,
-                    reason,
-                    time_in_homezone,
-                    pull_duration,
-                    entry['reward_duration'] or 0,
-                    entry['joystick_zone_enter'] or '',
-                    entry['joystick_zone_exit'] or '',
-                    entry['discrim_delay'],
-                    entry['go_cue_delay'],
-                ])
-            writer.writerow([])
-            
-            def get_time_in_game():
-                for e in self.event_log:
-                    if e['name'] == 'game_start':
-                        delta = time.perf_counter() - e['time_m']
-                        delta = timedelta(seconds=delta)
-                        return str(delta)
-                return None
-            
-            end_info = self.get_end_info()
-            dur = end_info['action_duration']
-            writer.writerow([
-                'count', end_info['count'],
-                'percent_correct', end_info['percent_correct'],
-                'time_in_game', get_time_in_game(),
-            ])
-            writer.writerow([
-                'min', dur['min'],
-                'max', dur['max'],
-                'mean', dur['mean'],
-                'stdev', dur['stdev'],
-            ])
-            
-            writer.writerow([])
-            writer.writerow(['discrim', 'correct', 'pulls', 'count', 'min', 'max', 'mean', 'stdev'])
-            for discrim, dad in end_info['discrim_action_duration'].items():
-                writer.writerow([
-                    discrim, dad['correct_count'], dad['pull_count'], dad['count'],
-                    dad['min'], dad['max'], dad['mean'], dad['stdev'],
-                ])
-            
-            writer.writerow([])
-            writer.writerow(['error', 'count', 'percent'])
-            for e, ei in end_info['errors'].items():
-                writer.writerow([e, ei['count'], ei['percent']])
-        
-        # self.events_file.generate_templates_at(
-        #     self.classifier, self.config.save_path / f"{self.config.log_file_name_base}_templates.json",
-        #     event_class = self.config.classification_event,
-        # )
-        # if not partial:
-        #     if not os.environ.get('skip_template_gen'):
-        #         behavioral_classifiers.eucl_classifier.build_templates_from_new_events_file(
-        #             events_path = self.classifier_events_path,
-        #             template_path = self.template_out_path,
-        #             event_class = self.config.classification_event,
-        #             post_time = self.config.post_time,
-        #             bin_size = self.config.bin_size,
-        #             labels = self.config.labels,
-        #         )
-        
-        # if self.info_view is not None:
-        #     screenshot_widgets([*self.info_view.rows, self.info_view.label], histo_path)
-    
-    def print_histogram(self):
-        events = [e for e in self.event_log if e['name'] == 'task_completed']
-        
-        def get_bin_ranges():
-            start = 0
-            # end = math.ceil(self.MaxTimeAfterSound)
-            end = max(rwd.get('high', 0) for rwd in self.config.reward_thresholds)
-            step = (end - start) / 10
-            
-            ws = start # window start
-            we = step # window end
-            while ws < end:
-                yield ws, we
-                ws = we
-                if we < 1.999999999:
-                    we = ws + 0.2
-                else:
-                    we = ws + step
-        bins = {
-            k: []
-            for k in get_bin_ranges()
-        }
-        errors = Counter()
-        
-        for e in events:
-            a_d = e['info']['action_duration']
-            if a_d == 0 and e['info']['failure_reason'] is not None:
-                errors[e['info']['failure_reason']] += 1
-                continue
-            for (bin_s, bin_e), bin_events in bins.items():
-                if bin_s <= a_d < bin_e:
-                    bin_events.append(e['info']['success'])
-                    break
-        
-        if errors:
-            print('-'*20)
-            error_col_width = max(len(e) for e in errors)
-            for error, count in errors.items():
-                print(f"{error.rjust(error_col_width)} {count}")
-        
-        for i, ((bin_s, bin_e), bin_events) in enumerate(bins.items()):
-            if i%4==0:
-                print('-'*20)
-            events_str = "".join('O' if e else 'X' for e in bin_events)
-            print(f"{bin_s:>5.1f}-{bin_e:<5.1f} {events_str}")
-    
-    def get_end_info(self):
-        events = [e for e in self.event_log if e['name'] == 'task_completed']
-        
-        n = len(events)
-        def perc(count):
-            if n == 0:
-                return 0
-            return count/n
-        
-        error_counts = Counter()
-        for e in events:
-            reason = e['info']['failure_reason']
-            if reason is None:
-                continue
-            error_counts[reason] += 1
-        error_info = {
-            reason: {'count': c, 'percent': perc(c)}
-            for reason, c in error_counts.items()
-        }
-        
-        correct = [e for e in events if e['info']['success']]
-        correct_n = len(correct)
-        
-        pull_durations = [e['info']['action_duration'] for e in events]
-        pull_durations = [x for x in pull_durations if x != 0]
-        
-        def get_discrim_durations():
-            for discrim, d_events in sgroup(events, lambda x: x['info']['discrim']):
-                d_events = list(d_events)
-                d_correct = [e for e in d_events if e['info']['success']]
-                pull_durations = [
-                    e['info']['action_duration']
-                    for e in d_events
-                ]
-                count = len(pull_durations)
-                pull_durations = [x for x in pull_durations if x != 0]
-                out = {
-                    'count': count, # number of times discrim appeared
-                    'pull_count': len(pull_durations), # number of pulls in response to discrim
-                    'correct_count': len(d_correct),
-                    'min': min(pull_durations, default=0),
-                    'max': max(pull_durations, default=0),
-                    'mean': statistics.mean(pull_durations) if pull_durations else 0,
-                    'stdev': statistics.pstdev(pull_durations) if pull_durations else 0,
-                }
-                yield discrim, out
-        
-        info = {
-            'count': n,
-            'correct_count': len(correct),
-            'percent_correct': perc(correct_n),
-            'action_duration': {
-                'min': min(pull_durations, default=0),
-                'max': max(pull_durations, default=0),
-                'mean': statistics.mean(pull_durations) if pull_durations else 0,
-                'stdev': statistics.pstdev(pull_durations) if pull_durations else 0,
-            },
-            'discrim_action_duration': dict(get_discrim_durations()),
-            'errors': error_info,
-        }
-        
-        return info
 
 def main():
     FORMAT = "%(levelname)s:%(message)s"
