@@ -15,13 +15,13 @@ class PhotoDiode:
         self.changed = False
         
         # using high % change since plexon seems to see oscillations in the signal
-        self._cal_perc = 0.25
+        # self._cal_perc = 0.25
         
         self._change_threshold: float = 0.0
     
     def set_range(self, min_val: float, max_val: float):
         assert self.calibrating
-        threshold = abs(max_val - min_val) * self._cal_perc
+        threshold = abs(max_val - min_val) / 2 + min_val
         self._change_threshold = threshold
         self.calibrating = False
     
@@ -34,30 +34,30 @@ class PhotoDiode:
         
         wait_t = 1
         
-        set_marker_level(1)
-        yield from wait(wait_t)
-        max_val = self.last_value
+        # set_marker_level(1)
+        # yield from wait(wait_t)
+        # max_val = self.last_value
         set_marker_level(0.5)
         yield from wait(wait_t)
         mid_val = self.last_value
         # print(self.last_value)
         set_marker_level(0)
-        yield from wait(wait_t)
-        min_val = self.last_value
+        # yield from wait(wait_t)
+        # min_val = self.last_value
         # time.sleep(20)
         
         # print(max_val, min_val)
-        assert max_val is not None
-        assert min_val is not None
-        assert max_val > min_val
-        threshold = abs(max_val - min_val) * self._cal_perc
-        self._change_threshold = threshold
+        # assert max_val is not None
+        # assert min_val is not None
+        # assert max_val > min_val
+        # threshold = abs(max_val - min_val) * self._cal_perc
+        # self._change_threshold = threshold
         self.calibrating = False
         
         return {
-            'min': min_val,
+            # 'min': min_val,
             'mid': mid_val,
-            'max': max_val,
+            # 'max': max_val,
         }
     
     def _cal_value(self, val: float):
@@ -99,14 +99,24 @@ class PhotoDiode:
             self._last_time = ts
             return
         
-        # assume at least 1 ms between events
-        # if ts - self._last_time < 0.001:
-        #     self.changed = False
-        #     return
+        # require at least 0.5 ms between events
+        if ts - self._last_time < 0.0005:
+            self.changed = False
+            return
         
-        if abs(self.last_value - val) > self._change_threshold:
-            self.changed = True
+        # if abs(self.last_value - val) > self._change_threshold:
+        #     self.changed = True
             
+        #     self.last_value = val
+        #     self._last_time = ts
+        # else:
+        #     self.changed = False
+        
+        ct = self._change_threshold
+        rising = self.last_value < ct and val >= ct
+        falling = self.last_value >= ct and val < ct
+        if rising or falling:
+            self.changed = True
             self.last_value = val
             self._last_time = ts
         else:

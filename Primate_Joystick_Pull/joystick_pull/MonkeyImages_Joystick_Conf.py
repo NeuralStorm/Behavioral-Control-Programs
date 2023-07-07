@@ -194,6 +194,7 @@ class MonkeyImages:
         if self.config.photodiode_range is not None:
             pmin, pmax = self.config.photodiode_range
             self._photodiode.set_range(pmin, pmax)
+        self._photodiode_off_time: Optional[float] = None
         
         if self.config.record_events:
             self.classifier_events_path = self.config.save_path / f"{self.config.log_file_name_base}_classifier_events.json.bz2"
@@ -335,6 +336,16 @@ class MonkeyImages:
         for cb in self._callbacks[key]:
             cb()
     
+    def flash_marker(self, name=None, *, level=1.0):
+        info = {}
+        if name is not None:
+            info['name'] = name
+        if self._photodiode_off_time is not None:
+            info['already_on'] = True
+        self.log_event('photodiode_expected', info=info)
+        self.game_frame.set_marker_level(level)
+        self._photodiode_off_time = time.perf_counter() + self.config.photodiode_flash_duration
+    
     # resets loop state, starts callback loop
     def start_new_loop(self):
         self.last_new_loop_time = time.perf_counter()
@@ -350,6 +361,11 @@ class MonkeyImages:
         cur_time = time.perf_counter()
         elapsed_time = cur_time - self.last_new_loop_time
         self.last_new_loop_time = cur_time
+        
+        if self._photodiode_off_time is not None:
+            if cur_time >= self._photodiode_off_time:
+                self._photodiode_off_time = None
+                self.game_frame.set_marker_level(0)
         
         if not self.paused:
             self.normalized_time += elapsed_time
@@ -383,7 +399,11 @@ class MonkeyImages:
     
     def run_trial(self):
         with ExitStack() as trial_stack:
-            trial_stack.callback(lambda: self.game_frame.set_marker_level(0))
+            def clear_photo_marker():
+                self._photodiode_off_time = None
+                self.game_frame.set_marker_level(0)
+            trial_stack.callback(clear_photo_marker)
+            
             discrim_delay = random.uniform(*self.config.discrim_delay_range)
             go_cue_delay = random.uniform(*self.config.go_cue_delay_range)
             
@@ -497,8 +517,6 @@ class MonkeyImages:
             joystick_pulled = Sentinel()
             trial_stack.enter_context(self._register_callback('joystick_pulled', joystick_pulled.set))
             
-            self.game_frame.set_marker_level(1)
-            
             gc_hand_removed_early = False
             # yield from waiter.wait(t=discrim_delay, event='homezone_exit')
             yield from waiter.wait(t=discrim_delay, cond=lambda: not in_zone())
@@ -518,7 +536,7 @@ class MonkeyImages:
                 })
                 # display image without red box
                 self.show_image(selected_image_key)
-                self.game_frame.set_marker_level(0.6)
+                self.flash_marker('discrim_shown')
             
             if not gc_hand_removed_early:
                 yield from waiter.wait(t=go_cue_delay, cond=lambda: not in_zone())
@@ -539,7 +557,7 @@ class MonkeyImages:
                     'selected_image': selected_image_key,
                 })
                 self.show_image(selected_image_key, boxed=True)
-                self.game_frame.set_marker_level(0.2)
+                self.flash_marker('go_cue_shown')
                 
                 # in_zone_at_go_cue = in_zone()
             
@@ -582,7 +600,6 @@ class MonkeyImages:
                     yield
                 
                 pull_start = trial_t()
-                # self.game_frame.set_marker_level(0.2)
                 
                 while self.joystick_pulled:
                     yield
@@ -619,7 +636,6 @@ class MonkeyImages:
                 
                 exit_time = trial_t()
                 exit_delay = exit_time - cue_time
-                # self.game_frame.set_marker_level(0.2)
                 
                 reward_duration = self.ChooseReward(exit_delay, cue=selected_image_key)
                 
@@ -679,8 +695,6 @@ class MonkeyImages:
             else:
                 assert False, f"invalid task_type {task_type}"
             
-            self.game_frame.set_marker_level(0)
-            
             task_completed_info = {
                 'reward_duration': reward_duration, # Optional[float]
                 'remote_pull_duration': remote_pull_duration, # float
@@ -721,6 +735,7 @@ class MonkeyImages:
                         'selected_image': selected_image_key,
                         'color': 'red',
                     })
+                    self.flash_marker('punish')
                 if self.ImageReward or self.config.EnableBlooperNoise:
                     # 1.20 is the duration of the sound effect
                     yield from wait(1.20)
@@ -737,6 +752,7 @@ class MonkeyImages:
                         'selected_image': selected_image_key,
                         'color': 'white',
                     })
+                    self.flash_marker('reward')
                 
                 if winsound is not None:
                     winsound.PlaySound(
