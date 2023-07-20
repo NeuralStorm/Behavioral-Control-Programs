@@ -147,7 +147,8 @@ class GameConfig:
             assert photodiode_range is not None
             pmin, pmax = config_dict['photodiode_range']
             self.photodiode_range = float(pmin), float(pmax)
-        self.photodiode_flash_duration: float = float(os.environ.get('photodiode_flash_duration', 0.002))
+        # default to 18ms, longer than 1 refresh at 60hz (16.7 ms)
+        self.photodiode_flash_duration: float = float(os.environ.get('photodiode_flash_duration', 0.018))
         
         record_events = config_dict.get('record_events')
         if record_events in [None, [], [''], ['false']]:

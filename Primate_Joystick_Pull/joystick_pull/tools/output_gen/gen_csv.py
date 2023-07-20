@@ -6,6 +6,7 @@ from datetime import timedelta
 import statistics
 from collections import Counter
 from itertools import groupby
+from copy import deepcopy
 
 class RaiseType:
     pass
@@ -57,13 +58,20 @@ def _find_one(events, name, *, ignore_extra=False, default: Any = Raise) -> Any:
         return out
     raise MoreThanOne(f"more than one {name}")
 
+def filter_incomplete_trials(trials):
+    """filters incomplete trials, may be from game being stopped, program closing, etc"""
+    for trial in trials:
+        comp = _find_one(trial, 'task_completed', ignore_extra=True, default=None)
+        if comp is not None:
+            yield trial
+
 def row_from_trial(trial, *, trial_i, task_type: str):
     def find(name):
         yield from _find(trial, name)
     def find_one(name, ignore_extra=False, default:Any=Raise):
         return _find_one(trial, name, ignore_extra=ignore_extra, default=default)
     
-    pprint(trial)
+    # pprint(trial)
     start = find_one('trial_start')
     comp_event = find_one('task_completed')
     comp = comp_event['info']
@@ -101,7 +109,8 @@ def row_from_trial(trial, *, trial_i, task_type: str):
     
     row = [
         trial_i+1,
-        start['info']['discrim'],
+        # start['info']['discrim'],
+        comp['discrim'],
         is_success,
         reason,
         time_in_homezone,
@@ -118,7 +127,10 @@ def row_from_trial(trial, *, trial_i, task_type: str):
 def gen_trial_rows(events):
     config_event = _find_one(events, 'config_loaded', ignore_extra=True)
     
-    for trial_i, trial in enumerate(group_trials(events)):
+    trials = group_trials(events)
+    trials = filter_incomplete_trials(trials)
+    
+    for trial_i, trial in enumerate(trials):
         new_config_event = list(_find(trial, 'config_loaded'))
         if new_config_event:
             config_event = new_config_event[-1]
@@ -130,7 +142,8 @@ def gen_trial_rows(events):
             )
         except EventNotFound as e:
             print("trial", trial_i, e)
-            continue
+            # continue
+            raise
         
         yield row
 
@@ -197,7 +210,28 @@ def get_end_info(events):
     
     return info
 
-def gen_csv_rows(events):
+def permissive_events(events):
+    out = []
+    for e in events:
+        name = e.get('name')
+        if name is None:
+            continue
+        e = deepcopy(e)
+        if name == 'config_loaded':
+            # handle old config_loaded structure with only raw data
+            if 'task_type' not in e['info']['config']:
+                if e['info']['config']['Number of Events'][0] == '0':
+                    e['info']['config']['task_type'] = 'homezone_exit'
+                else:
+                    e['info']['config']['task_type'] = 'joystick_pull'
+        
+        out.append(e)
+    
+    return out
+
+def gen_csv_rows(events, *, permissive=False):
+    if permissive:
+        events = permissive_events(events)
     yield [
         'trial',
         'discrim',

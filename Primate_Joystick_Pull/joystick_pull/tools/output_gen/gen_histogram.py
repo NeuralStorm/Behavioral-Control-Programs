@@ -144,19 +144,20 @@ def get_info_text(end_info, event_log):
 def gen_histogram(event_log, output_path):
     # with open(input_path, encoding='utf8', newline='\n') as f:
     #     data = json.load(f)
-
+    
     # event_log = data['events']
-
+    
     end_info = get_end_info(event_log)
-
-    hist_lengths, hist_errors = InfoView.gen_histogram(event_log, h_range=(0, 10))
-
+    
+    task_comp = [e for e in event_log if e['name'] == 'task_completed']
+    hist_lengths, hist_errors = InfoView.gen_histogram(task_comp, h_range=(0, 10))
+    
     info_text = get_info_text(end_info, event_log)
-
+    
     # print(hist_lengths)
     # print(end_info)
     # print(info_text)
-
+    
     test = {
         # 'carat': [1,2,3,3,3],
         # 'y': [1, 1, 1, 2, 3],
@@ -176,12 +177,12 @@ def gen_histogram(event_log, output_path):
         # 'fill': ['S', 'S', 'S', 'F', 'S'],
         'fill': [],
     }
-
+    
     y_breaks = []
     y_labels = []
-
+    
     y_pos = 0
-
+    
     for (r_start, r_end), trials in sorted(hist_lengths.items(), key=lambda x: x[0][0], reverse=True):
         label = f"{r_start:.3f}-{r_end:.3f}"
         y_labels.append(label)
@@ -199,9 +200,9 @@ def gen_histogram(event_log, output_path):
             x_pos += 1
         
         y_pos += 1
-
+    
     max_trials = max(len(ts) for ts in hist_lengths.values())
-
+    
     fig = (
         # ggplot(diamonds, aes(x='carat'))
         # ggplot(pd.DataFrame(test), aes(x='carat'))
@@ -236,7 +237,7 @@ def gen_histogram(event_log, output_path):
         # + geom_point(aes(x='carat', y='y', color='fill'))
         + geom_rect(aes(xmin='xmin', xmax='xmax', ymin='ymin', ymax='ymax', fill='fill'))
     )
-
+    
     fig.save(filename = output_path, verbose=False)
     # print(output_path)
 

@@ -15,6 +15,8 @@ from pathlib import Path
 import time
 from datetime import datetime
 from pprint import pprint
+import inspect
+from uuid import uuid1
 
 try:
     import winsound
@@ -25,7 +27,7 @@ import tkinter as tk
 from tkinter import filedialog
 
 import behavioral_classifiers
-from butil import EventFile
+from butil import EventFile, Debounce
 
 from .game_frame import GameFrame, InfoView, screenshot_widgets, screenshot_widget
 from .photodiode import PhotoDiode
@@ -37,16 +39,24 @@ debug = logger.debug
 
 SOUND_PATH_BASE = Path(__file__).parent.parent / 'assets/TaskSounds'
 
+def get_event_id(evt):
+    if evt is None:
+        return None
+    return evt['id']
+
 class Sentinel:
     """used to check if callbacks have been called"""
     def __init__(self):
         self.triggered: bool = False
+        self.event = None
     
     def __bool__(self) -> bool:
         return self.triggered
     
-    def set(self):
+    def set(self, evt):
         self.triggered = True
+        if self.event is None:
+            self.event = evt
 
 def get_config_path() -> Path:
     if 'config_path' in os.environ:
@@ -128,6 +138,7 @@ class MonkeyImages:
         self.paused: bool = False
         
         self.joystick_pulled: bool = False # wether the joystick is currently pulled
+        self.joystick_pull_event: Optional[Any] = None
         self.joystick_pull_remote_ts = None
         self.joystick_release_remote_ts = None
         
@@ -138,7 +149,7 @@ class MonkeyImages:
         self.joystick_zone_exit = None # Optional[float]
         
         # used in gathering_data_omni_new to track changes in joystick position
-        self.joystick_last_state = None
+        self.joystick_debounce = Debounce(threshold=4, delay=0.001)
         
         # callbacks triggered by external events
         # Dict[str, Set[Callable[[], None]]]
@@ -161,8 +172,6 @@ class MonkeyImages:
         else:
             self.plexon = None
         
-        self.joystick_pull_threshold = 4
-        
         self.auto_water_reward_enabled = True
         
         if test_config and 'config_path' not in os.environ:
@@ -170,6 +179,9 @@ class MonkeyImages:
         else:
             self.config_path = get_config_path()
         print(self.config_path)
+        
+        # index of logged events so each can receive a unique id
+        self.event_i = 0
         
         # self.new_events_path = self.config.save_path / f"{self.config.log_file_name_base}_new_events.json.gz"
         # self.new_events_file = EventFile(path=self.new_events_path)
@@ -292,15 +304,20 @@ class MonkeyImages:
         mono_time = time.perf_counter()
         out = {
             # 'time_human': human_time,
+            'id': self.event_i,
+            # 'id': uuid1().hex,
             'time_m': mono_time,
             'name': name,
             'tags': tags,
             'info': info,
         }
+        self.event_i += 1
         
         self.new_events_file.write_record(out)
         
-        self._trigger_event(name)
+        self._trigger_event(name, event=out)
+        
+        return out
     
     def log_hw(self, name, *, sim: bool = False, info=None, plexon_ts: Optional[float] = None):
         tags = ['hw']
@@ -310,9 +327,15 @@ class MonkeyImages:
             tags.append('hw_simulated')
         if plexon_ts is not None:
             info['plexon_ts'] = plexon_ts
-        self.log_event(name, tags=tags, info=info)
+        return self.log_event(name, tags=tags, info=info)
     
     def _register_callback(self, event_key, cb):
+        # handle callback without a parameter
+        sig = inspect.signature(cb)
+        if not sig.parameters:
+            _cb = cb
+            cb = lambda evt: _cb() # type: ignore
+        
         if event_key not in self._callbacks:
             self._callbacks[event_key] = set()
         self._callbacks[event_key].add(cb)
@@ -328,13 +351,13 @@ class MonkeyImages:
             v.clear()
     
     # call callbacks registered for event key
-    def _trigger_event(self, key):
+    def _trigger_event(self, key, event=None):
         if self.paused:
             return
         if key not in self._callbacks:
             return
         for cb in self._callbacks[key]:
-            cb()
+            cb(event)
     
     def flash_marker(self, name=None, *, level=1.0):
         info = {}
@@ -392,12 +415,12 @@ class MonkeyImages:
             if self.config.max_trials is not None and completed_trials >= self.config.max_trials:
                 yield
                 continue
-            yield from self.run_trial()
+            yield from self.run_trial(trial_i=completed_trials)
             completed_trials += 1
             if self.config.max_trials is not None:
                 print(f"trial {completed_trials}/{self.config.max_trials} complete")
     
-    def run_trial(self):
+    def run_trial(self, trial_i=0):
         with ExitStack() as trial_stack:
             def clear_photo_marker():
                 self._photodiode_off_time = None
@@ -442,6 +465,7 @@ class MonkeyImages:
                 'discrim_delay': discrim_delay,
                 'go_cue_delay': go_cue_delay,
                 'task_type': self.config.task_type,
+                'trial_index': trial_i,
             })
             
             # if winsound is not None:
@@ -700,6 +724,7 @@ class MonkeyImages:
                 'remote_pull_duration': remote_pull_duration, # float
                 'pull_duration': pull_duration, # float
                 'action_duration': action_duration, # float
+                'pull_event': get_event_id(joystick_pulled.event),
                 'success': reward_duration is not None, # bool
                 'failure_reason': log_failure_reason[0], # Optional[str]
                 'discrim': selected_image_key, # str
@@ -915,12 +940,16 @@ class MonkeyImages:
             if not self.joystick_pulled:
                 self.joystick_pull_remote_ts = time.perf_counter()
                 self.joystick_pulled = True
-                self.log_hw('joystick_pulled', sim=True)
+                evt = self.log_hw('joystick_pulled', sim=True)
+                self.joystick_pull_event = evt
                 self.dbg_classification_event('joystick_pull')
             else:
                 self.joystick_release_remote_ts = time.perf_counter()
                 self.joystick_pulled = False
-                self.log_hw('joystick_released', sim=True)
+                self.log_hw('joystick_released', sim=True, info={
+                    'pull_event': get_event_id(self.joystick_pull_event),
+                })
+                self.joystick_pull_event = None
                 self.dbg_classification_event('joystick_released')
             
             print('joystick', self.joystick_pulled)
@@ -981,9 +1010,6 @@ class MonkeyImages:
             self.handle_classification_event(event_class, time.perf_counter())
     
     def gathering_data_omni_new(self):
-        # joystick threshold
-        js_thresh = self.joystick_pull_threshold
-        
         assert self.plexon
         for d in self.plexon.get_data():
             if self._cl_helper is not None:
@@ -991,26 +1017,24 @@ class MonkeyImages:
             
             if d.type == d.ANALOG:
                 if d.chan == self.config.joystick_channel:
-                    if self.joystick_last_state is None:
-                        self.joystick_last_state = d.value
+                    edge = self.joystick_debounce.sample(d.value)
                     
-                    # joystick has transitioned from not pulled to pulled
-                    if self.joystick_last_state < js_thresh and d.value >= js_thresh:
-                        self.log_hw('joystick_pulled', plexon_ts=d.ts)
+                    if edge.rising:
+                        evt = self.log_hw('joystick_pulled', plexon_ts=d.ts)
+                        self.joystick_pull_event = evt
                         self.joystick_pulled = True
                         self.joystick_pull_remote_ts = d.ts
                         
                         self.handle_classification_event('joystick_pull', d.ts)
-                    
-                    # joystick has transitioned from pulled to not pulled
-                    elif self.joystick_last_state >= js_thresh and d.value < js_thresh:
-                        self.log_hw('joystick_released', plexon_ts=d.ts)
+                    elif edge.falling:
+                        self.log_hw('joystick_released', plexon_ts=d.ts, info={
+                            'pull_event': get_event_id(self.joystick_pull_event),
+                        })
+                        self.joystick_pull_event = None
                         self.joystick_pulled = False
                         self.joystick_release_remote_ts = d.ts
                         
                         self.handle_classification_event('joystick_released', d.ts)
-                    
-                    self.joystick_last_state = d.value
                 elif d.chan == 1: # photodiode
                     self._photodiode.handle_value(d.value, d.ts)
                     if self._photodiode.changed:

@@ -7,7 +7,6 @@ import traceback
 
 from butil import EventReader
 from . import gen_csv
-from . import gen_histogram
 
 def parse_args():
     parser = argparse.ArgumentParser(prog='output_gen', description='')
@@ -27,6 +26,8 @@ def parse_args():
     split_parser.add_argument('--skip-failed', action='store_true')
     split_parser.add_argument('--ignore-photodiode', action='store_true',
         help="discard photodiode events")
+    split_parser.add_argument('--plots', action='store_true',
+        help="enable histogram")
     split_parser.add_argument('input', nargs='+', type=Path,
         help='input events .json.bz files')
     
@@ -37,6 +38,7 @@ def gen_from_file(*,
     input_path: Path,
     ignore_photodiode: bool,
     overwrite: bool,
+    plots: bool,
     ):
     # reader = EventReader(path=input_file)
     # out_events = []
@@ -76,11 +78,8 @@ def gen_from_file(*,
     with open(csv_output_path, 'w', encoding='utf8', newline='\n') as f:
         gen_csv.write_csv(f, out_events)
     
-    try:
-        import plotnine
-    except ImportError:
-        pass
-    else:
+    if plots:
+        from . import gen_histogram
         gen_histogram.gen_histogram(out_events, histogram_output_path)
 
 def main():
@@ -93,6 +92,7 @@ def main():
                     input_path=input_path,
                     ignore_photodiode=args.ignore_photodiode,
                     overwrite=args.overwrite,
+                    plots=args.plots,
                 )
             except:
                 if not args.skip_failed:
