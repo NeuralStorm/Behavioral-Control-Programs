@@ -149,8 +149,8 @@ class DataBridge:
                                 chan = CHAN_MAPPING.get(i, i)
                                 if chan is None:
                                     continue
-                                chan *= -1
-                                yield PlexonEvent(msg['ts'], PlexonEvent.EVENT, chan=chan)
+                                # chan *= -1
+                                yield PlexonEvent(msg['ts'], PlexonEvent.EVENT, chan=chan, falling=True)
                         self._digital_prev = msg['d']
                 elif message_type == 'spike':
                     yield PlexonEvent(msg['ts'], PlexonEvent.SPIKE, chan=msg['ch'], unit=0)

@@ -32,6 +32,7 @@ from butil import EventFile, Debounce
 from .game_frame import GameFrame, InfoView, screenshot_widgets, screenshot_widget
 from .photodiode import PhotoDiode
 from .config import GameConfig
+from .zone import Zone
 
 logger = logging.getLogger(__name__)
 
@@ -142,14 +143,8 @@ class MonkeyImages:
         self.joystick_pull_remote_ts = None
         self.joystick_release_remote_ts = None
         
-        # set in gathering_data_omni_new
-        # if joystick_zone_enter is not None and joystick_zone_exit is None the hand is currently in the joystick zone
-        # these track the time reported by plexon
-        self.joystick_zone_enter = None # Optional[float]
-        self.joystick_zone_exit = None # Optional[float]
-        
         # used in gathering_data_omni_new to track changes in joystick position
-        self.joystick_debounce = Debounce(threshold=4, delay=0.001)
+        self.joystick_debounce = Debounce(threshold=2, high_threshold=4, delay=0.001)
         
         # callbacks triggered by external events
         # Dict[str, Set[Callable[[], None]]]
@@ -192,10 +187,14 @@ class MonkeyImages:
         self.config: GameConfig
         self.load_config(first_load=True) # set self.config
         
-        self.Area1_right_pres = False   # Home Area
-        # self.Area2_right_pres = False   # Joystick Area
-        # self.Area1_left_pres = False    # Home Area
-        # self.Area2_left_pres = False    # Joystick Area
+        self.zones = [
+            Zone('homezone', 14, None),
+            Zone('joystick_zone', 11, None),
+        ]
+        self.zone_by_name = {x.name: x for x in self.zones}
+        self.zone_by_chan = {x.chan: x for x in self.zones}
+        self.zone_by_exit_chan = {x.exit_chan: x for x in self.zones if x.exit_chan is not None}
+        
         self.ImageReward = True        # Default Image Reward set to True
         
         # set to the selected image key at the start of the trial for use in classification event log
@@ -442,13 +441,11 @@ class MonkeyImages:
             # reset state for new trial
             self.joystick_pull_remote_ts = None
             self.joystick_release_remote_ts = None
-            self.joystick_zone_enter = None
-            self.joystick_zone_exit = None
             
             trial_start = self.normalized_time
             
             def in_zone():
-                return self.Area1_right_pres
+                return self.zone_by_name['homezone'].in_zone
             
             def trial_t():
                 return self.normalized_time - trial_start
@@ -927,15 +924,18 @@ class MonkeyImages:
             self.root.quit()
             # sys.exit()
         elif key == '1':
-            self.Area1_right_pres = not self.Area1_right_pres
-            if self.Area1_right_pres:
+            zone = self.zone_by_name['homezone']
+            if not zone.in_zone:
+                zone.enter()
                 self.log_hw('homezone_enter', sim=True)
                 self.dbg_classification_event('homezone_enter')
+                print('homezone enter')
             else:
-                self.log_hw('zone_exit', sim=True, info={'simulated_zone': 'homezone'})
+                zone.exit()
+                # self.log_hw('zone_exit', sim=True, info={'simulated_zone': 'homezone'})
                 self.log_hw('homezone_exit', sim=True, info={'simulated_zone': 'homezone'})
                 self.dbg_classification_event('homezone_exit')
-            print('in zone toggled', self.Area1_right_pres)
+                print('homezone exit')
         elif key == '2':
             if not self.joystick_pulled:
                 self.joystick_pull_remote_ts = time.perf_counter()
@@ -953,16 +953,6 @@ class MonkeyImages:
                 self.dbg_classification_event('joystick_released')
             
             print('joystick', self.joystick_pulled)
-        elif key == '3':
-            if self.joystick_zone_enter is None:
-                self.joystick_zone_enter = time.perf_counter()
-                self.log_hw('joystick_zone_enter', sim=True)
-            elif self.joystick_zone_exit is None:
-                self.joystick_zone_exit = time.perf_counter()
-                self.log_hw('zone_exit', sim=True, info={'simulated_zone': 'joystick_zone'})
-                self.log_hw('joystick_zone_exit', sim=True)
-            
-            print('joystick zone', self.joystick_zone_enter, self.joystick_zone_exit)
     
     ### These attach to buttons that will select if Monkey has access to the highly coveted monkey image reward
     def HighLevelRewardOn(self):
@@ -1047,48 +1037,41 @@ class MonkeyImages:
                         timestamp = d.ts,
                     )
             elif d.type == d.EVENT:
-                # negative channels are falling edges from neurokey interface
-                # neuorkey interface won't send channel 12
-                if d.chan == 14: # enter home zone
-                    self.log_hw('homezone_enter', plexon_ts=d.ts)
-                    self.Area1_right_pres = True
-                    
-                    self.handle_classification_event('homezone_enter', d.ts)
-                elif d.chan == -14:
-                    self.log_hw('homezone_exit', plexon_ts=d.ts)
-                    self.Area1_right_pres = False
-                    # self._trigger_event('homezone_exit')
-                    
-                    self.handle_classification_event('homezone_exit', d.ts)
-                elif d.chan == 11: # enter joystick zone
-                    self.log_hw('joystick_zone_enter', plexon_ts=d.ts)
-                    if self.joystick_zone_enter is None:
-                        self.joystick_zone_enter = d.ts
-                    
-                    self.handle_classification_event('joystick_zone_enter', d.ts)
-                elif d.chan == -11:
-                    self.log_hw('joystick_zone_exit', plexon_ts=d.ts)
-                    self.joystick_zone_exit = d.ts
-                    
-                    self.handle_classification_event('joystick_zone_exit', d.ts)
-                elif d.chan == 12: # exit either zone
-                    self.log_hw('zone_exit', plexon_ts=d.ts, info={
-                        'was_in_homezone': self.Area1_right_pres,
-                        'was_in_joystick_zone': self.joystick_zone_enter is not None and self.joystick_zone_exit is None,
-                    })
-                    if self.Area1_right_pres:
-                        self.Area1_right_pres = False
-                        self.log_hw('homezone_exit', plexon_ts=d.ts)
-                        # self._trigger_event('homezone_exit')
-                        
-                        self.handle_classification_event('homezone_exit', d.ts)
-                    if self.joystick_zone_enter is not None and self.joystick_zone_exit is None:
-                        self.log_hw('joystick_zone_exit', plexon_ts=d.ts)
-                        self.joystick_zone_exit = d.ts
-                        
-                        self.handle_classification_event('joystick_zone_exit', d.ts)
+                zone = self.zone_by_chan.get(d.chan)
+                if zone is not None:
+                    if d.falling: # zone exit
+                        zone.exit()
+                    else: # zone enter
+                        zone.enter()
                 else:
-                    self.log_hw('plexon_event', plexon_ts=d.ts, info={'channel': d.chan})
+                    # handle dedicated exit events from plexon
+                    zone = self.zone_by_exit_chan.get(d.chan)
+                    if zone is not None:
+                        zone.exit()
+                
+                # neuorkey interface won't send channel 12
+                if zone is None and d.chan == 12 and d.rising:
+                    homezone = self.zone_by_name['homezone']
+                    joystick_zone = self.zone_by_name['joystick_zone']
+                    self.log_hw('zone_exit', plexon_ts=d.ts, info={
+                        'was_in_homezone': homezone.in_zone,
+                        'was_in_joystick_zone': joystick_zone.in_zone,
+                    })
+                    
+                    if homezone.in_zone:
+                        zone = homezone
+                        zone.exit()
+                    elif joystick_zone.in_zone:
+                        zone = joystick_zone
+                        zone.exit()
+                
+                if zone is not None:
+                    self.log_hw(zone.event_name, plexon_ts=d.ts, info={
+                        'changed': zone.changed,
+                    })
+                    self.handle_classification_event(zone.event_name, d.ts)
+                else:
+                    self.log_hw('hw_event', plexon_ts=d.ts, info={'channel': d.chan})
             elif d.type == d.OTHER_EVENT:
                 if d.chan == 1:
                     # not sure what this is but plexon sends them every 10ms or so

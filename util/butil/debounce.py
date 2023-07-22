@@ -1,5 +1,5 @@
 
-from typing import Union
+from typing import Union, Optional
 from numbers import Real
 from time import perf_counter
 
@@ -8,17 +8,26 @@ class Edge:
     falling: bool = False
 
 class Debounce:
-    def __init__(self, *, threshold: Real, delay: float):
+    def __init__(self, *, threshold: Real, high_threshold: Optional[Real], delay: float):
         self._is_high = False
         self._last_state_change = None
         self._threshold = threshold
+        self._high_threshold = high_threshold if high_threshold is not None else threshold
         self._delay = delay
+    
+    @property
+    def is_low(self):
+        return not self._is_high
+    
+    @property
+    def is_high(self):
+        return self._is_high
     
     def sample(self, value: Real) -> Edge:
         # check if the state has changed
         if self._is_high and value < self._threshold:
             rising = False
-        elif not self._is_high and value >= self._threshold:
+        elif not self._is_high and value >= self._high_threshold:
             rising = True
         else:
             return Edge()

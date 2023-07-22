@@ -34,12 +34,18 @@ class PlexonEvent:
         value: float = 0,
         chan: int = 0,
         unit: int = 0,
+        falling: bool = False,
     ):
         self.ts: float = ts
         self.type: str = event_type
         self.value: float = value
         self.chan: int = chan
         self.unit: int = unit
+        self.falling: bool = falling
+    
+    @property
+    def rising(self) -> bool:
+        return not self.falling
 
 class Plexon:
     def __init__(self):
