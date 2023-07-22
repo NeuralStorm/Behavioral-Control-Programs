@@ -27,7 +27,7 @@ import tkinter as tk
 from tkinter import filedialog
 
 import behavioral_classifiers
-from butil import EventFile, Debounce
+from butil import EventFile, Debounce, get_git_info
 
 from .game_frame import GameFrame, InfoView, screenshot_widgets, screenshot_widget
 from .photodiode import PhotoDiode
@@ -263,6 +263,14 @@ class MonkeyImages:
             assert self._cl_helper is not None
             from behavioral_classifiers.helpers.debug_tools import DebugSpikeSource
             self._stack.enter_context(DebugSpikeSource(self._cl_helper))
+        
+        if not os.environ.get('no_git'):
+            try:
+                git_info = get_git_info()
+            except Exception as e:
+                traceback.print_exc()
+                git_info = {'error': str(e)}
+            self.log_event('git_info', info=git_info)
     
     def __enter__(self):
         pass
