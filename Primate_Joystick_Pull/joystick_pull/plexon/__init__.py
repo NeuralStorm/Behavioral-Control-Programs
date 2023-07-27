@@ -1,6 +1,7 @@
 
 import logging
 from pathlib import Path
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -106,26 +107,29 @@ class Plexon:
                     source_numbers_voltage_scalers[global_parameters.source_ids[index]] = voltage_scaler
                     logger.info("Digitization Rate: {}, Voltage Scaler: {}".format(rate, voltage_scaler))
         
-        ## Setup for Plexon DO
-        compatible_devices = ['PXI-6224', 'PXI-6259']
-        self.plexdo = PyPlexDO(plexdo_dll_path=str(bin_path))
-        doinfo = self.plexdo.get_digital_output_info()
-        self.device_number = 1
-        for k in range(doinfo.num_devices):
-            if self.plexdo.get_device_string(doinfo.device_numbers[k]) in compatible_devices:
-                device_number = doinfo.device_numbers[k]
-        if device_number == None:
-            print("No compatible devices found. Exiting.")
-            # sys.exit(1)
-            raise PlexonError()
+        if os.environ.get('disable_plexon_do'):
+            self.plexdo = None
         else:
-            print("{} found as device {}".format(self.plexdo.get_device_string(device_number), device_number))
-        res = self.plexdo.init_device(device_number)
-        if res != 0:
-            print("Couldn't initialize device. Exiting.")
-            # sys.exit(1)
-            raise PlexonError()
-        self.plexdo.clear_all_bits(device_number)
+            ## Setup for Plexon DO
+            compatible_devices = ['PXI-6224', 'PXI-6259']
+            self.plexdo = PyPlexDO(plexdo_dll_path=str(bin_path))
+            doinfo = self.plexdo.get_digital_output_info()
+            self.device_number = 1
+            for k in range(doinfo.num_devices):
+                if self.plexdo.get_device_string(doinfo.device_numbers[k]) in compatible_devices:
+                    device_number = doinfo.device_numbers[k]
+            if device_number == None:
+                print("No compatible devices found. Exiting.")
+                # sys.exit(1)
+                raise PlexonError()
+            else:
+                print("{} found as device {}".format(self.plexdo.get_device_string(device_number), device_number))
+            res = self.plexdo.init_device(device_number)
+            if res != 0:
+                print("Couldn't initialize device. Exiting.")
+                # sys.exit(1)
+                raise PlexonError()
+            self.plexdo.clear_all_bits(device_number)
         
     def wait_for_start(self):
         while True:
@@ -147,10 +151,12 @@ class Plexon:
                     }
     
     def water_on(self):
-        self.plexdo.set_bit(self.device_number, self.reward_nidaq_bit)
+        if self.plexdo is not None:
+            self.plexdo.set_bit(self.device_number, self.reward_nidaq_bit)
     
     def water_off(self):
-        self.plexdo.clear_bit(self.device_number, self.reward_nidaq_bit)
+        if self.plexdo is not None:
+            self.plexdo.clear_bit(self.device_number, self.reward_nidaq_bit)
     
     def get_data(self):
         self.client.opx_wait(5)
