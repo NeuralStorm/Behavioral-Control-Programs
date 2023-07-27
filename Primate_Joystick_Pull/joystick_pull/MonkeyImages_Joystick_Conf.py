@@ -559,7 +559,7 @@ class MonkeyImages:
             for cb in in_zone_cbs:
                 cb.clear()
             
-            if not gc_hand_removed_early:
+            if not gc_hand_removed_early and not joystick_pulled:
                 self.log_event('discrim_shown', tags=['game_flow'], info={
                     'selected_image': selected_image_key,
                 })
@@ -567,7 +567,7 @@ class MonkeyImages:
                 self.show_image(selected_image_key)
                 self.flash_marker('discrim_shown')
             
-            if not gc_hand_removed_early:
+            if not gc_hand_removed_early and not joystick_pulled:
                 yield from waiter.wait(t=go_cue_delay, cond=lambda: not in_zone())
                 if waiter.trigger != 'time':
                     # gc_hand_removed_early = True
@@ -577,10 +577,7 @@ class MonkeyImages:
             else:
                 in_zone_at_go_cue = False
             
-            if gc_hand_removed_early:
-                # in_zone_at_go_cue = False
-                pass
-            else:
+            if not gc_hand_removed_early and not joystick_pulled:
                 # display image with box
                 self.log_event('go_cue_shown', tags=['game_flow'], info={
                     'selected_image': selected_image_key,
@@ -590,7 +587,7 @@ class MonkeyImages:
                 
                 # in_zone_at_go_cue = in_zone()
             
-            if in_zone_at_go_cue:
+            if in_zone_at_go_cue and not joystick_pulled:
                 if winsound is not None:
                     winsound.PlaySound(
                         str(SOUND_PATH_BASE / 'mixkit-unlock-game-notification-253.wav'),
