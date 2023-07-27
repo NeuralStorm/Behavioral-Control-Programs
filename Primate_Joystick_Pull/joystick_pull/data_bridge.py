@@ -5,7 +5,7 @@ import json
 import os
 import time
 
-from plexon import PlexonEvent
+from .plexon import PlexonEvent
 
 class ConnectionError(Exception):
     pass
