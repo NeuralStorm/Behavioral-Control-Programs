@@ -46,7 +46,9 @@ class Debounce:
         edge = Edge()
         if rising:
             edge.rising = True
+            self._is_high = True
         else:
             edge.falling = True
+            self._is_high = False
         
         return edge

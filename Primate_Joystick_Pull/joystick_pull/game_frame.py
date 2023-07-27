@@ -92,6 +92,10 @@ class InfoView:
             h_max = max(x['info']['action_duration'] for x in events)
             h_range = h_min, h_max
         
+        # ignore pulls longer than 2 minutes
+        if h_range[1] > 120:
+            h_range[1] = 120.0
+        
         def get_bin_ranges():
             start, end = h_range
             step = 0.5
