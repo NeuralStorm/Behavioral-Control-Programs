@@ -15,19 +15,24 @@ def _minimal_ext_cmd(cmd, cwd):
     env['LANGUAGE'] = 'C'
     env['LANG'] = 'C'
     env['LC_ALL'] = 'C'
-    out = subprocess.Popen(cmd, stdout=subprocess.PIPE, env=env, cwd=cwd).communicate()[0]
+    out, err = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env, cwd=cwd).communicate()
     out = out.strip().decode('ascii')
-    return out
+    err = err.strip().decode('ascii')
+    return out, err
 
 def get_git_info():
     fn = inspect.stack()[0].filename
     path = Path(fn)
     path = path.parent
     
-    status = _minimal_ext_cmd(['git', 'status', '--porcelain=v2', '--branch'], path)
+    status, err = _minimal_ext_cmd(['git', 'status', '--porcelain=v2', '--branch'], path)
     
     lines = status.split('\n')
     
-    return {
+    out = {
         'status': lines,
     }
+    if err:
+        out['status_stderr'] = err.split('\n')
+    
+    return out

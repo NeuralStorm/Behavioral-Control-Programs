@@ -23,7 +23,7 @@ class Debounce:
     def is_high(self):
         return self._is_high
     
-    def sample(self, value: Real) -> Edge:
+    def sample(self, timestamp: Real, value: Real) -> Edge:
         # check if the state has changed
         if self._is_high and value < self._threshold:
             rising = False
@@ -33,7 +33,8 @@ class Debounce:
             return Edge()
         
         # check that the debounce delay has passed
-        now = perf_counter()
+        # now = perf_counter()
+        now = timestamp
         if self._last_state_change is None:
             pass
         elif now - self._last_state_change > self._delay:

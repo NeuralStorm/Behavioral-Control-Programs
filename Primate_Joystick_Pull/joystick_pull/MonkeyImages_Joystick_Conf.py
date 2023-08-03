@@ -1,7 +1,7 @@
 """
     Sound effects obtained from https://www.zapsplat.com
     """
-# For keypad controls, search "def KeyPress"
+# For keypad controls, search "def handle_key_press"
 
 from typing import List, Tuple, Optional, Literal, Dict, Any, Union
 import os
@@ -49,7 +49,7 @@ class Sentinel:
     """used to check if callbacks have been called"""
     def __init__(self):
         self.triggered: bool = False
-        self.event = None
+        self.event: Optional[Any] = None
     
     def __bool__(self) -> bool:
         return self.triggered
@@ -195,7 +195,7 @@ class MonkeyImages:
         self.zone_by_chan = {x.chan: x for x in self.zones}
         self.zone_by_exit_chan = {x.exit_chan: x for x in self.zones if x.exit_chan is not None}
         
-        self.ImageReward = True        # Default Image Reward set to True
+        self.trial_stack: ExitStack = ExitStack()
         
         # set to the selected image key at the start of the trial for use in classification event log
         self._classifier_event_type: Optional[str] = None
@@ -226,14 +226,13 @@ class MonkeyImages:
         game_frame = GameFrame(self.root, layout_debug=layout_debug, hide_buttons=hide_buttons)
         self.game_frame = game_frame
         
+        # exit cleanly when main window is closed with the X button
+        self.root.protocol('WM_DELETE_WINDOW', self.close_application)
+        
         btn = game_frame.add_button
         
-        btn("Start-'a'", self.Start)
-        btn("Pause-'s'", self.Pause)
-        btn("Unpause-'d'", self.Unpause)
-        btn("Stop-'f'", self.Stop)
-        btn("ImageReward\nOn", self.HighLevelRewardOn)
-        btn("ImageReward\nOff", self.HighLevelRewardOff)
+        btn("Start-'a'", self.start)
+        btn("Stop-'f'", self.stop)
         btn("Water Reward-'z'", self.manual_water_dispense)
         
         def water_rw_cb(val):
@@ -245,7 +244,7 @@ class MonkeyImages:
         
         btn("Reload Config", self.load_config)
         
-        self.root.bind('<Key>', lambda a : self.KeyPress(a))
+        self.root.bind('<Key>', lambda a : self.handle_key_press(a))
         
         if show_info_view:
             self.info_view = InfoView(self.root, monkey_images=self)
@@ -281,6 +280,7 @@ class MonkeyImages:
                 self.plexon.water_off()
             except:
                 traceback.print_exc()
+        self.trial_stack.__exit__(*exc)
         self._stack.__exit__(*exc)
         self.new_events_file.close()
     
@@ -333,7 +333,7 @@ class MonkeyImages:
         if sim: # event actually triggered manually via keyboard
             tags.append('hw_simulated')
         if plexon_ts is not None:
-            info['plexon_ts'] = plexon_ts
+            info['time_ext'] = plexon_ts
         return self.log_event(name, tags=tags, info=info)
     
     def _register_callback(self, event_key, cb):
@@ -356,6 +356,13 @@ class MonkeyImages:
     def _clear_callbacks(self):
         for v in self._callbacks.values():
             v.clear()
+    
+    def sentinel(self, event_key) -> Sentinel:
+        """create a sentinel set by event_key bound to the current trial"""
+        sentinel = Sentinel()
+        cb = self._register_callback(event_key, sentinel.set)
+        self.trial_stack.enter_context(cb)
+        return sentinel
     
     # call callbacks registered for event key
     def _trigger_event(self, key, event=None):
@@ -427,7 +434,37 @@ class MonkeyImages:
             if self.config.max_trials is not None:
                 print(f"trial {completed_trials}/{self.config.max_trials} complete")
     
+    def show_cues(self, *, pre_discrim_delay: float, pre_go_cue_delay: float, selected_image_key: str):
+        local_start = self.normalized_time
+        def local_t():
+            return self.normalized_time - local_start
+        waiter = Waiter(self, local_t)
+        
+        yield from waiter.wait(t=pre_discrim_delay)
+        
+        self.log_event('discrim_shown', tags=['game_flow'], info={
+            'selected_image': selected_image_key,
+        })
+        # display image without red box
+        self.show_image(selected_image_key)
+        self.flash_marker('discrim_shown')
+        
+        yield from waiter.wait(t=pre_go_cue_delay)
+        
+        self.log_event('go_cue_shown', tags=['game_flow'], info={
+            'selected_image': selected_image_key,
+        })
+        self.show_image(selected_image_key, boxed=True)
+        self.flash_marker('go_cue_shown')
+        
+        if winsound is not None:
+            winsound.PlaySound(
+                str(SOUND_PATH_BASE / 'mixkit-unlock-game-notification-253.wav'),
+                winsound.SND_FILENAME + winsound.SND_ASYNC + winsound.SND_NOWAIT)
+    
     def run_trial(self, trial_i=0):
+        self.trial_stack.close()
+        self.trial_stack = ExitStack()
         with ExitStack() as trial_stack:
             def clear_photo_marker():
                 self._photodiode_off_time = None
@@ -540,58 +577,25 @@ class MonkeyImages:
             if prep_flash:
                 self.clear_image()
             
-            # if winsound is not None:
-            #     winsound.PlaySound(winsound.Beep(100,0), winsound.SND_PURGE) #Purge looping sounds
-            
-            joystick_pulled = Sentinel()
-            trial_stack.enter_context(self._register_callback('joystick_pulled', joystick_pulled.set))
-            
-            gc_hand_removed_early = False
-            # yield from waiter.wait(t=discrim_delay, event='homezone_exit')
-            yield from waiter.wait(t=discrim_delay, cond=lambda: not in_zone())
-            if waiter.trigger != 'time':
-                gc_hand_removed_early = True
-            
-            # show image
-            selected_image = self.config.images[selected_image_key]
-            image_i = selected_image['nidaq_event_index']
+            joystick_pulled = self.sentinel('joystick_pulled')
+            joystick_released = self.sentinel('joystick_released')
+            homezone_exited = self.sentinel('homezone_exit')
             
             for cb in in_zone_cbs:
                 cb.clear()
             
-            if not gc_hand_removed_early and not joystick_pulled:
-                self.log_event('discrim_shown', tags=['game_flow'], info={
-                    'selected_image': selected_image_key,
-                })
-                # display image without red box
-                self.show_image(selected_image_key)
-                self.flash_marker('discrim_shown')
+            show_cues_gen = self.show_cues(
+                pre_discrim_delay = discrim_delay,
+                pre_go_cue_delay = go_cue_delay,
+                selected_image_key = selected_image_key,
+            )
+            for _ in show_cues_gen:
+                if homezone_exited:
+                    break
+                if joystick_pulled:
+                    break
+                yield
             
-            if not gc_hand_removed_early and not joystick_pulled:
-                yield from waiter.wait(t=go_cue_delay, cond=lambda: not in_zone())
-                if waiter.trigger != 'time':
-                    # gc_hand_removed_early = True
-                    in_zone_at_go_cue = False
-                else:
-                    in_zone_at_go_cue = True
-            else:
-                in_zone_at_go_cue = False
-            
-            if not gc_hand_removed_early and not joystick_pulled:
-                # display image with box
-                self.log_event('go_cue_shown', tags=['game_flow'], info={
-                    'selected_image': selected_image_key,
-                })
-                self.show_image(selected_image_key, boxed=True)
-                self.flash_marker('go_cue_shown')
-                
-                # in_zone_at_go_cue = in_zone()
-            
-            if in_zone_at_go_cue and not joystick_pulled:
-                if winsound is not None:
-                    winsound.PlaySound(
-                        str(SOUND_PATH_BASE / 'mixkit-unlock-game-notification-253.wav'),
-                        winsound.SND_FILENAME + winsound.SND_ASYNC + winsound.SND_NOWAIT)
             cue_time = trial_t()
             
             log_failure_reason = [None]
@@ -604,22 +608,12 @@ class MonkeyImages:
                     fail_r('joystick pulled before cue')
                     return None, 0, 0
                 
-                if gc_hand_removed_early:
-                    fail_r('hand removed from homezone before discriminandum')
-                    return None, 0, 0
-                if not in_zone_at_go_cue:
-                    # wait one second to detect if joystick is pulled shortly after
-                    # homezone exit
-                    yield from wait(1)
-                    if joystick_pulled:
-                        fail_r('joystick pulled before cue')
-                    else:
-                        fail_r('hand removed from homezone before go cue')
+                if homezone_exited:
+                    fail_r('hand removed before cue')
                     return None, 0, 0
                 
-                # cue_time = trial_t()
                 # wait up to MaxTimeAfterSound for the joystick to be pulled
-                while not self.joystick_pulled:
+                while not joystick_pulled:
                     if trial_t() - cue_time > self.config.MaxTimeAfterSound:
                         fail_r('joystick not pulled within MaxTimeAfterSound')
                         return None, 0, 0
@@ -627,17 +621,19 @@ class MonkeyImages:
                 
                 pull_start = trial_t()
                 
-                while self.joystick_pulled:
+                while not joystick_released:
                     yield
                 
-                pull_duration = trial_t() - pull_start
-                assert self.joystick_pull_remote_ts is not None
-                assert self.joystick_release_remote_ts is not None
-                remote_pull_duration = self.joystick_release_remote_ts - self.joystick_pull_remote_ts
-                assert remote_pull_duration >= 0
+                pull_start = joystick_pulled.event
+                pull_end = joystick_released.event
+                assert pull_start is not None
+                assert pull_end is not None
+                
+                pull_duration = pull_end['time_m'] - pull_start['time_m']
+                remote_pull_duration = pull_end['info']['time_ext'] - pull_start['info']['time_ext']
                 
                 # print(pull_duration, remote_pull_duration)
-                reward_duration = self.ChooseReward(remote_pull_duration, cue=selected_image_key)
+                reward_duration = self.choose_reward(remote_pull_duration, cue=selected_image_key)
                 
                 if reward_duration is None:
                     fail_r('joystick pulled for incorrect amount of time')
@@ -646,12 +642,12 @@ class MonkeyImages:
             
             def get_homezone_exit_info():
                 # hand removed from home zone before cue
-                if gc_hand_removed_early:
-                    fail_r('hand removed from homezone before discriminandum')
+                if homezone_exited:
+                    fail_r('hand removed before cue')
                     return None, 0, 0
-                if not in_zone_at_go_cue:
-                    fail_r('hand removed from homezone before go cue')
-                    return None, 0, 0
+                # if not in_zone_at_go_cue:
+                #     fail_r('hand removed from homezone before go cue')
+                #     return None, 0, 0
                 
                 # wait up to MaxTimeAfterSound for the hand to exit the homezone
                 while in_zone():
@@ -663,7 +659,7 @@ class MonkeyImages:
                 exit_time = trial_t()
                 exit_delay = exit_time - cue_time
                 
-                reward_duration = self.ChooseReward(exit_delay, cue=selected_image_key)
+                reward_duration = self.choose_reward(exit_delay, cue=selected_image_key)
                 
                 if reward_duration is None:
                     fail_r('hand removed after incorrect amount of time')
@@ -726,7 +722,8 @@ class MonkeyImages:
                 'remote_pull_duration': remote_pull_duration, # float
                 'pull_duration': pull_duration, # float
                 'action_duration': action_duration, # float
-                'pull_event': get_event_id(joystick_pulled.event),
+                'js_pull_event': get_event_id(joystick_pulled.event), # Optional[int]
+                'js_release_event': get_event_id(joystick_released.event), # Optional[int]
                 'success': reward_duration is not None, # bool
                 'failure_reason': log_failure_reason[0], # Optional[str]
                 'discrim': selected_image_key, # str
@@ -738,7 +735,7 @@ class MonkeyImages:
                 'info':task_completed_info,
             })
             
-            print('Press Duration: {:.4f} (remote: {:.4f})'.format(action_duration, pull_duration))
+            print('Press Duration: {:.4f} (remote: {:.4f} local: {:.4f})'.format(action_duration, remote_pull_duration, pull_duration))
             print('Reward Duration: {}'.format(reward_duration))
             if log_failure_reason[0]:
                 print(log_failure_reason[0])
@@ -756,16 +753,14 @@ class MonkeyImages:
                             str(SOUND_PATH_BASE / 'zapsplat_multimedia_game_sound_kids_fun_cheeky_layered_mallets_negative_66204.wav'),
                             winsound.SND_FILENAME + winsound.SND_ASYNC + winsound.SND_NOWAIT)
                 
-                if self.ImageReward:
-                    self.show_image(selected_image_key, variant='red', boxed=True)
-                    self.log_event('image_reward_shown', tags=['game_flow'], info={
-                        'selected_image': selected_image_key,
-                        'color': 'red',
-                    })
-                    self.flash_marker('punish')
-                if self.ImageReward or self.config.EnableBlooperNoise:
-                    # 1.20 is the duration of the sound effect
-                    yield from wait(1.20)
+                self.show_image(selected_image_key, variant='red', boxed=True)
+                self.log_event('image_reward_shown', tags=['game_flow'], info={
+                    'selected_image': selected_image_key,
+                    'color': 'red',
+                })
+                self.flash_marker('punish')
+                # 1.20 is the duration of the sound effect
+                yield from wait(1.20)
                 if self.config.EnableTimeOut:
                     self.log_event('time_out_shown', tags=['game_flow'], info={
                         'duration': self.config.TimeOut,
@@ -773,25 +768,23 @@ class MonkeyImages:
                     self.clear_image()
                     yield from wait(self.config.TimeOut)
             else: # pull suceeded
-                if self.ImageReward:
-                    self.show_image(selected_image_key, variant='white', boxed=True)
-                    self.log_event('image_reward_shown', tags=['game_flow'], info={
-                        'selected_image': selected_image_key,
-                        'color': 'white',
-                    })
-                    self.flash_marker('reward')
+                self.show_image(selected_image_key, variant='white', boxed=True)
+                self.log_event('image_reward_shown', tags=['game_flow'], info={
+                    'selected_image': selected_image_key,
+                    'color': 'white',
+                })
+                self.flash_marker('reward')
                 
                 if winsound is not None:
                     winsound.PlaySound(
                         str(SOUND_PATH_BASE / 'zapsplat_multimedia_game_sound_kids_fun_cheeky_layered_mallets_complete_66202.wav'),
                         winsound.SND_FILENAME + winsound.SND_ASYNC + winsound.SND_NOWAIT)
                 
-                if self.ImageReward:
-                    if self.config.post_succesful_pull_delay is not None:
-                        yield from wait(self.config.post_succesful_pull_delay)
-                    else:
-                        # 1.87 is the duration of the sound effect
-                        yield from wait(1.87)
+                if self.config.post_succesful_pull_delay is not None:
+                    yield from wait(self.config.post_succesful_pull_delay)
+                else:
+                    # 1.87 is the duration of the sound effect
+                    yield from wait(1.87)
                 
                 if self.auto_water_reward_enabled and reward_duration > 0:
                     self.log_event("water_dispense", tags=['game_flow'], info={'duration': reward_duration})
@@ -832,11 +825,7 @@ class MonkeyImages:
         
         inner()
     
-    def random_duration(self, d_min, d_max) -> float:
-        output = round(random.uniform(d_min,d_max),2)
-        return output
-    
-    def ChooseReward(self, duration, cue) -> Optional[float]:
+    def choose_reward(self, duration, cue) -> Optional[float]:
         
         # if self.reward_thresholds is not None:
         for rwd in self.config.reward_thresholds:
@@ -872,7 +861,7 @@ class MonkeyImages:
         
         return None
     
-    def Start(self):
+    def start(self):
         already_started = not self.stopped
         self.paused = False
         self.stopped = False
@@ -881,21 +870,7 @@ class MonkeyImages:
             self.log_event('game_start', tags=['game_flow'])
             self.start_new_loop()
     
-    def Pause(self):
-        self.log_event('game_pause', tags=['game_flow'], info={'was_paused': self.paused})
-        self.paused = True
-        
-        print('pause')
-        if winsound is not None:
-            winsound.PlaySound(None, winsound.SND_PURGE)
-        if self.plexon:
-            self.plexon.water_off()
-    
-    def Unpause(self):
-        self.log_event('game_unpause', tags=['game_flow'], info={'was_paused': self.paused})
-        self.paused = False
-    
-    def Stop(self):
+    def stop(self):
         self.log_event('game_stop', tags=['game_flow'], info={'was_stopped': self.stopped})
         self.stopped = True
         self._clear_callbacks()
@@ -907,16 +882,12 @@ class MonkeyImages:
             winsound.PlaySound(None, winsound.SND_PURGE)
         pprint(InfoView.calc_end_info(self.event_log))
     
-    def KeyPress(self, event):
+    def handle_key_press(self, event):
         key = event.char
         if key == 'a':
-            self.Start()
-        elif key == 's':
-            self.Pause()
-        elif key == 'd':
-            self.Unpause()
+            self.start()
         elif key == 'f':
-            self.Stop()
+            self.stop()
         elif key == 'z':
             self.manual_water_dispense()
         elif key == 'p':
@@ -925,33 +896,31 @@ class MonkeyImages:
                 screenshot_widget(self.info_view.window, 'test2.png')
                 screenshot_widgets(self.info_view.rows, 'test3.png')
         elif key == '`':
-            self.Stop()
-            self.root.quit()
-            # sys.exit()
+            self.close_application()
         elif key == '1':
             zone = self.zone_by_name['homezone']
             if not zone.in_zone:
                 zone.enter()
-                self.log_hw('homezone_enter', sim=True)
+                self.log_hw('homezone_enter', plexon_ts=time.perf_counter(), sim=True)
                 self.dbg_classification_event('homezone_enter')
                 print('homezone enter')
             else:
                 zone.exit()
                 # self.log_hw('zone_exit', sim=True, info={'simulated_zone': 'homezone'})
-                self.log_hw('homezone_exit', sim=True, info={'simulated_zone': 'homezone'})
+                self.log_hw('homezone_exit', plexon_ts=time.perf_counter(), sim=True, info={'simulated_zone': 'homezone'})
                 self.dbg_classification_event('homezone_exit')
                 print('homezone exit')
         elif key == '2':
             if not self.joystick_pulled:
                 self.joystick_pull_remote_ts = time.perf_counter()
                 self.joystick_pulled = True
-                evt = self.log_hw('joystick_pulled', sim=True)
+                evt = self.log_hw('joystick_pulled', plexon_ts=time.perf_counter(), sim=True)
                 self.joystick_pull_event = evt
                 self.dbg_classification_event('joystick_pull')
             else:
                 self.joystick_release_remote_ts = time.perf_counter()
                 self.joystick_pulled = False
-                self.log_hw('joystick_released', sim=True, info={
+                self.log_hw('joystick_released', plexon_ts=time.perf_counter(), sim=True, info={
                     'pull_event': get_event_id(self.joystick_pull_event),
                 })
                 self.joystick_pull_event = None
@@ -959,14 +928,12 @@ class MonkeyImages:
             
             print('joystick', self.joystick_pulled)
     
-    ### These attach to buttons that will select if Monkey has access to the highly coveted monkey image reward
-    def HighLevelRewardOn(self):
-        print('Image Reward On')
-        self.ImageReward = True
-
-    def HighLevelRewardOff(self):
-        print('Image Reward Off')
-        self.ImageReward = False
+    def close_application(self):
+        try:
+            self.stop()
+        except:
+            traceback.print_exc()
+        self.root.quit()
     
     def show_image(self, k, *, variant=None, boxed=False, _clear=True):
         if _clear:
@@ -1012,7 +979,7 @@ class MonkeyImages:
             
             if d.type == d.ANALOG:
                 if d.chan == self.config.joystick_channel:
-                    edge = self.joystick_debounce.sample(d.value)
+                    edge = self.joystick_debounce.sample(d.ts, d.value)
                     
                     if edge.rising:
                         evt = self.log_hw('joystick_pulled', plexon_ts=d.ts)
@@ -1030,7 +997,7 @@ class MonkeyImages:
                         self.joystick_release_remote_ts = d.ts
                         
                         self.handle_classification_event('joystick_released', d.ts)
-                elif d.chan == 1: # photodiode
+                elif d.chan in [0, 1]: # photodiode, chan 0 on neurokey, 1 on plexon
                     self._photodiode.handle_value(d.value, d.ts)
                     if self._photodiode.changed:
                         self.log_hw('photodiode_changed', plexon_ts=d.ts, info={'value': d.value})
