@@ -3,6 +3,7 @@ import math
 from collections import Counter
 import statistics
 from itertools import groupby
+import os
 
 import tkinter as tk
 from tkinter.font import Font
@@ -182,6 +183,12 @@ class InfoView:
                     e['info']['action_duration']
                     for e in d_events
                 ]
+                # correct pull durations
+                cpd = [
+                    e['info']['action_duration']
+                    for e in d_events
+                    if e['info']['success']
+                ]
                 count = len(pull_durations)
                 pull_durations = [x for x in pull_durations if x != 0]
                 out = {
@@ -192,6 +199,12 @@ class InfoView:
                     'max': max(pull_durations, default=0),
                     'mean': statistics.mean(pull_durations) if pull_durations else 0,
                     'stdev': statistics.pstdev(pull_durations) if pull_durations else 0,
+                    'correct_durations': {
+                        'min': min(cpd, default=0),
+                        'max': max(cpd, default=0),
+                        'mean': statistics.mean(cpd) if cpd else 0,
+                        'stdev': statistics.pstdev(cpd) if cpd else 0,
+                    }
                 }
                 yield discrim, out
         
@@ -224,6 +237,9 @@ class InfoView:
             out.append(f"  {discrim} correct/pulls/count: {dad['correct_count']}/{dad['pull_count']}/{dad['count']}")
             out.append(f"    min-max: {dad['min']:.3f}-{dad['max']:.3f}")
             out.append(f"    mean: {dad['mean']:.3f} stdev: {dad['stdev']:.3f}")
+            out.append(f"    only correct pulls:")
+            out.append(f"      min-max: {dad['correct_durations']['min']:.3f}-{dad['correct_durations']['max']:.3f}")
+            out.append(f"      mean: {dad['correct_durations']['mean']:.3f} stdev: {dad['correct_durations']['stdev']:.3f}")
         
         out.append(f"trials: {end_info['count']}")
         out.append("")
@@ -236,7 +252,8 @@ class InfoView:
                 out.append(f"{error.rjust(error_col_width)} {count:>2} {perc*100:.1f}%")
             out.append("")
         
-        print("\n".join(out))
+        if not os.environ.get('no_print_stats'):
+            print("\n".join(out))
         self.label['text'] = "\n".join(out)
         # import pdb;pdb.set_trace()
         
