@@ -267,7 +267,7 @@ class MonkeyImages:
         btn("Water Reward\nOn", water_rw_cb(True))
         btn("Water Reward\nOff", water_rw_cb(False))
         
-        btn("Reload Config", self.load_config)
+        # btn("Reload Config", self.load_config)
         
         self.root.bind('<Key>', lambda a : self.handle_key_press(a))
         
@@ -620,7 +620,7 @@ class MonkeyImages:
                 
                 in_zone_cbs = register_in_zone_cb()
                 while True:
-                    if trial_t() > self.config.InterTrialTime and in_zone():
+                    if trial_t() > self.config.InterTrialTime and in_zone() and not self.joystick_pulled:
                         break
                     yield
             
@@ -778,6 +778,7 @@ class MonkeyImages:
                 'action_duration': action_duration, # float
                 'js_pull_event': get_event_id(joystick_pulled.event), # Optional[int]
                 'js_release_event': get_event_id(joystick_released.event), # Optional[int]
+                'homezone_exit_event': get_event_id(homezone_exited.event), # Optional[int]
                 'success': reward_duration is not None, # bool
                 'failure_reason': log_failure_reason[0], # Optional[str]
                 'discrim': selected_image_key, # str
