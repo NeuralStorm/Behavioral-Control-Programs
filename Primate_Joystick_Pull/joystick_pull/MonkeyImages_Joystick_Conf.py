@@ -4,6 +4,7 @@
 # For keypad controls, search "def handle_key_press"
 
 from typing import List, Tuple, Optional, Literal, Dict, Any, Union
+import types
 import os
 import os.path
 import sys
@@ -70,6 +71,24 @@ def get_config_path() -> Path:
         prompt_root.withdraw()
         del prompt_root
         return Path(config_path)
+
+def get_gen_stack(gen, stack=None):
+    if stack is None:
+        stack = []
+    stack.append(gen)
+    if gen.gi_yieldfrom is not None:
+        if isinstance(gen.gi_yieldfrom, types.GeneratorType):
+            get_gen_stack(gen.gi_yieldfrom, stack)
+            return stack
+    f_locals = gen.gi_frame.f_locals
+    if 'gen' in f_locals:
+        local_gen = f_locals['gen']
+        gen_state = inspect.getgeneratorstate(local_gen)
+        # if the generator is suspended it's probably still running
+        if gen_state == inspect.GEN_SUSPENDED:
+            get_gen_stack(local_gen, stack)
+            return stack
+    return stack
 
 class RegisteredCallback:
     def __init__(self, cb, _clear_callback):
@@ -407,6 +426,13 @@ class MonkeyImages:
         
         cur_time = time.perf_counter()
         elapsed_time = cur_time - self.last_new_loop_time
+        if logger.isEnabledFor(5) and elapsed_time > 0.002:
+            inner_gen = get_gen_stack(self.new_loop_iter)[-1]
+            file_name = Path(inner_gen.gi_code.co_filename).name
+            line_no = inner_gen.gi_frame.f_lineno
+            
+            trace("callback delay at %s delay %sms to %s:%s",
+                round(cur_time, 2), round(elapsed_time*1000, 2), file_name, line_no)
         self.last_new_loop_time = cur_time
         
         if self._photodiode_off_time is not None:
@@ -417,10 +443,25 @@ class MonkeyImages:
         if not self.paused:
             self.normalized_time += elapsed_time
         
+        s = time.perf_counter()
         self.new_loop_upkeep()
+        e = time.perf_counter()
+        d = e - s
+        if d > 0.001:
+            trace("upkeep %sms", round(d*1000, 2))
         
         if not self.paused:
+            start_line_no = self.new_loop_iter.gi_frame.f_lineno
+            s = time.perf_counter()
             next(self.new_loop_iter)
+            e = time.perf_counter()
+            d = s - e
+            if logger.isEnabledFor(5) and d > 0.001:
+                inner_gen = get_gen_stack(self.new_loop_iter)[-1]
+                file_name = Path(inner_gen.gi_code.co_filename).name
+                line_no = inner_gen.gi_frame.f_lineno
+                trace("long loop iter %sms | %s:%s -> %s", round(d*1000, 2),
+                    file_name, start_line_no, line_no)
         
         self.game_frame.after(self.cb_delay_ms, self.progress_new_loop)
     
@@ -594,17 +635,20 @@ class MonkeyImages:
             for cb in in_zone_cbs:
                 cb.clear()
             
-            show_cues_gen = self.show_cues(
+            gen = self.show_cues(
                 pre_discrim_delay = discrim_delay,
                 pre_go_cue_delay = go_cue_delay,
                 selected_image_key = selected_image_key,
             )
-            for _ in show_cues_gen:
+            for _ in gen:
                 if homezone_exited:
                     break
                 if joystick_pulled:
                     break
                 yield
+            # delete gen so debugging code knows it's
+            # done on early termination
+            del gen
             
             cue_time = trial_t()
             
