@@ -140,6 +140,13 @@ class GameConfig:
             self.load_thresholds(config_dict['reward_thresholds'])
         self.reward_thresholds: List[Dict[str, Any]]
         
+        pc = os.environ.get('photodiode_channel')
+        if pc == '':
+            pc = None
+        if pc is not None:
+            pc = int(pc)
+        self.photodiode_channel: Optional[int] = pc
+        
         photodiode_range = config_dict.get('photodiode_range')
         if photodiode_range in [None, [], ['']]:
             self.photodiode_range: Optional[Tuple[float, float]] = None

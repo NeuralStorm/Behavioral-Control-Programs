@@ -371,4 +371,5 @@ class GameFrame(tk.Frame):
         # self.photo_marker.create_rectangle(0, 0, 100, 100, fill='white')
         component = f"{round(level*255):2<0x}"
         color = '#' + component*3
+        self.photo_marker.delete(tk.ALL)
         self.photo_marker.create_rectangle(0, 0, 100, 100, fill=color)

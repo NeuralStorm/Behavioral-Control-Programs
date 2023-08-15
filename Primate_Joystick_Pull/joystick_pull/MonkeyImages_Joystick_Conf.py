@@ -37,6 +37,8 @@ from .zone import Zone
 logger = logging.getLogger(__name__)
 
 debug = logger.debug
+def trace(*args, **kwargs):
+    return logger.log(5, *args, **kwargs)
 
 SOUND_PATH_BASE = Path(__file__).parent.parent / 'assets/TaskSounds'
 
@@ -200,11 +202,15 @@ class MonkeyImages:
         # set to the selected image key at the start of the trial for use in classification event log
         self._classifier_event_type: Optional[str] = None
         
-        self._current_photodiode_value: Optional[float] = None
-        self._photodiode = PhotoDiode()
-        if self.config.photodiode_range is not None:
-            pmin, pmax = self.config.photodiode_range
-            self._photodiode.set_range(pmin, pmax)
+        if self.config.photodiode_channel is None:
+            self._photodiode: Optional[PhotoDiode] = None
+        else:
+            self._photodiode = PhotoDiode()
+            if self.config.photodiode_range is not None:
+                pmin, pmax = self.config.photodiode_range
+                self._photodiode.set_range(pmin, pmax)
+        
+        # tracks the time that the photodiode should turn off at
         self._photodiode_off_time: Optional[float] = None
         
         if self.config.record_events:
@@ -374,6 +380,8 @@ class MonkeyImages:
             cb(event)
     
     def flash_marker(self, name=None, *, level=1.0):
+        if self._photodiode is None:
+            return
         info = {}
         if name is not None:
             info['name'] = name
@@ -381,6 +389,8 @@ class MonkeyImages:
             info['already_on'] = True
         self.log_event('photodiode_expected', info=info)
         self.game_frame.set_marker_level(level)
+        # update screen immediately to ensure a consistent marker flash duration
+        self.root.update()
         self._photodiode_off_time = time.perf_counter() + self.config.photodiode_flash_duration
     
     # resets loop state, starts callback loop
@@ -420,7 +430,7 @@ class MonkeyImages:
             self.gathering_data_omni_new()
     
     def new_loop_gen(self):
-        if self._photodiode.calibrating:
+        if self._photodiode is not None and self._photodiode.calibrating:
             cal_res = yield from self._photodiode.run_calibration(self.game_frame.set_marker_level)
             self.log_event("photodiode_calibration", info=cal_res)
         
@@ -997,10 +1007,12 @@ class MonkeyImages:
                         self.joystick_release_remote_ts = d.ts
                         
                         self.handle_classification_event('joystick_released', d.ts)
-                elif d.chan in [0, 1]: # photodiode, chan 0 on neurokey, 1 on plexon
-                    self._photodiode.handle_value(d.value, d.ts)
-                    if self._photodiode.changed:
-                        self.log_hw('photodiode_changed', plexon_ts=d.ts, info={'value': d.value})
+                elif self._photodiode is not None and d.chan == self.config.photodiode_channel:
+                    edge = self._photodiode.handle_value(d.value, d.ts)
+                    if edge.rising:
+                        self.log_hw('photodiode_on', plexon_ts=d.ts)
+                    if edge.falling:
+                        self.log_hw('photodiode_off', plexon_ts=d.ts)
             elif d.type == d.SPIKE:
                 if self._cl_helper is not None:
                     self._cl_helper.spike(
@@ -1054,13 +1066,16 @@ class MonkeyImages:
                     self.log_hw('plexon_other_event', plexon_ts=d.ts, info={'channel': d.chan})
 
 def main():
+    logging.addLevelName(5, "trace")
     FORMAT = "%(levelname)s:%(message)s"
-    if os.environ.get('log'):
+    if os.environ.get('trace'):
+        logging.basicConfig(level=5, format=FORMAT)
+    elif os.environ.get('log'):
         # logging.basicConfig(filename='debug.log', encoding='utf-8', level=logging.DEBUG)
         logging.basicConfig(level=logging.DEBUG, format=FORMAT)
-        logging.getLogger('PIL.PngImagePlugin').setLevel(logging.WARNING)
     else:
         logging.basicConfig(level=logging.WARNING, format=FORMAT)
+    logging.getLogger('PIL.PngImagePlugin').setLevel(logging.WARNING)
     
     debug("program start %s", datetime.now())
     
