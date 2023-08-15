@@ -750,7 +750,8 @@ class MonkeyImages:
             if log_failure_reason[0]:
                 print(log_failure_reason[0])
             try:
-                InfoView.print_histogram(self.event_log)
+                if not os.environ.get('no_print_stats'):
+                    InfoView.print_histogram(self.event_log)
                 if self.info_view is not None:
                     self.info_view.update_info(self.event_log)
             except:
@@ -890,7 +891,8 @@ class MonkeyImages:
         self.clear_image()
         if winsound is not None:
             winsound.PlaySound(None, winsound.SND_PURGE)
-        pprint(InfoView.calc_end_info(self.event_log))
+        if not os.environ.get('no_print_stats'):
+            pprint(InfoView.calc_end_info(self.event_log))
     
     def handle_key_press(self, event):
         key = event.char
@@ -966,7 +968,7 @@ class MonkeyImages:
         self.game_frame.cv1.create_image(offset, y_offset, anchor = 'c', image = img)
     
     def clear_image(self):
-        self.game_frame.cv1.delete("all")
+        self.game_frame.cv1.delete(tk.ALL)
     
     def handle_classification_event(self, event_class, timestamp):
         if self._cl_helper is not None:

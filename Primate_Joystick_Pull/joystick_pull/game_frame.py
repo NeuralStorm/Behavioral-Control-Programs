@@ -83,7 +83,7 @@ class InfoView:
     
     def key_handler(self, event):
         if self.monkey_images is not None:
-            self.monkey_images.KeyPress(event)
+            self.monkey_images.handle_key_press(event)
     
     @staticmethod
     def gen_histogram(events, *, h_range = None):

@@ -159,7 +159,7 @@ class Plexon:
             self.plexdo.clear_bit(self.device_number, self.reward_nidaq_bit)
     
     def get_data(self):
-        self.client.opx_wait(5)
+        # self.client.opx_wait(5)
         new_data = self.client.get_new_data()
         
         for i in range(new_data.num_data_blocks):
