@@ -41,7 +41,7 @@ debug = logger.debug
 def trace(*args, **kwargs):
     return logger.log(5, *args, **kwargs)
 
-SOUND_PATH_BASE = Path(__file__).parent.parent / 'assets/TaskSounds'
+SOUND_PATH_BASE = Path(__file__).parent / 'assets/audio'
 
 def get_event_id(evt):
     if evt is None:

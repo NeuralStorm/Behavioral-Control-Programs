@@ -39,8 +39,8 @@ def gen_images():
     SAT = 255 // 2
     
     base = Path(__file__).parent.parent / 'assets'
-    out_path = base / 'images_gen'
-    out_path.mkdir(exist_ok=True)
+    out_path = Path(__file__).parent / 'assets/images'
+    out_path.mkdir(exist_ok=True, parents=True)
     src = base / './TaskImages_Joystick'
     
     prep_path = out_path / 'prepare.png'

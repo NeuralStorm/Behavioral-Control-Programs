@@ -240,7 +240,7 @@ class GameConfig:
             self.labels = None
     
     def load_images(self, config_images: List[str], image_ratios: Optional[List[int]]):
-        base = Path(__file__).parent.parent / 'assets/images_gen'
+        base = Path(__file__).parent / 'assets/images'
         # config_images = config_dict['images']
         def build_image_entry(i, name):
             name = name.strip()
