@@ -8,6 +8,20 @@ import traceback
 from butil import EventReader
 from . import gen_csv
 
+def removeprefix(self: str, prefix: str, /) -> str:
+    if self.startswith(prefix):
+        return self[len(prefix):]
+    else:
+        return self[:]
+
+def removesuffix(self: str, suffix: str, /) -> str:
+    # suffix='' should not call self[:-0].
+    if suffix and self.endswith(suffix):
+        return self[:-len(suffix)]
+    else:
+        return self[:]
+
+
 def parse_args():
     parser = argparse.ArgumentParser(prog='output_gen', description='')
     
@@ -43,7 +57,10 @@ def gen_from_file(*,
     # reader = EventReader(path=input_file)
     # out_events = []
     
-    stem = input_path.stem.removesuffix(".json").removesuffix('_new_events')
+    # stem = input_path.stem.removesuffix(".json").removesuffix('_new_events')
+    stem = input_path.stem
+    stem = removesuffix(stem, ".json")
+    stem = removesuffix(stem, '_new_events')
     events_output_path = input_path.parent / f"{stem}_game_events.json"
     histogram_output_path = input_path.parent / f"{stem}_histogram.png"
     csv_output_path = input_path.parent / f"{stem}_trials.csv"
@@ -100,8 +117,11 @@ def main():
                 traceback.print_exc()
                 print("exception ocurred processing file", input_path)
                 
-                stem = input_path.stem.removesuffix(".json").removesuffix('_new_events')
-                output_path = input_path.parent / f"{stem}.csv"
+                # stem = input_path.stem.removesuffix(".json").removesuffix('_new_events')
+                stem = input_path.stem
+                stem = removesuffix(stem, ".json")
+                stem = removesuffix(stem, '_new_events')
+                output_path = input_path.parent / f"{stem}_trials.csv"
                 with open(output_path, 'w') as _f:
                     pass
 
