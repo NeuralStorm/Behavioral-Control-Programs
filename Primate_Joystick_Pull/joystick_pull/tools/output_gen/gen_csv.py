@@ -286,8 +286,12 @@ def gen_csv_rows(events, *, permissive=False):
     for e, ei in end_info['errors'].items():
         yield [e, ei['count'], ei['percent']]
 
-def write_csv(f, events):
-    writer = csv.writer(f)
+def write_csv(f, events, tsv_mode=False):
+    if tsv_mode:
+        dialect = csv.excel_tab
+    else:
+        dialect = csv.excel
+    writer = csv.writer(f, dialect=dialect)
     
     for row in gen_csv_rows(events):
         writer.writerow(row)
