@@ -249,6 +249,7 @@ class MonkeyImages:
         self.root.wm_title("MonkeyImages")
         
         game_frame = GameFrame(self.root, layout_debug=layout_debug, hide_buttons=hide_buttons)
+        game_frame.load_images(self.config.selectable_images)
         self.game_frame = game_frame
         
         # exit cleanly when main window is closed with the X button
@@ -497,7 +498,7 @@ class MonkeyImages:
             'selected_image': selected_image_key,
         })
         # display image without red box
-        self.show_image(selected_image_key)
+        self.show_image(selected_image_key, variant='pending')
         self.flash_marker('discrim_shown')
         
         yield from waiter.wait(t=pre_go_cue_delay)
@@ -505,7 +506,7 @@ class MonkeyImages:
         self.log_event('go_cue_shown', tags=['game_flow'], info={
             'selected_image': selected_image_key,
         })
-        self.show_image(selected_image_key, boxed=True)
+        self.show_image(selected_image_key, variant='pending', boxed=True)
         self.flash_marker('go_cue_shown')
         
         if winsound is not None:
@@ -809,11 +810,11 @@ class MonkeyImages:
                             str(SOUND_PATH_BASE / 'zapsplat_multimedia_game_sound_kids_fun_cheeky_layered_mallets_negative_66204.wav'),
                             winsound.SND_FILENAME + winsound.SND_ASYNC + winsound.SND_NOWAIT)
                 
-                self.show_image(selected_image_key, variant='red', boxed=True)
                 self.log_event('image_reward_shown', tags=['game_flow'], info={
                     'selected_image': selected_image_key,
-                    'color': 'red',
+                    'variant': 'fail',
                 })
+                self.show_image(selected_image_key, variant='fail', boxed=True)
                 self.flash_marker('punish')
                 # 1.20 is the duration of the sound effect
                 yield from wait(1.20)
@@ -824,11 +825,11 @@ class MonkeyImages:
                     self.clear_image()
                     yield from wait(self.config.TimeOut)
             else: # pull suceeded
-                self.show_image(selected_image_key, variant='white', boxed=True)
                 self.log_event('image_reward_shown', tags=['game_flow'], info={
                     'selected_image': selected_image_key,
-                    'color': 'white',
+                    'variant': 'success',
                 })
+                self.show_image(selected_image_key, variant='success', boxed=True)
                 self.flash_marker('reward')
                 
                 if winsound is not None:
@@ -996,21 +997,17 @@ class MonkeyImages:
         if _clear:
             self.clear_image()
         
-        img = self.config.images[k]['tk'][variant]
+        img = self.game_frame.images[k]['tk'][variant]
         
         canvas_size = self.game_frame.cv1.winfo_width(), self.game_frame.cv1.winfo_height()
-        # w = self.images[k]['width']
-        # offset = (canvas_size[0] - w) / 2
-        offset = (canvas_size[0]) / 2
         
-        # h = self.images[k]['height']
-        # y_offset = (canvas_size[1] - h) / 2
+        x_offset = (canvas_size[0]) / 2
         y_offset = (canvas_size[1]) / 2
+        
+        self.game_frame.cv1.create_image(x_offset, y_offset, anchor = 'c', image = img)
         
         if boxed:
             self.show_image('box', variant=variant, _clear=False)
-        
-        self.game_frame.cv1.create_image(offset, y_offset, anchor = 'c', image = img)
     
     def clear_image(self):
         self.game_frame.cv1.delete(tk.ALL)

@@ -8,7 +8,13 @@ Ubuntu
 
 Installation
 ```
-pip install -e .[plotting,hw]
+pip install --only-binary :all: -e .[plotting,hw]
+```
+
+For win7 python 3.8
+```
+pip install .[hw]
+pip install --only-binary :all: plotnine==0.10.1
 ```
 
 # Usage
@@ -97,13 +103,18 @@ The first reward duration where `low < pull duration < high` and `cue` is not se
 
 examples:
 ```
-dBlank.png
-bOval.png,bRectangle.png,bStare
+bOval
+bOval,bRectangle,bStar
 ```
 
-The files `aBlank.png`, `xBlack.png`, `yPrepare.png` and `zMonkey2.png` are expected to exist in the graphics dir. No files alphabetically before `aBlank.png` or after `xBlack.png` should be placed in the graphics dir.
+Cues should have three versions in the `pending`, `success` and `fail` folders in `joystick_pull/assets/images`  
+All three versions should have the same name and end with `.png` extension. The name of the cue used in the config file is the file name without the extension.
 
-each image's boxed variant is expected to have the same name with `b` replace with `c` and `d` replaced with `e`. Note that this will replace letters in the shape name, not only the prefix.
+Files in the `joystick_pull/assets/pending_only` folder are used as the pending image, only the surrounding box will be shown for the success and fail images.
+
+Files in the `joystick_pull/assets/static` will be used as the pending, success and fail images.
+
+Images will be centered in the canvas and the visible section should fit inside the go cue rectangle which has the inner dimensions 649x435 with the center at 19,16.5 relative to the canvas center.
 
 ---
 ### `Number of Events`
@@ -118,7 +129,7 @@ Duration of water reward when manually triggered with the gui
 ---
 ### `Time Out`
 
-A blank screen will be displayed for `Time Out` seconds after the negative image and sound are played. If set to 0 no blank screen will be displayed before the next trial
+If trial is not successful a blank screen will be displayed for `Time Out` seconds after the negative image and sound are played. If set to 0 no blank screen will be displayed before the next trial
 
 ---
 ### `Inter Trial Time`
@@ -160,7 +171,6 @@ A number in the range [`Pre Go Cue Min delta t2`, `Pre Go Cue Max delta t2`] wil
 
 The delay after a succesful pull before the water reward is dispensed.  
 If not specified the delay will be the length of the sound played (1.87s).  
-**Note**: If image reward is turned off via the gui this delay will be disabled.
 
 ---
 ### `joystick_channel` (optional)

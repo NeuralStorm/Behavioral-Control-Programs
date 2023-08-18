@@ -11,7 +11,6 @@ from PIL import Image, ImageTk
 class GameConfig:
     def __init__(self, *,
         config_path: Union[Path, str],
-        load_images: bool = True,
         start_dt: Optional[datetime] = None,
     ):
         def load_csv():
@@ -120,6 +119,8 @@ class GameConfig:
             num_trials = int(num_trials[0])
         self.max_trials: Optional[int] = num_trials
         
+        self.selectable_images: List[str] = list(set(x.strip() for x in config_dict['images']))
+        
         image_ratios = config_dict.get('image_ratios')
         if image_ratios is not None:
             if len(image_ratios) == 0:
@@ -127,17 +128,17 @@ class GameConfig:
             else:
                 image_ratios = [int(x.strip()) for x in image_ratios]
         
-        if load_images:
-            self.load_images(config_dict['images'], image_ratios)
+        if image_ratios is None:
+            self.image_selection_list: List[str] = self.selectable_images
         else:
-            self.selectable_images = list(set(x.strip() for x in config_dict['images']))
-        self.selectable_images: List[str]
-        # image selection list has keys duplicated based on image_ratios
-        self.image_selection_list: List[str]
-        self.images: Dict[str, Dict[str, Any]]
+            assert len(image_ratios) == len(self.selectable_images)
+            sel_list: List[str] = []
+            for count, key in zip(image_ratios, self.selectable_images):
+                sel_list.extend(key for _ in range(count))
+            assert len(sel_list) == sum(image_ratios)
+            self.image_selection_list = sel_list
         
-        if load_images:
-            self.load_thresholds(config_dict['reward_thresholds'])
+        self.load_thresholds(config_dict['reward_thresholds'])
         self.reward_thresholds: List[Dict[str, Any]]
         
         pc = os.environ.get('photodiode_channel')
@@ -238,77 +239,6 @@ class GameConfig:
             self.classify_wait_time = 0.2
             self.classify_reward_duration = None
             self.labels = None
-    
-    def load_images(self, config_images: List[str], image_ratios: Optional[List[int]]):
-        base = Path(__file__).parent / 'assets/images'
-        # config_images = config_dict['images']
-        def build_image_entry(i, name):
-            name = name.strip()
-            assert '.' not in name, f"{name}"
-            
-            obj = {}
-            
-            for color in ['white', 'red', 'green']:
-                img = Image.open(base / f"./{color}/{name}.png")
-                width = img.size[0]
-                height = img.size[1]
-                obj[color] = img
-            
-            obj[None] = obj['green']
-            
-            return name, {
-                'width': width,
-                'height': height,
-                'img': obj,
-                'nidaq_event_index': i+1,
-            }
-        
-        images = dict(
-            build_image_entry(i, x)
-            for i, x in enumerate(config_images)
-        )
-        
-        self.selectable_images = list(images)
-        if image_ratios is None:
-            self.image_selection_list = self.selectable_images
-        else:
-            assert len(image_ratios) == len(self.selectable_images)
-            sel_list: List[str] = []
-            for count, key in zip(image_ratios, self.selectable_images):
-                sel_list.extend(key for _ in range(count))
-            assert len(sel_list) == sum(image_ratios)
-            self.image_selection_list = sel_list
-        
-        img = Image.open(base / './prepare.png')
-        
-        images['yPrepare'] = {
-            'width': img.size[0],
-            'height': img.size[1],
-            'img': {None: img},
-        }
-        
-        red = Image.open(base / './box_red.png')
-        green = Image.open(base / './box_green.png')
-        white = Image.open(base / './box_white.png')
-        
-        images['box'] = {
-            'width': green.size[0],
-            'height': green.size[1],
-            'img': {
-                'red': red,
-                'green': green,
-                'white': white,
-                None: green,
-            }
-        }
-        
-        for image in images.values():
-            image['tk'] = {
-                k: ImageTk.PhotoImage(img)
-                for k, img in image['img'].items()
-            }
-        
-        self.images = images
     
     def parse_threshold(self, s):
         s = s.strip()

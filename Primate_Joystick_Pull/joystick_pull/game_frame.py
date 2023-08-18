@@ -4,6 +4,7 @@ from collections import Counter
 import statistics
 from itertools import groupby
 import os
+from pathlib import Path
 
 import tkinter as tk
 from tkinter.font import Font
@@ -361,6 +362,98 @@ class GameFrame(tk.Frame):
         else:
             assert False
         # self.photo_marker.grid(column=0, row=1)
+        
+        self.images = {}
+    
+    def load_images(self, config_images):
+        base = Path(__file__).parent / 'assets/images'
+        def build_image_entry(i, name):
+            name = name.strip()
+            assert '.' not in name, f"{name}"
+            
+            obj = {}
+            
+            static_path = base / f"./static/{name}.png"
+            pending_only_path = base / f"./pending_only/{name}.png"
+            
+            if static_path.exists():
+                img = Image.open(static_path)
+                width = img.size[0]
+                height = img.size[1]
+                obj['pending'] = img
+                obj['success'] = img
+                obj['fail'] = img
+            elif pending_only_path.exists():
+                img = Image.open(pending_only_path)
+                width = img.size[0]
+                height = img.size[1]
+                none_img = Image.open(base / './none.png')
+                obj['pending'] = img
+                obj['success'] = none_img
+                obj['fail'] = none_img
+            else:
+                pending_img = Image.open(base / f"./pending/{name}.png")
+                width = pending_img.size[0]
+                height = pending_img.size[1]
+                obj['pending'] = pending_img
+                
+                for folder in ['success', 'fail']:
+                    try:
+                        img = Image.open(base / f"./{folder}/{name}.png")
+                    except FileNotFoundError:
+                        img = pending_img
+                    obj[folder] = img
+            
+            obj[None]    = obj['pending']
+            obj['green'] = obj['pending']
+            obj['white'] = obj['success']
+            obj['red']   = obj['fail']
+            
+            return name, {
+                'width': width,
+                'height': height,
+                'img': obj,
+                'nidaq_event_index': i+1,
+            }
+        
+        images = dict(
+            build_image_entry(i, x)
+            for i, x in enumerate(config_images)
+        )
+        
+        img = Image.open(base / './prepare.png')
+        
+        images['yPrepare'] = {
+            'width': img.size[0],
+            'height': img.size[1],
+            'img': {None: img},
+        }
+        
+        red = Image.open(base / './box_red.png')
+        green = Image.open(base / './box_green.png')
+        white = Image.open(base / './box_white.png')
+        
+        images['box'] = {
+            'width': green.size[0],
+            'height': green.size[1],
+            'img': {
+                'pending': green,
+                'success': white,
+                'fail': red,
+                'red': red,
+                'green': green,
+                'white': white,
+                None: green,
+            }
+        }
+        
+        for image in images.values():
+            image['tk'] = {
+                k: ImageTk.PhotoImage(img)
+                for k, img in image['img'].items()
+            }
+        
+        self.images = images
     
     def _bgc(self, color: str) -> str:
         return color if self._layout_debug else 'black'
