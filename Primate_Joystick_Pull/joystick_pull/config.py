@@ -98,9 +98,9 @@ class GameConfig:
             self.task_type = 'joystick_pull'
         
         pspd = config_dict.get('post_succesful_pull_delay')
-        if pspd in [[''], []]:
-            pspd = None
-        if pspd is not None:
+        if pspd in [[''], [], None]:
+            pspd = 1.87
+        elif pspd is not None:
             pspd = float(pspd[0])
         self.post_succesful_pull_delay: Optional[float] = pspd
         

@@ -1,5 +1,5 @@
 
-from typing import Any
+from typing import Any, Optional
 import csv
 from pprint import pprint
 from datetime import timedelta
@@ -38,12 +38,26 @@ def group_trials(data):
         yield trial_events
     # return trials
 
-def _find(events, name):
+def _find(events, name, *,
+    after: Optional[float] = None,
+    event_id = None,
+):
     for e in events:
-        if e.get('name') == name:
+        if after is not None and not e['time_m'] > after:
+            continue
+        if event_id is not None and e.get('id') != event_id:
+            continue
+        if name is None or e.get('name') == name:
             yield e
-def _find_one(events, name, *, ignore_extra=False, default: Any = Raise) -> Any:
-    it = _find(events, name)
+
+def _find_one(
+    events, name: Optional[str] = None, *,
+    ignore_extra: bool = False,
+    default: Any = Raise,
+    after: Optional[float] = None,
+    event_id = None,
+) -> Any:
+    it = _find(events, name, after=after, event_id=event_id)
     try:
         out = next(it)
     except StopIteration:
@@ -65,7 +79,7 @@ def filter_incomplete_trials(trials):
         if comp is not None:
             yield trial
 
-def row_from_trial(trial, *, trial_i, task_type: str):
+def row_from_trial(events, trial, *, trial_i, task_type: str, config):
     def find(name):
         yield from _find(trial, name)
     def find_one(name, ignore_extra=False, default:Any=Raise):
@@ -106,6 +120,36 @@ def row_from_trial(trial, *, trial_i, task_type: str):
         time_in_homezone = comp['pull_duration']
     elif task_type == 'joystick_pull':
         pull_duration = comp['pull_duration']
+        
+        if reason == 'hand removed before cue':
+            def get_cue_name():
+                if comp['homezone_exit_event'] is None:
+                    return False
+                home_exit = _find_one(events, event_id=comp['homezone_exit_event'])
+                discrim = _find_one(trial, 'discrim_shown', default=None)
+                if discrim is None or home_exit['time_m'] < discrim['time_m']:
+                    return 'discrim'
+                else:
+                    return 'go cue'
+            
+            def check_pull_after_early_exit():
+                if comp['homezone_exit_event'] is None:
+                    return False
+                _home_exit = _find_one(events, event_id=comp['homezone_exit_event'])
+                _js_pull = _find_one(events, 'joystick_pulled', ignore_extra=True, default=None, after=_home_exit['time_m'])
+                
+                if _js_pull is None:
+                    return False
+                
+                time_diff = _js_pull['info']['time_ext'] - _home_exit['info']['time_ext']
+                
+                return time_diff < config['post_succesful_pull_delay']
+            
+            cue_name = get_cue_name()
+            if check_pull_after_early_exit():
+                reason = f'joystick pulled before {cue_name}'
+            else:
+                reason = f'hand removed before {cue_name}'
     
     row = [
         trial_i+1,
@@ -136,9 +180,11 @@ def gen_trial_rows(events):
             config_event = new_config_event[-1]
         try:
             row = row_from_trial(
+                events,
                 trial,
                 trial_i = trial_i,
                 task_type = config_event['info']['config']['task_type'],
+                config = config_event['info']['config']
             )
         except EventNotFound as e:
             print("trial", trial_i, e)
