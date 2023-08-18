@@ -410,7 +410,8 @@ class MonkeyImages:
         self.log_event('photodiode_expected', info=info)
         self.game_frame.set_marker_level(level)
         # update screen immediately to ensure a consistent marker flash duration
-        self.root.update()
+        # update_idletasks won't call the game logic callback, only update drawn geometry
+        self.root.update_idletasks()
         self._photodiode_off_time = time.perf_counter() + self.config.photodiode_flash_duration
     
     # resets loop state, starts callback loop
@@ -601,6 +602,9 @@ class MonkeyImages:
                 def register_in_zone_cb():
                     def _enter():
                         self.show_image('yPrepare')
+                        # only flash the marker if it won't interfere with the discrim marker flash
+                        if self.config.discrim_delay_range[0] > self.config.photodiode_flash_duration+0.1:
+                            self.flash_marker('prep_diamond')
                         if winsound is not None:
                             winsound.PlaySound(
                                 str(SOUND_PATH_BASE / 'mixkit-arcade-bonus-229.wav'),
