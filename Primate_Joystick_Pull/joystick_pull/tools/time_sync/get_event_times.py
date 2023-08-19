@@ -124,15 +124,13 @@ def build_csv(events, trial_details, out_path: Path):
         
         out_f = stack.enter_context(open(out_path, 'w'))
         
-        writer = csv.writer(out_f)
+        dialect = csv.excel if os.environ.get('no_tsv') else csv.excel_tab
+        writer = csv.writer(out_f, dialect=dialect)
         header = next(reader)
-        # header += [f'{event_class}_ts']
         header += ['homezone_enter_ts', 'DiscrimDisplay', 'GoCue_Display', 'ExitHomeZone', 'JoystickPull', 'JoystickRelease', 'water_dispense', 'joystick_zone_enter', 'joystick_zone_exit']
         writer.writerow(header)
         rows = list(reader)
-        # print(len(rows), len(trial_details))
         n = len(trial_details)
-        # print(n)
         for row, trial in zip(rows[:n-1], trial_details):
             trial = trial['events']
             def get_ts(k):
@@ -160,7 +158,8 @@ def build_csv(events, trial_details, out_path: Path):
 
 def build_event_info_csv(trial_details, out_path):
     with open(out_path, 'w') as out_f:
-        writer = csv.writer(out_f)
+        dialect = csv.excel if os.environ.get('no_tsv') else csv.excel_tab
+        writer = csv.writer(out_f, dialect=dialect)
         writer.writerow(['EventLabel', 'EventTimestamp', 'Index'])
         i = 0
         for trial in trial_details:
@@ -219,7 +218,8 @@ def run_for_paths(events_path, csv_out, event_info_path=None, *, plx_offset: Opt
         with open(trial_details_path, 'w') as f:
             json.dump(trial_details, f, indent=2)
     
-    build_csv(events, trial_details, csv_out)
+    if csv_out is None:
+        build_csv(events, trial_details, csv_out)
     if event_info_path is not None:
         build_event_info_csv(trial_details, event_info_path)
 
@@ -228,11 +228,11 @@ def parse_args():
     
     parser.add_argument('--events', required=True, type=Path,
         help='events json')
-    parser.add_argument('--csv-out', required=True, type=Path,
+    parser.add_argument('--csv-out', type=Path,
         help='csv output with added timestamps')
-    parser.add_argument('--event-info',
+    parser.add_argument('--event-info', type=Path,
         help='event info csv output')
-    parser.add_argument('--trial-details',
+    parser.add_argument('--trial-details', type=Path,
         help='trial details json output')
     parser.add_argument('--offset', type=float,
         help='time to subtract from external timestamps in seconds')

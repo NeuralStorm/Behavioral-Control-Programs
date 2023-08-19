@@ -4,6 +4,7 @@ from pathlib import Path
 from contextlib import ExitStack
 import json
 import traceback
+import os
 
 from butil import EventReader
 from . import gen_csv
@@ -93,7 +94,7 @@ def gen_from_file(*,
         json.dump({'events': out_events}, f, indent=2)
     
     with open(csv_output_path, 'w', encoding='utf8', newline='\n') as f:
-        gen_csv.write_csv(f, out_events, tsv_mode=True)
+        gen_csv.write_csv(f, out_events, tsv_mode=bool(os.environ.get('no_tsv')))
     
     if plots:
         from . import gen_histogram
