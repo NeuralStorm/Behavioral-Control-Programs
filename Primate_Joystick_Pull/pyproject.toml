@@ -28,6 +28,7 @@ js-game = "joystick_pull.__main__:main"
 js-gen-output = "joystick_pull.tools.output_gen.__main__:main"
 js-histogram = "joystick_pull.tools.gen_histogram:main"
 js-gen-template = "joystick_pull.gen_templates:gen_templates_main"
+js-display-trials = "joystick_pull.tools.display_trials:main"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

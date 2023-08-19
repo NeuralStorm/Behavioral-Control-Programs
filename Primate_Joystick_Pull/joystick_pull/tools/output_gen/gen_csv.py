@@ -38,7 +38,21 @@ def _group_trials_inner(data):
         yield trial_events
     # return trials
 
-def group_trials(events, *, filter_incomplete=True):
+def group_trials(
+    events, *,
+    filter_incomplete=True,
+    game_only=True,
+    filter_photodiode=False,
+):
+    def p(evt):
+        name = evt.get('name')
+        if game_only and name is None:
+            return False
+        if filter_photodiode and name in ['photodiode_changed', 'photodiode_on', 'photodiode_off']:
+            return False
+        return True
+    
+    events = (e for e in events if p(e))
     trials = _group_trials_inner(events)
     if filter_incomplete:
         trials = filter_incomplete_trials(trials)
