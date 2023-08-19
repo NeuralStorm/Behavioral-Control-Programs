@@ -20,7 +20,7 @@ class MoreThanOne(Exception):
 def sgroup(data, key):
     return groupby(sorted(data, key=key), key=key)
 
-def group_trials(data):
+def _group_trials_inner(data):
     # trials = []
     trial_events = None
     for x in data:
@@ -38,7 +38,13 @@ def group_trials(data):
         yield trial_events
     # return trials
 
-def _find(events, name, *,
+def group_trials(events, *, filter_incomplete=True):
+    trials = _group_trials_inner(events)
+    if filter_incomplete:
+        trials = filter_incomplete_trials(trials)
+    return trials
+
+def find(events, name, *,
     after: Optional[float] = None,
     event_id = None,
 ):
@@ -50,14 +56,14 @@ def _find(events, name, *,
         if name is None or e.get('name') == name:
             yield e
 
-def _find_one(
+def find_one(
     events, name: Optional[str] = None, *,
     ignore_extra: bool = False,
     default: Any = Raise,
     after: Optional[float] = None,
     event_id = None,
 ) -> Any:
-    it = _find(events, name, after=after, event_id=event_id)
+    it = find(events, name, after=after, event_id=event_id)
     try:
         out = next(it)
     except StopIteration:
@@ -72,22 +78,27 @@ def _find_one(
         return out
     raise MoreThanOne(f"more than one {name}")
 
+def find_id(events, event_id: Optional[int]):
+    if event_id is None:
+        return None
+    return find_one(events, event_id=event_id)
+
 def filter_incomplete_trials(trials):
     """filters incomplete trials, may be from game being stopped, program closing, etc"""
     for trial in trials:
-        comp = _find_one(trial, 'task_completed', ignore_extra=True, default=None)
+        comp = find_one(trial, 'task_completed', ignore_extra=True, default=None)
         if comp is not None:
             yield trial
 
 def row_from_trial(events, trial, *, trial_i, task_type: str, config):
-    def find(name):
-        yield from _find(trial, name)
-    def find_one(name, ignore_extra=False, default:Any=Raise):
-        return _find_one(trial, name, ignore_extra=ignore_extra, default=default)
+    def _find(name):
+        yield from find(trial, name)
+    def _find_one(name, ignore_extra=False, default:Any=Raise):
+        return find_one(trial, name, ignore_extra=ignore_extra, default=default)
     
     # pprint(trial)
-    start = find_one('trial_start')
-    comp_event = find_one('task_completed')
+    start = _find_one('trial_start')
+    comp_event = _find_one('task_completed')
     comp = comp_event['info']
         # 'reward_duration': reward_duration, # Optional[float]
         # 'remote_pull_duration': remote_pull_duration, # float
@@ -97,8 +108,8 @@ def row_from_trial(events, trial, *, trial_i, task_type: str, config):
         # 'failure_reason': log_failure_reason[0], # Optional[str]
         # 'discrim': selected_image_key, # str
     
-    js_enter = find_one('joystick_zone_enter', ignore_extra=True, default=None)
-    js_exit = find_one('joystick_zone_exit', ignore_extra=True, default=None)
+    js_enter = _find_one('joystick_zone_enter', ignore_extra=True, default=None)
+    js_exit = _find_one('joystick_zone_exit', ignore_extra=True, default=None)
     def get_t(evt):
         if evt is None:
             return ''
@@ -125,8 +136,8 @@ def row_from_trial(events, trial, *, trial_i, task_type: str, config):
             def get_cue_name():
                 if comp['homezone_exit_event'] is None:
                     return False
-                home_exit = _find_one(events, event_id=comp['homezone_exit_event'])
-                discrim = _find_one(trial, 'discrim_shown', default=None)
+                home_exit = find_one(events, event_id=comp['homezone_exit_event'])
+                discrim = find_one(trial, 'discrim_shown', default=None)
                 if discrim is None or home_exit['time_m'] < discrim['time_m']:
                     return 'discrim'
                 else:
@@ -135,8 +146,8 @@ def row_from_trial(events, trial, *, trial_i, task_type: str, config):
             def check_pull_after_early_exit():
                 if comp['homezone_exit_event'] is None:
                     return False
-                _home_exit = _find_one(events, event_id=comp['homezone_exit_event'])
-                _js_pull = _find_one(events, 'joystick_pulled', ignore_extra=True, default=None, after=_home_exit['time_m'])
+                _home_exit = find_one(events, event_id=comp['homezone_exit_event'])
+                _js_pull = find_one(events, 'joystick_pulled', ignore_extra=True, default=None, after=_home_exit['time_m'])
                 
                 if _js_pull is None:
                     return False
@@ -169,13 +180,12 @@ def row_from_trial(events, trial, *, trial_i, task_type: str, config):
     return row
 
 def gen_trial_rows(events):
-    config_event = _find_one(events, 'config_loaded', ignore_extra=True)
+    config_event = find_one(events, 'config_loaded', ignore_extra=True)
     
     trials = group_trials(events)
-    trials = filter_incomplete_trials(trials)
     
     for trial_i, trial in enumerate(trials):
-        new_config_event = list(_find(trial, 'config_loaded'))
+        new_config_event = list(find(trial, 'config_loaded'))
         if new_config_event:
             config_event = new_config_event[-1]
         try:
@@ -297,7 +307,7 @@ def gen_csv_rows(events, *, permissive=False):
     if not events:
         time_in_game = 0
     else:
-        start_evt = _find_one(events, 'game_start', ignore_extra=True, default=None)
+        start_evt = find_one(events, 'game_start', ignore_extra=True, default=None)
         if start_evt is None:
             time_in_game = 0
         else:
