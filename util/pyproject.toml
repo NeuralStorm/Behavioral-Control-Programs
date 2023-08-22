@@ -7,7 +7,7 @@ authors = ["Ryan <yarnnd@gmail.com>"]
 packages = [ { include = "butil" }, ]
 
 [tool.poetry.dependencies]
-python = "^3.8,^3.11"
+python = "^3.8"
 
 [tool.poetry.dev-dependencies]
 

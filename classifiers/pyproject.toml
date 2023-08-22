@@ -7,7 +7,7 @@ authors = ["Ryan <yarnnd@gmail.com>"]
 packages = [ { include = "behavioral_classifiers" }, ]
 
 [tool.poetry.dependencies]
-python = "^3.8,^3.11"
+python = "^3.8"
 
 butil = { path = "../util", develop = true }
 
