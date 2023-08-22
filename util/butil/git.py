@@ -21,9 +21,12 @@ def _minimal_ext_cmd(cmd, cwd):
     return out, err
 
 def get_git_info():
-    fn = inspect.stack()[0].filename
-    path = Path(fn)
-    path = path.parent
+    if 'repo_path' in os.environ:
+        path = Path(os.environ['repo_path'])
+    else:
+        fn = inspect.stack()[0].filename
+        path = Path(fn)
+        path = path.parent
     
     status, err = _minimal_ext_cmd(['git', 'status', '--porcelain=v2', '--branch'], path)
     
