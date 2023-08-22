@@ -94,7 +94,7 @@ def gen_from_file(*,
         json.dump({'events': out_events}, f, indent=2)
     
     with open(csv_output_path, 'w', encoding='utf8', newline='\n') as f:
-        gen_csv.write_csv(f, out_events, tsv_mode=bool(os.environ.get('no_tsv')))
+        gen_csv.write_csv(f, out_events, tsv_mode=not bool(os.environ.get('no_tsv')))
     
     if plots:
         from . import gen_histogram
@@ -122,7 +122,7 @@ def main():
                 stem = input_path.stem
                 stem = removesuffix(stem, ".json")
                 stem = removesuffix(stem, '_new_events')
-                output_path = input_path.parent / f"{stem}_trials.tsv"
+                output_path = input_path.parent / f"{stem}_trials.txt"
                 with open(output_path, 'w') as _f:
                     pass
 
