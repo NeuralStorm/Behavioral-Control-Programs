@@ -3,6 +3,7 @@ import subprocess
 import os
 from pathlib import Path
 import inspect
+import json
 
 def _minimal_ext_cmd(cmd, cwd):
     # construct minimal environment
@@ -21,12 +22,9 @@ def _minimal_ext_cmd(cmd, cwd):
     return out, err
 
 def get_git_info():
-    if 'repo_path' in os.environ:
-        path = Path(os.environ['repo_path'])
-    else:
-        fn = inspect.stack()[0].filename
-        path = Path(fn)
-        path = path.parent
+    fn = inspect.stack()[0].filename
+    path = Path(fn)
+    path = path.parent
     
     status, err = _minimal_ext_cmd(['git', 'status', '--porcelain=v2', '--branch'], path)
     
@@ -36,6 +34,11 @@ def get_git_info():
         'status': lines,
     }
     if err:
-        out['status_stderr'] = err.split('\n')
+        info_path = Path(__file__).parent / 'git_info.json'
+        if info_path.exists():
+            with open(info_path) as f:
+                out = json.load(f)
+        else:
+            out['status_stderr'] = err.split('\n')
     
     return out

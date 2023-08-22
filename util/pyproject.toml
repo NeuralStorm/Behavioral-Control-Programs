@@ -11,6 +11,11 @@ python = "^3.8"
 
 [tool.poetry.dev-dependencies]
 
+# https://github.com/python-poetry/poetry/issues/5539#issuecomment-1119047694
+[tool.poetry.build]
+generate-setup-file = false
+script = "build.py"
+
 [build-system]
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
