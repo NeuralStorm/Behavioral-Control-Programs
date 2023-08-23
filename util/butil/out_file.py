@@ -5,6 +5,7 @@ from pathlib import Path
 from contextlib import ExitStack
 import gzip
 import bz2
+import time
 
 class EventFile:
     def __init__(self, *, file_obj=None, path: Optional[Path]):
@@ -25,6 +26,7 @@ class EventFile:
             raise ValueError()
         
         self._first_event = True
+        self._last_flush = time.perf_counter()
         
         # write a newline so it's easier to fix broken records if appending to
         # a file that was interrupted mid write
@@ -43,7 +45,11 @@ class EventFile:
         json.dump(data, self._f, separators=(',', ':'))
         self._f.write('\n')
         
-        self._f.flush()
+        now = time.perf_counter()
+        # don't flush more than every 100ms
+        if now - self._last_flush > 0.1:
+            self._f.flush()
+            self._last_flush = now
 
 class EventReader:
     def __init__(self, *, file_obj=None, path: Optional[Path], ignore_error: bool = True):
