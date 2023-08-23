@@ -6,6 +6,8 @@ from contextlib import ExitStack
 import gzip
 import bz2
 import time
+from multiprocessing import Queue as PQueue, Process
+
 
 class EventFile:
     def __init__(self, *, file_obj=None, path: Optional[Path]):
@@ -50,6 +52,49 @@ class EventFile:
         if now - self._last_flush > 0.1:
             self._f.flush()
             self._last_flush = now
+
+class _DoneClass:
+    pass
+class _InnerProcess(Process):
+    Done = _DoneClass()
+    
+    def __init__(self, path):
+        super().__init__(daemon=True)
+        self._path = path
+        self._queue = PQueue()
+    
+    def write_record(self, data):
+        self._queue.put(data)
+    
+    def shutdown(self):
+        self._queue.put(self.Done)
+        self.join()
+    
+    def run(self):
+        with ExitStack() as stack:
+            _event_file = stack.enter_context(EventFile(path=self._path))
+            while True:
+                data = self._queue.get()
+                if type(data) == _DoneClass:
+                    break
+                _event_file.write_record(data)
+
+class EventFileProcess(EventFile):
+    def __init__(self, *, path):
+        self._inner = _InnerProcess(path)
+        self._inner.start()
+    
+    def __enter__(self):
+        return self
+    
+    def __exit__(self, *exc):
+        self.close()
+    
+    def close(self):
+        self._inner.shutdown()
+    
+    def write_record(self, data):
+        self._inner._queue.put(data)
 
 class EventReader:
     def __init__(self, *, file_obj=None, path: Optional[Path], ignore_error: bool = True):

@@ -232,16 +232,9 @@ class MonkeyImages:
         # tracks the time that the photodiode should turn off at
         self._photodiode_off_time: Optional[float] = None
         
-        if self.config.record_events:
-            self.classifier_events_path = self.config.save_path / f"{self.config.log_file_name_base}_classifier_events.json.bz2"
-        else:
-            self.classifier_events_path = None
-        # self.template_out_path = self.config.save_path / f"{self.config.log_file_name_base}_templates.json"
-        
         self._cl_helper = self._stack.enter_context(behavioral_classifiers.helpers.Helper(
             config = self.config.classifier_config(),
-            event_file = self.new_events_file,
-            # events_file_path = self.classifier_events_path,
+            event_file = self.new_events_file if self.config.record_events else None,
         ))
         
         print("ready for plexon:" , bool(self.plexon))
@@ -322,7 +315,9 @@ class MonkeyImages:
                 self.new_events_file.close()
         if is_opening:
             self.new_events_path = new_events_path
-            self.new_events_file = EventFile(path=self.new_events_path)
+            # self.new_events_file = EventFile(path=self.new_events_path)
+            from butil.out_file import EventFileProcess
+            self.new_events_file = EventFileProcess(path=self.new_events_path)
         
         self.log_event('config_loaded', tags=[], info={
             'time_utc': datetime.utcnow().isoformat(),
