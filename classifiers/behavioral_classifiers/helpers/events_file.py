@@ -39,6 +39,8 @@ class EventsFileWriter:
         self._callback = callback
         self._first_event = True
         
+        self._last_flush = time.perf_counter()
+        
         if self._f is not None:
             self._f.write('[\n')
             self._stack.callback(lambda: self._f.write('\n]\n'))
@@ -66,7 +68,11 @@ class EventsFileWriter:
             self._callback(data)
         if self._f is not None:
             json.dump(data, self._f, separators=(',', ':'))
-            self._f.flush()
+            now = time.perf_counter()
+            # don't flush more than every 100ms
+            if now - self._last_flush > 0.1:
+                self._f.flush()
+                self._last_flush = now
     
     def write_raw(self, rec):
         assert 'type' in rec
