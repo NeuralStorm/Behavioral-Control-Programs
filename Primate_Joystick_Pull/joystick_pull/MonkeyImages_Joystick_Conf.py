@@ -181,10 +181,12 @@ class MonkeyImages:
         if use_hardware:
             if ability_mode:
                 from .data_bridge import DataBridge
-                self.plexon = DataBridge()
+                self.plexon = DataBridge() #type: ignore
             else:
                 from .plexon import Plexon
-                self.plexon: Optional[Plexon] = Plexon()
+                # self.plexon: Optional[Plexon] = Plexon()
+                from .plexon import PlexonProxy
+                self.plexon: Optional[Plexon] = PlexonProxy() #type: ignore
         else:
             self.plexon = None
         
@@ -436,6 +438,7 @@ class MonkeyImages:
             if cur_time >= self._photodiode_off_time:
                 self._photodiode_off_time = None
                 self.game_frame.set_marker_level(0)
+                self.root.update_idletasks()
         
         if not self.paused:
             self.normalized_time += elapsed_time
