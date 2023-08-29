@@ -3,6 +3,7 @@ import logging
 from pathlib import Path
 import os
 from multiprocessing import Process, Queue as PQueue
+from queue import Empty
 
 logger = logging.getLogger(__name__)
 
@@ -178,11 +179,14 @@ class Plexon:
                 
                 yield PlexonEvent(ts, PlexonEvent.ANALOG, value=val, chan=chan)
             elif block_type == SPIKE_TYPE:
+                continue
                 unit = new_data.unit[i]
                 yield PlexonEvent(ts, PlexonEvent.SPIKE, chan=chan, unit=unit)
             elif num_or_type == self.event_source:
                 yield PlexonEvent(ts, PlexonEvent.EVENT, chan=chan)
             elif num_or_type == self.other_event_source:
+                if chan == 1:
+                    continue
                 yield PlexonEvent(ts, PlexonEvent.OTHER_EVENT, chan=chan)
 
 class _PlexonProcess(Process):
@@ -194,11 +198,17 @@ class _PlexonProcess(Process):
         plexon = Plexon(no_do=True)
         
         while True:
+            plexon.client.opx_wait(1)
             data = list(plexon.get_data())
+            if not data:
+                continue
             self._queue.put(data)
     
     def get_data(self):
-        data = self._queue.get()
+        try:
+            data = self._queue.get(block=False)
+        except Empty:
+            return []
         return data
 
 class PlexonProxy:
