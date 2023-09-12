@@ -1,20 +1,16 @@
 
-# Dependencies
+# Installation
 
 targets python 3.11
+
+For installation/usage on a plexon system see [computer_setup.md](https://github.com/NeuralStorm/docs/blob/main/joystick_task/computer_setup.md)
 
 Ubuntu  
 `sudo apt-get install python3 python3-pip python3-tk python3-pil.imagetk python3-numpy`
 
 Installation
 ```
-pip install --only-binary :all: -e .[plotting,hw]
-```
-
-For win7 python 3.8
-```
-pip install .[hw]
-pip install --only-binary :all: plotnine==0.10.1
+pip install --only-binary :all: --no-binary PyDAQmx -e .[plotting,hw]
 ```
 
 # Usage
