@@ -397,7 +397,7 @@ class MonkeyImages:
             cb(event)
     
     def flash_marker(self, name=None, *, level=1.0):
-        if self._photodiode is None:
+        if self.config.photodiode_flash_duration == 0:
             return
         info = {}
         if name is not None:
