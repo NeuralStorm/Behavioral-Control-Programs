@@ -31,7 +31,7 @@ import behavioral_classifiers
 from butil import EventFile, Debounce, get_git_info
 
 from .game_frame import GameFrame, InfoView, screenshot_widgets, screenshot_widget
-from .photodiode import PhotoDiode
+from .photodiode import Photodiode
 from .config import GameConfig
 from .zone import Zone
 
@@ -223,13 +223,16 @@ class MonkeyImages:
         # set to the selected image key at the start of the trial for use in classification event log
         self._classifier_event_type: Optional[str] = None
         
-        if self.config.photodiode_channel is None:
-            self._photodiode: Optional[PhotoDiode] = None
+        if self.config.pd_channel is None:
+            self._photodiode: Optional[Photodiode] = None
         else:
-            self._photodiode = PhotoDiode()
-            if self.config.photodiode_range is not None:
-                pmin, pmax = self.config.photodiode_range
-                self._photodiode.set_range(pmin, pmax)
+            self._photodiode = Photodiode()
+            self._photodiode.set_params(
+                falling_threshold = self.config.pd_threshold[0],
+                rising_threshold = self.config.pd_threshold[1],
+                min_pulse_width = self.config.pd_min_pulse_width,
+                edge_offset = self.config.pd_edge_offset,
+            )
         
         # tracks the time that the photodiode should turn off at
         self._photodiode_off_time: Optional[float] = None
@@ -471,10 +474,6 @@ class MonkeyImages:
             self.gathering_data_omni_new()
     
     def new_loop_gen(self):
-        if self._photodiode is not None and self._photodiode.calibrating:
-            cal_res = yield from self._photodiode.run_calibration(self.game_frame.set_marker_level)
-            self.log_event("photodiode_calibration", info=cal_res)
-        
         completed_trials = 0
         while True:
             if self.config.max_trials is not None and completed_trials >= self.config.max_trials:
@@ -1053,10 +1052,10 @@ class MonkeyImages:
                         self.joystick_release_remote_ts = d.ts
                         
                         self.handle_classification_event('joystick_released', d.ts)
-                elif self._photodiode is not None and d.chan == self.config.photodiode_channel:
+                elif self._photodiode is not None and d.chan == self.config.pd_channel:
                     edge = self._photodiode.handle_value(d.value, d.ts)
                     if edge.rising:
-                        self.log_hw('photodiode_on', plexon_ts=d.ts)
+                        self.log_hw('photodiode_on', plexon_ts=d.ts, info={'edge_ts': edge.ts})
                     if edge.falling:
                         self.log_hw('photodiode_off', plexon_ts=d.ts)
             elif d.type == d.SPIKE:

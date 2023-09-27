@@ -1,9 +1,10 @@
 
 import os
-from typing import Any, Tuple, Literal, Optional, Dict, List, Union
+from typing import Any, Tuple, Literal, Optional, Dict, List, Union, TypedDict
 import csv
 from pathlib import Path
 from datetime import datetime
+import json
 
 import hjson
 from PIL import Image, ImageTk
@@ -141,20 +142,20 @@ class GameConfig:
         self.load_thresholds(config_dict['reward_thresholds'])
         self.reward_thresholds: List[Dict[str, Any]]
         
-        pc = os.environ.get('photodiode_channel')
-        if pc == '':
-            pc = None
-        if pc is not None:
-            pc = int(pc)
-        self.photodiode_channel: Optional[int] = pc
-        
-        photodiode_range = config_dict.get('photodiode_range')
-        if photodiode_range in [None, [], ['']]:
-            self.photodiode_range: Optional[Tuple[float, float]] = None
+        pd_ = os.environ.get('photodiode')
+        if pd_ is None:
+            self.pd_channel: Optional[int] = None
+            self.pd_threshold: Tuple[float, float] = 0, 0
+            self.pd_min_pulse_width: int = 0
+            self.pd_edge_offset: float = 0.0
         else:
-            assert photodiode_range is not None
-            pmin, pmax = config_dict['photodiode_range']
-            self.photodiode_range = float(pmin), float(pmax)
+            pd = hjson.loads(pd_)
+            self.pd_channel = int(pd['channel'])
+            a, b = pd['threshold']
+            self.pd_threshold = float(a), float(b)
+            self.pd_min_pulse_width = int(pd['min_pulse_width'])
+            self.pd_edge_offset = float(pd['edge_offset'])
+        
         # default to 18ms, longer than 1 refresh at 60hz (16.7 ms)
         self.photodiode_flash_duration: float = float(os.environ.get('photodiode_flash_duration', 0.018))
         
