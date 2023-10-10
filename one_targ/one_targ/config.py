@@ -54,12 +54,14 @@ class Config:
             'Donut': 'donu', 'Sandpiper': 'sand', 'Sabotage': 'sabo',
         }
         
+        # https://github.com/NeuralStorm/Behavioral-Control-Programs/blob/61a9baa6d198e3dc13d30326901ea78bd42dc77f/touchscreen_co/Touchscreen/one_targ_new/main.py#L431
         p = Path.cwd()
         # the program would split the path on \ creating platform specific behavior
         # attempt to recreate that here
         if platform == 'win32':
             p = p.resolve()
-            p = p.parent.parent
+            path_parts = [x for x in p.parts if 'Touch' not in x and 'Targ' not in x]
+            p = Path(*path_parts)
         data_p = p / 'data'
         if data_p.exists():
             p = data_p

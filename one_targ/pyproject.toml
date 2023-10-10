@@ -10,8 +10,12 @@ python = "3.11.*"
 "kivy" = { version = "2.2.1", extras = ["base"] }
 numpy = "1.25.2"
 hjson = "3.0.1"
+nidaqmx = { version = "0.5.7", optional = true }
 
 [tool.poetry.dev-dependencies]
+
+[tool.poetry.extras]
+hw = ["nidaqmx"]
 
 [tool.poetry.scripts]
 one-targ = "one_targ.__main__:main"

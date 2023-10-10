@@ -1,53 +1,41 @@
 
-# IMPORTANT NOTES
-
-* The path the repo is placed at should not contain the strings "Touch" or "targ"
-or the game will break on windows (any system with backslash as the default path delimeter)
-
-* On systems that allow it (mac, linux) the path the repo is placed at should not contain
-backslashes
-
-* the program targets python 3.8
-
 # Setup
 
 copy `./example_config.hjson` to `./config.hjson`
 
-run `pip install -r requirements.txt`
-
-If running with actual hardware  
-`pip install nidaqmx==0.5.7`
+using python 3.11  
+run `pip install .[hw]`
 
 # Running
 
 modify `./config.hjson` as needed
 
-run `python main.py`  
-without hardware `python main.py --test`
-
-# Poetry (alternative to pip/python commands above)
-
-`poetry update`  
-`poetry run python main.py -- --test`
+in bash
+```sh
+export nidaq=1
+export plexon=1
+one-targ
+```
 
 # Other Things
 
-### Output file save location (maybe)  
+### Output file save location  
+Some previous versions of "one_targ_new" replicated the save location from "One Targ" assuming the working directory was in the same folder as the script, not the full original logic.  
+The current logic does not split the path on backslashes on platforms besides windows, the original logic split the path on backslashes regardless of platform.  
 ```
-on systems with forward slash as the default path delimeter (mac, linux)
-    if <working dir>/data/ exists
+on non windows (mac, linux)
+    if ./data/ exists
         files will be saved to `<working dir>/data/`
     else
         files will be saved to `<working dir>/data_tmp_<date>/`
 
-on systems with backslash as the default path delimeter (windows)
-    if <repo root>/touchscreen_co/data/ exists
-        files will be saved to `<repo root>/touchscreen_co/data/`
+on windows
+    where <p> is the working directory with any segments containing "Touch" or "Targ" removed
+    if <p>/data/ exists
+        files will be saved to `<p>/data/`
     else
-        files will be saved to `<repo root>/touchscreen_co/data_tmp_<date>/`
+        files will be saved to `<p>/data_tmp_<date>/`
 ```
-
-saving HDF5 file requires https://www.pytables.org/
 
 ## misc dev notes  
 https://kivy.org/doc/stable/guide/lang.html
