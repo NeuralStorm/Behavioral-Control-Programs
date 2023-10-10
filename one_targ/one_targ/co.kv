@@ -1,0 +1,134 @@
+#:kivy 1.10.0
+#:import Clock kivy.clock.Clock
+
+<Manager>:
+    id: screen_manager
+    _splash: splash
+
+    Screen: 
+        name: 'splash_start'
+        Splash:
+            id: splash
+
+        BoxLayout:
+            id: test
+            orientation: 'vertical'
+         
+            Label:
+                text: 'Parameters Cached!! \n \n Prepare the Monkey! \n \n Pausing Until Start Button Pressed. '
+                halign: 'center'
+                fontsize: 50
+
+            Label:
+                text: ''
+                fontsize: 50
+
+            Label:
+                text: ''
+                fontsize: 50
+
+            Label:
+                text: ''
+                fontsize: 50
+
+            Label:
+                text: ''
+                fontsize: 50
+                
+            BoxLayout:
+                id: test2
+                orientation: 'horizontal'
+
+                Label:
+                    text: ''
+                    fontsize: 50
+                
+                Label:
+                    text: ''
+                    fontsize: 50
+
+                Label:
+                    text: ''
+                    fontsize: 50
+
+                Label:
+                    text: ''
+                    fontsize: 50
+
+                Button: 
+                    text: 'Start'
+                    color: .25, .25, .25, 1
+                    background_color: (.2, .2, .2, 1.0)
+
+                    on_release:
+                        screen_manager.start_co_game()
+                        #root.current = 'game_screen'
+                        # game.init(*splash.args)
+                        # Clock.schedule_interval(game.update, 1.0 / 60.0)
+                
+                Label:
+                    text: ''
+                    fontsize: 50
+
+                Label:
+                    text: ''
+                    fontsize: 50
+
+            Label:
+                text: ''
+                fontsize: 50
+                
+    Screen:
+        name: 'game_screen'
+        COGame:
+            id: game
+
+<COGame>:
+    center_target: target_c
+    periph_target: target_p
+    photo_marker: photo_marker
+
+    Target:
+        id: target_c
+        
+    Target: 
+        id: target_p
+    
+    Label:
+        color: .5,.5,.5,1
+        font_size: 50
+        center_x: root.width * 6/8
+        top: root.top - 70
+        text: str(root.trial_counter)
+    
+    PhotoMarker:
+        id: photo_marker
+
+
+<PhotoMarker>:
+    canvas:
+        Color:
+            rgba: self.color
+        Rectangle:
+            size: (100, 100)
+            pos: self.pos
+
+
+<Target>:
+    canvas:
+        Color:
+            rgba: self._color
+        Ellipse:
+            pos:self.pos
+            on_touch_down: print('a')
+            size:self.size
+        Color:
+            rgba: self._rectangle_color
+        Rectangle:
+            #group: 'a'
+            pos: self.pos
+            size: self.size
+        Color:
+            rgba: self._triangle_color
+        Triangle:
+            points: self.triangle_points

@@ -1,9 +1,0 @@
-Drivers link: https://ftdichip.com/drivers/vcp-drivers/
-Download 'CDM v2.12.36.4 WHQL Certified'
-
-
-https://www.instructables.com/FT232R-USB-UART-Arduino-Nano/
-
-# Order of operations; 
-# Follow instructables without downloading drivers 
-# Then update driver according to the downloaded driver
