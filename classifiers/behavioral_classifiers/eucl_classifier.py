@@ -37,16 +37,19 @@ class EuclClassifier(Classifier):
         # (event type, timestamp in ms)
         self._current_event: Optional[Tuple[str, int]] = None
         # list of spike timestamps in ms
-        self.event_spike_list: List[Tuple[str, int]] = []
+        self.event_spike_list: deque[Tuple[str, int]] = deque()
         
         # event_type -> psth dict
         self.templates: Dict[str, PsthDict] = {}
         
         self.channel_filter: set[str] | None = channel_filter
+        
+        self._buffer_time = self.post_time*1.2
+        if self._buffer_time < 0.1:
+            self._buffer_time = 0.1
     
     def clear(self):
         self._current_event = None
-        self.event_spike_list = []
     
     def event(self, *, event_type: str = '', timestamp: float):
         # convert to integer ms
@@ -60,6 +63,8 @@ class EuclClassifier(Classifier):
         
         timestamp_ms = round(timestamp * 1000)
         self.event_spike_list.append((channel, timestamp_ms))
+        while timestamp_ms - self.event_spike_list[0][1] > self._buffer_time:
+            self.event_spike_list.popleft()
     
     def zero_psth(self) -> List[int]:
         """creates a list of the correct length filled with zeros"""
