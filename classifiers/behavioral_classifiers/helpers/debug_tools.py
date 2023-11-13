@@ -11,13 +11,14 @@ class DebugSpikeSource:
         
         def gen_dbg_spikes():
             while not self.stopping:
+                now = time.perf_counter()
                 helper.spike(
                     channel = random.choice([1, 2, 3]),
                     unit = random.choice([1, 2]),
-                    timestamp = time.perf_counter(),
+                    timestamp = now,
                 )
-                helper.any_event(time.perf_counter())
-                time.sleep(random.choice([0.001, 0.004, 0.008]))
+                helper.any_event(now)
+                time.sleep(random.random() * 0.004)
         self.thread = Thread(target=gen_dbg_spikes)
     
     def __enter__(self):

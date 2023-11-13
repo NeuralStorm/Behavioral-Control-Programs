@@ -28,15 +28,9 @@ Example to create output csv, json and histogram png files from the initial json
 js-gen-output gen output/TIP_1_001_20220725_180137_Joystick.json.gz
 ```
 
-Example to create outputs for all json.gz files in the `./output` directory
+Example to create outputs for all json.gz files in the `./output` directory. This requires bash, not cmd.
 ```sh
 js-gen-output --skip-failed gen output/*.json.gz
-```
-
-## Template generation
-
-```sh
-js-gen-template --config config.csv --events output/test.json.gz --template-out output/template.json
 ```
 
 ## Histogram generation
@@ -69,6 +63,8 @@ example: `low=0'high=4'type=linear'reward_min=0'reward_max=1'cue=bOval`
 Each value in the csv is a collection of parameter value pairs separated by `'`. Each parameter value pair is of the form `parameter=value`. Leading and trailing whitespace is removed from parameters and values.
 
 The first reward duration where `low < pull duration < high` and `cue` is not set or matches the displayed cue is used.
+
+When performing online classification the `mid` value is used.
 
 **General Parameters**
 
@@ -145,7 +141,7 @@ Directory to which log csv files are saved
 ---
 ### `Study ID`, `Animal ID`, `Session ID`, `Task Type`, `experimental_group`, `experimental_condition`
 
-Included in the name of the output csv log file
+Included in the name of the output csv log file. Defaults to "`NOTSET`".
 
 ---
 ### `Enable Blooper Noise`
@@ -163,9 +159,9 @@ A number in the range [`Pre Discriminatory Stimulus Min delta t1`, `Pre Discrimi
 A number in the range [`Pre Go Cue Min delta t2`, `Pre Go Cue Max delta t2`] will be selected each trial for the delay between a shape being shown and the go cue being shown. Min and max can be set to the same value to have a fixed delay.
 
 ---
-### `post_succesful_pull_delay` (optional)
+### `post_successful_pull_delay` (optional)
 
-The delay after a succesful pull before the water reward is dispensed.  
+The delay after a successful pull before the water reward is dispensed.  
 If not specified the delay will be the length of the sound played (1.87s).  
 
 ---
@@ -179,77 +175,9 @@ The channel (direction) of the joystick to use. Default 3.
 Number of trials to run before stopping. If unspecified or "0" an unlimited number of trials will be performed.
 
 ---
-### `photodiode_range` (optional)
+### `template` (optional)
 
-Voltage levels read by the photodiode at minimum and maximum screen brightness.
-
-If `photodiode_range` is unspecified a calibration routine will be run when the game is started. Ensure the game window is maximized and the photodiode is correctly positioned before starting the game.
-
-When calibration is run it will create a `photodiode_calibration` event with the found min and max values in the events.json output file.
-```json
-{
-    "time_human": "2023-03-28T08:13:27.957032",
-    "time_m": 9.49143193,
-    "name": "photodiode_calibration",
-    "tags": [],
-    "info": {
-        "min": 0.0,
-        "max": 0.03663898562081158
-    }
-}
-```
-
-Example: `photodiode_range,0,0.0366`
-
----
-### `record_events` (optional)
-
-Enable recording of classification events. Default: false
-
-When `classification_event` is specified recording of classification events will always be enabled.
-
-Example: `record_events,true`
-
-# Classifier config
-
-If `classification_event` is not specified classification will be disabled and all classifier config options become optional.
-
----
-### `classification_event`
-
-Which event to perform classification around.
-
-Example: `classification_event,joystick_pull`
-
----
-### `post_time_ms`
-
-Period after event to use in classification.
-
----
-### `bin_size_ms`
-
-Bin size used for classification.
-
----
-### `correct_reward_dur`
-
-Duration of the water reward when classification is correct in seconds. Can be specified for specific cues by prefixing the value with the cue name and `:`. The unprefixed value is used as the default if no cue specific value is specified.
-
-Example: `correct_reward_dur,bOval:1,bRectangle:2,3`
-
----
-### `classify_wait_time` (optional)
-
-Period of time to wait for spikes after the event type specified by `classification_event` occurs in seconds. Defaults to `post_time_ms` converted to seconds.
-
----
-### `classify_wait_mode` (optional)
-
-One of `local`, `plexon`. Defaults to `plexon`.
-
-`local` uses the computers local clock to deterimne how long to wait after the classification event occures.  
-`plexon` waits for an event to be received from plexon that is at least `classify_wait_time` after the classification event.
+The path of the classifier template file to load. If this parameter is specified classification will be enabled.
 
 ---
 ### `classify_wait_timeout` (optional)
@@ -258,21 +186,128 @@ Amount of time, based on the computer's local time, to wait before failing class
 
 If not specified the program will wait an indefinite amount of time for the event to occur.
 
----
-### `baseline` (optional)
+# Template generation
 
-If `true`, events will be collected and the game will run normally. If `false`, classification will occur instead of waiting for a joystick pull or homezone exit. Defaults to `true`.
-
----
-### `template_in` (optional)
-
-Required when baseline is `false`. The path of the template file to load.
-
----
-### `labels` (optional)
-
-Path of the labels file to load. If not specified all channels and units will be used for classification.
+Example
+```sh
+js-gen-template --events output/test.json.gz --event-class tpullstart --template-out output/test_template.json --labels output/labels.json --post-time 200 --bin-size 5
+```
 
 Example labels file: https://github.com/NeuralStorm/Behavioral-Control-Programs/blob/75f3f6e869c1c8869a93ab25f6270787049ab98c/tilt_hardware_control/tilt_hardware_control/example_labels.hjson
 
 The labels file has one parameter `channels`. The parameters of the dict are plexon channels and the values are plexon units within that channel.
+
+Supported event classes
+```
+tpullstart
+tgocue
+tdiscrim
+```
+
+# Environment Variables
+
+For environment variables marked [flag] any value that is set and not an empty string will enable the functionality.  
+For example (bash)
+```bash
+export record_events='1'
+```
+
+---
+### `config_path`
+
+use config file at path instead of showing gui file chooser
+
+---
+### `event_source`
+
+set to `plexon` or `ability` to collect events from an external system
+
+---
+### `out_file_name`
+
+overrides normal file name generation and uses a fixed value instead
+
+---
+### `photodiode_flash_duration`
+
+photodiode marker flash duration in seconds, set to 0 to disable the photodiode marker flash  
+default: 0.018
+
+---
+### `photodiode`
+
+photodiode settings, json string
+
+`channel`: analog channel that the photodiode is on  
+`threshold`:  
+thresholds for photodiode signal in volts  
+falling edges must fall below the first value for the signal to be considered low  
+rising edges must rise above the second value for the signal to be considered high  
+`min_pulse_width`: the number of samples the signal must be high for the photodiode to be considered on  
+`edge_offset`:  
+offset of the generated timestamp when the photodiode becomes on  
+this should probably be `min_pulse_width` / -1000 to get the timestamp when the signal initially went high
+
+Example (bash)
+```bash
+export photodiode='{
+        channel: 8
+        threshold: [0.005, 0.02]
+        min_pulse_width: 4
+        edge_offset: -0.004
+}'
+```
+---
+### `record_events` [flag]
+
+Enable recording of classification events and spikes.
+
+---
+### `record_analog` [flag]
+
+Enable recording of photodiode signal.
+
+---
+### `classifier_debug` [flag]
+
+generates fake spike events and classification events for simulated interactions
+
+---
+### `simulate_photodiode` [flag]
+
+generates fake photodiode events
+
+---
+### `no_git` [flag]
+
+disable fetching and saving of git status
+
+---
+### `no_print_stats` [flag]
+
+disable calculation and printing of histogram info in the console
+
+---
+### `trace`, `log` [flag]
+
+enables verbose logging (trace is more verbose than log)
+
+---
+### `no_wait_for_start` [flag]
+
+disables waiting for a recording start event from plexon
+
+---
+### `no_info_view` [flag]
+
+disable the info view and associated calculations
+
+---
+### `hide_buttons` [flag]
+
+hide ui buttons
+
+---
+### `layout_debug` [flag]
+
+color different ui elements different colors to aid debugging of the ui layout

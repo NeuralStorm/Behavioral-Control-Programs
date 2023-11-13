@@ -52,22 +52,20 @@ class GameConfig:
             
             assert False
         
-        self.enable_old_output = bool(os.environ.get('old_outputs'))
-        
         self.raw_config = config_dict
         # PARAMETERS META DATA
-        self.study_id: str = config_dict['Study ID'][0]       # 3 letter study code
-        self.session_id: str = config_dict['Session ID'][0] # Type of Session
+        self.study_id: str = get('Study ID', 'NOTSET')       # 3 letter study code
+        self.session_id: str = get('Session ID', 'NOTSET') # Type of Session
         self.experimental_group: str = get('experimental_group', 'NOTSET')
         self.experimental_condition: str = get('experimental_condition', 'NOTSET')
-        self.animal_id: str = config_dict['Animal ID'][0]   # 3 digit number
+        self.animal_id: str = get('Animal ID', 'NOTSET')   # 3 digit number
+        self.TaskType: str = get('Task Type', 'NOTSET')
+        
         if start_dt is None:
             start_dt = datetime.now()
         self.start_time: str = start_dt.strftime('%Y%m%d_%H%M%S')
         start_date_str = start_dt.strftime('%Y%m%d')
         start_time_str = start_dt.strftime('%H%M%S')
-        
-        self.TaskType: str = config_dict['Task Type'][0]
         
         self.save_path: Path = Path(config_dict['Task Data Save Dir'][0])
         if os.environ.get('out_file_name'):
@@ -98,26 +96,20 @@ class GameConfig:
         else:
             self.task_type = 'joystick_pull'
         
-        pspd = config_dict.get('post_succesful_pull_delay')
-        if pspd in [[''], [], None]:
+        pspd = get('post_successful_pull_delay', None)
+        if pspd is None:
+            pspd = get('post_succesful_pull_delay', None)
+        if pspd is None:
             pspd = 1.87
-        elif pspd is not None:
-            pspd = float(pspd[0])
-        self.post_succesful_pull_delay: Optional[float] = pspd
+        else:
+            pspd = float(pspd)
+        self.post_successful_pull_delay: float = pspd
         
-        jc = config_dict.get('joystick_channel')
-        if jc in [[''], [], None]:
-            jc = [3]
-        jc = int(jc[0])
-        self.joystick_channel: int = jc
+        self.joystick_channel: int = int(get('joystick_channel', 3))
         
-        num_trials = config_dict.get('no_trials')
-        if num_trials == ['true']:
-            num_trials = [0]
-        elif num_trials in [[''], [], ['0']]:
+        num_trials = int(get('no_trials', 0))
+        if num_trials == 0:
             num_trials = None
-        if num_trials is not None:
-            num_trials = int(num_trials[0])
         self.max_trials: Optional[int] = num_trials
         
         self.selectable_images: List[str] = list(set(x.strip() for x in config_dict['images']))
@@ -142,6 +134,13 @@ class GameConfig:
         self.load_thresholds(config_dict['reward_thresholds'])
         self.reward_thresholds: List[Dict[str, Any]]
         
+        # example
+        # export photodiode='{
+        #     channel: 8
+        #     threshold: [0.005, 0.02]
+        #     min_pulse_width: 4
+        #     edge_offset: -0.003
+        # }'
         pd_ = os.environ.get('photodiode')
         if pd_ is None:
             self.pd_channel: Optional[int] = None
@@ -159,87 +158,33 @@ class GameConfig:
         # default to 18ms, longer than 1 refresh at 60hz (16.7 ms)
         self.photodiode_flash_duration: float = float(os.environ.get('photodiode_flash_duration', 0.018))
         
-        record_events = config_dict.get('record_events')
-        if record_events in [None, [], [''], ['false']]:
-            self.record_events: bool = False
-        elif record_events in [['true']]:
-            self.record_events = True
-        else:
-            raise ValueError(f"invalid setting for record_events `{record_events}`")
+        self.record_events: bool = bool(os.environ.get('record_events'))
+        self.record_analog: bool = bool(os.environ.get('record_analog'))
         
-        allowed_event_classes = [
-            'joystick_pull',
-            'joystick_released',
-            'homezone_enter',
-            'joystick_zone_enter',
-            'homezone_exit',
-            'homezone_exit',
-        ]
-        evt, = config_dict.get('classification_event', (None,))
-        evt = evt or None
-        assert evt is None or evt in allowed_event_classes
-        self.classification_event: Optional[str] = evt
-        if evt is not None:
-            # always record events if classification is enabled
-            self.record_events = True
-            
-            self.post_time = int(config_dict['post_time_ms'][0])
-            self.bin_size = int(config_dict['bin_size_ms'][0])
-            
-            template_in_path = config_dict.get('template_in')
-            if template_in_path in [None, [], ['']]:
-                self.template_in_path: Optional[Path] = None
-            else:
-                assert template_in_path is not None
-                self.template_in_path = Path(template_in_path[0])
-                assert self.template_in_path.is_file()
-            
-            baseline = config_dict.get('baseline')
-            if baseline in [None, [], [''], ['true']]:
-                self.baseline: bool = True
-            elif baseline in [['false']]:
-                self.baseline = False
-            else:
-                raise ValueError(f"invalid setting for baseline `{baseline}`")
-            
-            classify_wait_time = config_dict.get('classify_wait_time')
-            if classify_wait_time in [None, [], ['']]:
-                self.classify_wait_time: float = self.post_time / 1000
-            else:
-                assert classify_wait_time is not None
-                self.classify_wait_time = float(classify_wait_time[0])
-            
-            classify_wait_timeout: Optional[List[str]] = config_dict.get('classify_wait_timeout')
-            if classify_wait_timeout in [None, [], ['']]:
-                self.classify_wait_timeout: Optional[float] = None
-            else:
-                assert classify_wait_timeout is not None
-                self.classify_wait_timeout = float(classify_wait_timeout[0])
-            
-            # local, plexon
-            wait_mode: Literal['local', 'plexon'] = config_dict.get('classify_wait_mode', ['plexon'])[0] # type: ignore
-            assert wait_mode in ['local', 'plexon']
-            self.classify_wait_mode: Literal['local', 'plexon'] = wait_mode
-            
-            self.classify_reward_duration: Optional[Dict[Optional[str], float]] = self.parse_reward_durations(config_dict['correct_reward_dur'])
-            
-            labels_path: Optional[str] = config_dict.get('labels', [None])[0]
-            if labels_path is None:
-                self.labels: Optional[Dict[str, List[int]]] = None
-            else:
-                p = Path(labels_path)
-                assert p.exists(), "labels file must exist if specified"
-                with open(p) as f:
-                    labels_data = hjson.load(f)
-                self.labels = labels_data['channels']
+        template_in_path = get('template', None)
+        if template_in_path is None:
+            self.template_in_path: Optional[Path] = None
         else:
-            self.post_time = 1
-            self.bin_size = 1
-            self.template_in_path = None
-            self.baseline = True
-            self.classify_wait_time = 0.2
-            self.classify_reward_duration = None
-            self.labels = None
+            assert template_in_path is not None
+            self.template_in_path = Path(template_in_path)
+        
+        wait_timeout = get('classify_wait_timeout', None)
+        if wait_timeout is not None:
+            wait_timeout = float(wait_timeout)
+        self.classify_wait_timeout = wait_timeout
+        
+        self.classifier_debug: bool = bool(os.environ.get('classifier_debug'))
+        self.simulate_photodiode: bool = bool(os.environ.get('simulate_photodiode'))
+        
+        self.event_source: Optional[str] = os.environ.get('event_source')
+        
+        self.no_git: bool = bool(os.environ.get('no_git'))
+        self.no_print_stats: bool = bool(os.environ.get('no_print_stats'))
+        
+        self.no_wait_for_start: bool = bool(os.environ.get('no_wait_for_start'))
+        self.no_info_view: bool = bool(os.environ.get('no_info_view'))
+        self.hide_buttons: bool = bool(os.environ.get('hide_buttons'))
+        self.layout_debug: bool = bool(os.environ.get('layout_debug'))
     
     def parse_threshold(self, s):
         s = s.strip()
@@ -288,47 +233,6 @@ class GameConfig:
                 assert any(x['cue'] == img for x in rw_thr), f"cue {img} has no reward threshold"
         
         self.reward_thresholds = rw_thr
-    
-    def parse_reward_durations(self, raw) -> Dict[Optional[str], float]:
-        out = {}
-        for cell in raw:
-            cell = cell.strip()
-            if not cell:
-                continue
-            if ':' in cell:
-                a, b = cell.split(':')
-                out[a] = float(b)
-            else:
-                out[None] = float(cell)
-        
-        # ensure there is either a default or all cues have durations
-        if None not in out:
-            for cue in self.selectable_images:
-                assert cue in out, f"cue {cue} has no classify reward duration"
-        
-        return out
-    
-    def classifier_config(self, baseline=None):
-        if baseline is None:
-            baseline = self.baseline
-        if baseline:
-            # disable classification for baseline
-            return {
-                'type': '',
-                'event_class': '',
-                'baseline': True,
-            }
-        assert self.classification_event is not None
-        conf = {
-            'type': 'eucl',
-            'event_class': self.classification_event,
-            'baseline': self.baseline,
-            'post_time': self.post_time,
-            'bin_size': self.bin_size,
-            'labels': self.labels,
-            'template_path': self.template_in_path,
-        }
-        return conf
     
     def to_json_dict(self):
         out = {}

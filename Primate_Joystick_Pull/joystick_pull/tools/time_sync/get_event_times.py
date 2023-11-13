@@ -1,5 +1,5 @@
 
-from typing import Optional, Dict
+from typing import Optional, Dict, Any
 import json
 import csv
 from copy import copy
@@ -22,7 +22,7 @@ def get_trial_details(
     is_joystick = config_loaded['info']['config']['task_type'] == 'joystick_pull'
     if not is_joystick:
         assert config_loaded['info']['config']['task_type'] == 'homezone_exit'
-    post_succesful_pull_delay = config_loaded['info']['config']['post_succesful_pull_delay']
+    post_successful_pull_delay = config_loaded['info']['config']['post_successful_pull_delay']
     
     
     if plx_offset is None:
@@ -64,7 +64,24 @@ def get_trial_details(
             try:
                 edge_time = pd_times[event['id']]
             except KeyError:
-                return None
+                pd_on = find_one(trial, 'photodiode_on', after=event['time_m'], ignore_extra=True, default=None)
+                if pd_on is None:
+                    return None
+                
+                out = {
+                    'id': event['id'],
+                    'name': event['info']['name'],
+                    't': pd_on['info']['edge_ts'],
+                    '_debug': {
+                        'local_event_time': event['time_m'],
+                        'local_pd_time': pd_on['time_m'],
+                        'external_pd_time': pd_on['info']['time_ext'],
+                        'edge_time': pd_on['info']['edge_ts'],
+                    },
+                }
+                return out
+                
+                assert False
             
             out = {
                 'id': event['id'],
@@ -72,8 +89,8 @@ def get_trial_details(
                 't': edge_time,
             }
             return out
-        trial_pds = (prep_pd(x) for x in trial if x['name'] == 'photodiode_expected')
-        trial_pds = [x for x in trial_pds if x is not None]
+        trial_pds_ = (prep_pd(x) for x in trial if x['name'] == 'photodiode_expected')
+        trial_pds: list[Any] = [x for x in trial_pds_ if x is not None]
         def get_pd_time(name, *, first=False, last=False):
             def gen():
                 for pd in trial_pds:
@@ -152,19 +169,21 @@ def get_trial_details(
                 continue
             out[k] = add_est(v)
         
-        # add consistent _ts key that is always the best timestamp
-        for k, v in out.items():
-            if v is None:
-                continue
-            def get_ts():
-                if 'time_ext' in v['info']:
-                    return v['info']['time_ext']
-                if '_estimated_plx_time' in v:
-                    return v['_estimated_plx_time']
-                return None
-            ts = get_ts()
-            if ts is not None:
-                v['_ts'] = ts
+        def add_ts(events):
+            # add consistent _ts key that is always the best timestamp
+            for k, v in events.items():
+                if v is None:
+                    continue
+                def get_ts():
+                    if 'time_ext' in v['info']:
+                        return v['info']['time_ext']
+                    if '_estimated_plx_time' in v:
+                        return v['_estimated_plx_time']
+                    return None
+                ts = get_ts()
+                if ts is not None:
+                    v['_ts'] = ts
+        add_ts(out)
         
         if plx_offset != 0.0:
             for k, v in out.items():
@@ -192,7 +211,7 @@ def get_trial_details(
                 t = get_ts('go_cue')
             if t is None:
                 return None
-            return t + post_succesful_pull_delay
+            return t + post_successful_pull_delay
         
         timing_vars = {
             'tclock': get_ts('trial_event'),
@@ -228,7 +247,7 @@ def build_csv(events, trial_details, out_path: Path):
         reader = get_reader()
         assert reader is not None
         
-        out_f = stack.enter_context(open(out_path, 'w'))
+        out_f = stack.enter_context(open(out_path, 'w', newline='\n', encoding='utf8'))
         
         dialect = csv.excel if os.environ.get('no_tsv') else csv.excel_tab
         writer = csv.writer(out_f, dialect=dialect)
@@ -289,7 +308,7 @@ def build_csv(events, trial_details, out_path: Path):
         #     writer.writerow(row)
 
 def build_event_info_csv(trial_details, out_path):
-    with open(out_path, 'w') as out_f:
+    with open(out_path, 'w', newline='\n', encoding='utf8') as out_f:
         dialect = csv.excel if os.environ.get('no_tsv') else csv.excel_tab
         writer = csv.writer(out_f, dialect=dialect)
         writer.writerow(['EventLabel', 'EventTimestamp', 'Index'])
@@ -327,44 +346,54 @@ def build_event_info_csv(trial_details, out_path):
                 writer.writerow([label, ts, i])
                 i += 1
 
-def build_event_file_csv(trial_details, out_path):
-    with open(out_path, 'w') as out_f:
+def build_event_file_csv(
+    trial_details, out_path, *,
+    skip_failed: bool = True,
+    key_format: str,
+):
+    def get_keys(trial):
+        cue = trial['events']['task']['info']['discrim']
+        success = trial['events']['task']['info']['success']
+        if not success and skip_failed:
+            return
+        tv = trial['timing_vars']
+        for k, ts in tv.items():
+            if ts is None:
+                continue
+            key_vars = {
+                'event_class': k,
+                'cue': cue,
+                'success': 's' if success else 'f',
+            }
+            out_k = key_format.format(**key_vars)
+            yield out_k, ts
+    
+    trials_by_key = {}
+    for trial in trial_details:
+        if trial.get('_partial'):
+            continue
+        
+        keys = get_keys(trial)
+        for key, ts in keys:
+            if key not in trials_by_key:
+                trials_by_key[key] = []
+            trials_by_key[key].append(ts)
+    
+    with open(out_path, 'w', newline='\n', encoding='utf8') as out_f:
         dialect = csv.excel if os.environ.get('no_tsv') else csv.excel_tab
         writer = csv.writer(out_f, dialect=dialect)
         
-        timing_var_names = []
-        for trial in trial_details:
-            if 'timing_vars' in trial:
-                timing_var_names = list(trial['timing_vars'].keys())
-                break
-        
-        out_cols = [(k, []) for k in timing_var_names]
-        
-        for trial in trial_details:
-            if trial.get('_partial'):
-                continue
-            if not trial['events']['task']['info']['success']:
-                continue
-            
-            for k, arr in out_cols:
-                x = trial['timing_vars'][k]
-                if x is not None:
-                    arr.append(x)
-        
-        writer.writerow(k for k, _ in out_cols)
-        i = 0
-        while True:
-            def get_idx(arr, i):
-                try:
-                    return arr[i]
-                except IndexError:
-                    return None
-            row = [get_idx(arr, i) for _, arr in out_cols]
-            if all(x is None for x in row):
-                break
+        def get_idx(xs, i):
+            try:
+                return xs[i]
+            except IndexError:
+                return None
+        keys = sorted(trials_by_key)
+        max_len = max(len(x) for x in trials_by_key.values())
+        writer.writerow(keys)
+        for i in range(max_len):
+            row = [get_idx(trials_by_key[k], i) for k in keys]
             writer.writerow(row)
-            
-            i += 1
 
 def run_for_paths(
     events_path, csv_out, event_info_path=None, *,
@@ -372,18 +401,25 @@ def run_for_paths(
     plx_offset: Optional[float] = None, trial_details_path=None,
     pd_times_path: Optional[Path] = None,
     estimate: bool = False,
+    ignore_photodiode: bool = False,
+    key_format: str,
+    include_failed: bool = False,
+    permissive: bool = False,
 ):
     input_path = events_path
-    ignore_photodiode = True
     out_events = []
     with ExitStack() as stack:
         reader = stack.enter_context(EventReader(path=input_path))
         
         for record in reader.read_records():
-            name = record.get('name')
-            if name is None:
-                continue
-            if ignore_photodiode and name == 'photodiode_changed':
+            rtype = record.get('type')
+            match rtype:
+                case None:
+                    pass
+                case _:
+                    continue
+            name = record['name']
+            if ignore_photodiode and name in ['photodiode_on', 'photodiode_off']:
                 continue
             out_events.append(record)
     
@@ -396,12 +432,16 @@ def run_for_paths(
     
     events = out_events
     
+    if permissive:
+        from ..output_gen.gen_csv import permissive_events
+        events = permissive_events(events)
+    
     # print("event types", {e['name'] for e in events})
     
     trial_details = list(get_trial_details(events, plx_offset=plx_offset, pd_times=pd_times, estimate=estimate))
     
     if trial_details_path is not None:
-        with open(trial_details_path, 'w') as f:
+        with open(trial_details_path, 'w', newline='\n', encoding='utf8') as f:
             json.dump(trial_details, f, indent=2)
     
     if csv_out is not None:
@@ -409,15 +449,19 @@ def run_for_paths(
     if event_info_path is not None:
         build_event_info_csv(trial_details, event_info_path)
     if event_file_path is not None:
-        build_event_file_csv(trial_details, event_file_path)
+        build_event_file_csv(
+            trial_details, event_file_path,
+            key_format=key_format,
+            skip_failed = not include_failed,
+        )
 
 def parse_args():
     parser = argparse.ArgumentParser(description='')
     
     parser.add_argument('--events', required=True, type=Path,
-        help='events json')
+        help='events .json.gz')
     parser.add_argument('--pd-times', type=Path,
-        help='pd times json')
+        help='pd times json, maps photodiode_expected event ids to times')
     parser.add_argument('--csv-out', type=Path,
         help='by trial tsv output')
     parser.add_argument('--event-info', type=Path,
@@ -430,6 +474,14 @@ def parse_args():
         help='time to subtract from external timestamps in seconds')
     parser.add_argument('--estimate', action='store_true',
         help='estimate external timestamps based on internal game clock')
+    parser.add_argument('--ignore-photodiode', action='store_true',
+        help='ignore photodiode events in the events file')
+    parser.add_argument('--group-by', default='{event_class}',
+        help='key format string used for event file')
+    parser.add_argument('--include-failed', action='store_true',
+        help='include failed trials in event file')
+    parser.add_argument('--permissive', action='store_true',
+        help='attempt to fill in data in older formats')
     
     return parser.parse_args()
 
@@ -446,6 +498,9 @@ def main():
         plx_offset=args.offset, trial_details_path=args.trial_details,
         pd_times_path = args.pd_times,
         estimate=args.estimate,
+        key_format=args.group_by,
+        include_failed=args.include_failed,
+        permissive=args.permissive,
     )
 
 if __name__ == '__main__':

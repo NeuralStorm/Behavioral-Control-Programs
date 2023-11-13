@@ -2,7 +2,7 @@ Study ID,TIP
 Session ID,001
 Animal ID,1
 #Number of Events,3
-Number of Events,0
+Number of Events,4
 #images, bOval, bRectangle, bStar
 #image_ratios,10,1,1
 images, bOval
@@ -21,6 +21,6 @@ reward_thresholds,low=0'high=4'cue=bOval'type=flat'reward_duration=1
 Inter Trial Time,1
 Enable Blooper Noise,TRUE
 Maximum Time After Sound,20
-#post_succesful_pull_delay,20
+#post_successful_pull_delay,20
 #joystick_channel,3
 #no_trials,1

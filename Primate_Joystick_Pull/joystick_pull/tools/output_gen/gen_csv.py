@@ -168,7 +168,7 @@ def row_from_trial(events, trial, *, trial_i, task_type: str, config):
                 
                 time_diff = _js_pull['info']['time_ext'] - _home_exit['info']['time_ext']
                 
-                return time_diff < config['post_succesful_pull_delay']
+                return time_diff < config['post_successful_pull_delay']
             
             cue_name = get_cue_name()
             if check_pull_after_early_exit():
@@ -294,6 +294,8 @@ def permissive_events(events):
                     e['info']['config']['task_type'] = 'homezone_exit'
                 else:
                     e['info']['config']['task_type'] = 'joystick_pull'
+            if 'post_successful_pull_delay' not in e['info']['config']:
+                e['info']['config']['post_successful_pull_delay'] = 1.8
         
         out.append(e)
     

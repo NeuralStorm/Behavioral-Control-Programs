@@ -15,82 +15,61 @@ from ..classifier import Classifier
 from ..eucl_classifier import EuclClassifier, build_templates_from_new_events_file
 from ..random_classifier import RandomClassifier
 
-from .config import load_config, Config, EuclConfig, RandomConfig
 from .events_file import EventsFileWriter
 
-classifier_map = {
-    'eucl': EuclClassifier,
-    'psth': EuclClassifier,
-    'random': RandomClassifier,
-}
-
-def from_config(config: Dict[str, Any]) -> Classifier:
-    _config = load_config(config)
-    return classifier_from_config(_config)
-
-def classifier_from_config(config: Config) -> Classifier:
-    # _config = load_config(config)
-    
-    if isinstance(config, EuclConfig):
-        classifier = EuclClassifier(
-            post_time = config.post_time,
-            bin_size = config.bin_size,
-            labels = config.labels,
-        )
-        
-        templates = config.load_templates()
-        if templates is not None:
-            classifier.templates = templates
-        
-        return classifier
-    elif isinstance(config, RandomConfig):
-        return RandomClassifier(config.event_types)
-    else:
-        assert False
-
-def generate_template_with_config(*, config: Config, events_file: Path, template_out: Path):
-    if isinstance(config, EuclConfig):
-        build_templates_from_new_events_file(
-            events_path = events_file,
-            template_path = template_out,
-            event_class = config.event_class,
-            post_time = config.post_time,
-            bin_size = config.bin_size,
-            labels = config.labels,
-        )
-    else:
-        raise ValueError(f"Can't generate template with classifier {config}")
-
-def generate_template_main(*, config: Dict[str, Any], events_file: Path, template_out: Path):
-    _config = load_config(config)
-    
-    generate_template_with_config(config=_config, events_file=events_file, template_out=template_out)
+def from_templates(templates: Dict[str, Any]) -> Classifier:
+    ctype = templates['type']
+    match ctype:
+        case 'eucl':
+            template_chans = set()
+            for _cue, template in templates['templates'].items():
+                for chan_str in template['spike_counts'].keys():
+                    template_chans.add(chan_str)
+            
+            classifier = EuclClassifier(
+                post_time = templates['post_time'],
+                bin_size = templates['bin_size'],
+                channel_filter = template_chans,
+            )
+            def prep_templates():
+                for cue, cue_templates in templates['templates'].items():
+                    n = cue_templates['event_count']
+                    def build_cue_template():
+                        for chan, counts in cue_templates['spike_counts'].items():
+                            yield chan, [x / n for x in counts]
+                    yield cue, dict(build_cue_template())
+            classifier.templates = dict(prep_templates())
+            
+            return classifier
+        case 'random':
+            assert isinstance(templates['event_types'], list)
+            return RandomClassifier(templates['event_types'])
+        case _:
+            raise ValueError("Unknown classifier type {ctype}")
 
 class Helper:
     def __init__(self, *,
-        config: Dict[str, Any],
+        templates: Optional[Any] = None,
         event_file: Optional[EventFile] = None,
-        events_file_path: Optional[PathLike] = None,
+        wait_timeout: Optional[float] = None,
     ):
         self._stack = ExitStack()
         ec = self._stack.enter_context
         
-        _config: Config = load_config(config)
-        if not _config.baseline:
-            self.classifier: Optional[Classifier] = classifier_from_config(_config)
+        if templates is None:
+            self.classifier: Optional[Classifier] = None
+            self.wait_time = 0
+            self.event_class = ''
         else:
-            self.classifier = None
-        self.event_class: str = _config.event_class
+            self.event_class: str = templates['event_class']
+            self.wait_time: float = templates['wait_time'] / 1000
+            self.classifier = from_templates(templates)
+        self.wait_timeout: Optional[float] = wait_timeout
         
         if event_file is not None:
-            self.events_file_path = None
-            self.events_file = ec(EventsFileWriter(callback=event_file.write_record))
-        elif events_file_path is None:
-            self.events_file_path: Optional[Path] = None
-            self.events_file: Optional[EventsFileWriter] = None
+            self._events_file = ec(EventsFileWriter(callback=event_file.write_record))
         else:
-            self.events_file_path = Path(events_file_path)
-            self.events_file = ec(EventsFileWriter(path=self.events_file_path))
+            self._events_file: Optional[EventsFileWriter] = None
         
         # set to the timestamp of the last received event from plexon
         self._last_external_ts: Optional[float] = None
@@ -124,8 +103,8 @@ class Helper:
         if self.classifier is not None and self.event_class == event_class:
             self.classifier.event(timestamp=timestamp)
         
-        if self.events_file is not None:
-            self.events_file.write_event(
+        if self._events_file is not None:
+            self._events_file.write_event(
                 event_type = event_type,
                 timestamp = timestamp,
                 event_class = event_class,
@@ -133,38 +112,82 @@ class Helper:
     
     def spike(self, channel: int, unit: int, timestamp: float):
         """call when a spike is received"""
+        out_chan = f'{channel}_{unit}'
         if self.classifier is not None:
             self.classifier.spike(
-                channel = channel,
-                unit = unit,
+                channel = out_chan,
                 timestamp = timestamp,
             )
         
-        if self.events_file is not None:
-            self.events_file.write_spike(
-                channel = channel,
-                unit = unit,
+        if self._events_file is not None:
+            self._events_file.write_spike(
+                channel = out_chan,
                 timestamp = timestamp,
             )
     
-    def external_wait(self, wait_time: float, timeout: Optional[float] = None):
+    def wait_for_event(self, wait_time: float, timeout: Optional[float] = None):
         """yields until an external timestamp `wait_time` after event or timeout"""
         local_start = time.perf_counter()
+        event_time = None
+        last_ts = None
         while True:
             if timeout is not None:
-                if time.perf_counter() - local_start > timeout:
-                    logger.warning("plexon event wait timed out")
-                    return None
+                now = time.perf_counter()
+                if now - local_start > timeout:
+                    logger.warning("external event wait timed out")
+                    return {
+                        'error': 'timeout',
+                        'event_class': self.event_class,
+                        'event_time': event_time,
+                        'last_event_ts': last_ts,
+                        'local_start': local_start,
+                        'local_end': now,
+                        'local_dur': now - local_start,
+                    }
             
-            if self._last_external_ts is None:
+            last_ts = self._last_external_ts
+            if last_ts is None:
                 yield
                 continue
             if self.event_class not in self._last_classification_events:
                 yield
                 continue
-            time_since_evt = self._last_external_ts - self._last_classification_events[self.event_class]
+            event_time = self._last_classification_events[self.event_class]
+            time_since_evt = last_ts - event_time
             
             if time_since_evt >= wait_time:
                 break
             yield
-        return time_since_evt
+        
+        now = time.perf_counter()
+        return {
+            'event_class': self.event_class,
+            'event_time': event_time,
+            'last_event_ts': last_ts,
+            'time_since_event': time_since_evt,
+            'local_start': local_start,
+            'local_end': now,
+            'local_dur': now - local_start,
+        }
+    
+    def classify(self, *,
+        wait: bool = True
+    ):
+        if self.classifier is None:
+            return {'error': 'no_classifier'}
+        if wait and self.wait_time != 0:
+            wait_res = yield from self.wait_for_event(self.wait_time, timeout=self.wait_timeout)
+            if 'error' in wait_res:
+                return {
+                    'error': 'timeout',
+                    '_wait_res': wait_res,
+                }
+        else:
+            wait_res = None
+        
+        prediction = self.classifier.classify()
+        res = {
+            'prediction': prediction,
+            '_wait_res': wait_res,
+        }
+        return res

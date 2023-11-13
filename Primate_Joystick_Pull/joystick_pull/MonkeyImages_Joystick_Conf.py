@@ -17,7 +17,8 @@ import time
 from datetime import datetime
 from pprint import pprint
 import inspect
-from uuid import uuid1
+import json
+from threading import Thread
 
 try:
     import winsound
@@ -28,7 +29,8 @@ import tkinter as tk
 from tkinter import filedialog
 
 import behavioral_classifiers
-from butil import EventFile, Debounce, get_git_info
+from butil import EventFile, Debounce, get_git_info, AnalogOut
+from butil.out_file import EventFileProcess
 
 from .game_frame import GameFrame, InfoView, screenshot_widgets, screenshot_widget
 from .photodiode import Photodiode
@@ -139,19 +141,6 @@ class MonkeyImages:
     def __init__(self, parent):
         self._stack = ExitStack()
         
-        test_config = 'test' in sys.argv or 'tc' in sys.argv
-        no_wait_for_start = 'nw' in sys.argv
-        use_hardware = 'test' not in sys.argv and 'nohw' not in sys.argv
-        ability_mode = 'ability' in sys.argv
-        if ability_mode:
-            use_hardware = True
-        
-        show_info_view = 'noinfo' not in sys.argv
-        hide_buttons = 'nobtn' in sys.argv
-        layout_debug = 'layout_debug' in sys.argv
-        
-        self.classifier_dbg = 'clsdbg' in sys.argv
-        
         # delay for how often state is updated, only used for new loop
         self.cb_delay_ms: int = 1
         
@@ -163,6 +152,10 @@ class MonkeyImages:
         self.joystick_pull_event: Optional[Any] = None
         self.joystick_pull_remote_ts = None
         self.joystick_release_remote_ts = None
+        
+        # holds the last photodiode marker event if no photodiode rising edge has been
+        # found for it
+        self.pending_photodiode_event: Optional[str] = None
         
         # used in gathering_data_omni_new to track changes in joystick position
         self.joystick_debounce = Debounce(threshold=2, high_threshold=4, delay=0.001)
@@ -178,37 +171,47 @@ class MonkeyImages:
         # for info view/histogram generation
         self.event_log = []
         
-        if use_hardware:
-            if ability_mode:
-                from .data_bridge import DataBridge
-                self.plexon = DataBridge() #type: ignore
-            else:
-                from .plexon import Plexon
-                # self.plexon: Optional[Plexon] = Plexon()
-                from .plexon import PlexonProxy
-                self.plexon: Optional[Plexon] = PlexonProxy() #type: ignore
-        else:
-            self.plexon = None
-        
         self.auto_water_reward_enabled = True
         
-        if test_config and 'config_path' not in os.environ:
-            self.config_path = 'dev_config.csv'
-        else:
-            self.config_path = get_config_path()
-        print(self.config_path)
+        config_path = get_config_path()
+        print('config:', config_path)
+        local_dt = datetime.now()
+        self.config: GameConfig = GameConfig(config_path=config_path, start_dt=local_dt)
         
         # index of logged events so each can receive a unique id
         self.event_i = 0
         
-        # self.new_events_path = self.config.save_path / f"{self.config.log_file_name_base}_new_events.json.gz"
-        # self.new_events_file = EventFile(path=self.new_events_path)
-        self.new_events_path: Path
-        self.new_events_file: EventFile
-        self.start_dt = datetime.now()
+        events_path: Path = self.config.save_path / f"{self.config.log_file_name_base}.json.gz"
+        self.events_file: EventFile = self._stack.enter_context(
+            EventFileProcess(path=events_path))
+        if self.config.record_analog:
+            self.analog_out = {
+                'photodiode': AnalogOut('photodiode', self.events_file),
+            }
+            for v in self.analog_out.values():
+                self._stack.enter_context(v)
+        else:
+            self.analog_out: dict[str, AnalogOut] | None = None
         
-        self.config: GameConfig
-        self.load_config(first_load=True) # set self.config
+        self.log_event('config_loaded', tags=[], info={
+            'time_utc': datetime.utcnow().isoformat(),
+            'config': self.config.to_json_dict(),
+            'raw': self.config.raw_config,
+        })
+        
+        match self.config.event_source:
+            case 'plexon':
+                from .plexon import Plexon
+                # self.plexon: Optional[Plexon] = Plexon()
+                from .plexon import PlexonProxy
+                self.plexon: Optional[Plexon] = PlexonProxy() #type: ignore
+            case 'ability':
+                from .data_bridge import DataBridge
+                self.plexon = DataBridge() #type: ignore
+            case None:
+                self.plexon = None
+            case _:
+                raise ValueError(f"Invalid event_source {self.config.event_source}")
         
         self.zones = [
             Zone('homezone', 14, None),
@@ -237,16 +240,32 @@ class MonkeyImages:
         # tracks the time that the photodiode should turn off at
         self._photodiode_off_time: Optional[float] = None
         
+        if self.config.template_in_path is not None:
+            self.classification_enabled = True
+            with open(self.config.template_in_path) as f:
+                templates = json.load(f)
+            self.log_event('templates_loaded', tags=[], info={
+                'templates': templates,
+            })
+        else:
+            self.classification_enabled = False
+            templates = None
         self._cl_helper = self._stack.enter_context(behavioral_classifiers.helpers.Helper(
-            config = self.config.classifier_config(),
-            event_file = self.new_events_file if self.config.record_events else None,
+            # config = self.config.classifier_config(),
+            # template_in_path = self.config.template_in_path,
+            templates = templates,
+            event_file = self.events_file if self.config.record_events else None,
+            wait_timeout = self.config.classify_wait_timeout,
         ))
         
-        print("ready for plexon:" , bool(self.plexon))
         self.root = parent
         self.root.wm_title("MonkeyImages")
         
-        game_frame = GameFrame(self.root, layout_debug=layout_debug, hide_buttons=hide_buttons)
+        game_frame = GameFrame(
+            self.root,
+            layout_debug=self.config.layout_debug,
+            hide_buttons=self.config.hide_buttons,
+        )
         game_frame.load_images(self.config.selectable_images)
         self.game_frame = game_frame
         
@@ -270,24 +289,26 @@ class MonkeyImages:
         
         self.root.bind('<Key>', lambda a : self.handle_key_press(a))
         
-        if show_info_view:
-            self.info_view = InfoView(self.root, monkey_images=self)
-        else:
+        if self.config.no_info_view:
             self.info_view = None
+        else:
+            self.info_view = InfoView(self.root, monkey_images=self)
         
         if self.plexon is not None:
-            if not no_wait_for_start:
+            print("ready for plexon:" , bool(self.plexon))
+            if not self.config.no_wait_for_start:
                 print('Start Plexon Recording now')
                 wait_res = self.plexon.wait_for_start()
                 self.log_hw('plexon_recording_start', plexon_ts=wait_res['ts'], info={'wait': True})
                 print ("Recording start detected.")
         
+        self.classifier_dbg = self.config.classifier_debug
         if self.classifier_dbg:
             assert self._cl_helper is not None
             from behavioral_classifiers.helpers.debug_tools import DebugSpikeSource
             self._stack.enter_context(DebugSpikeSource(self._cl_helper))
         
-        if not os.environ.get('no_git'):
+        if not self.config.no_git:
             try:
                 git_info = get_git_info()
             except Exception as e:
@@ -306,29 +327,6 @@ class MonkeyImages:
                 traceback.print_exc()
         self.trial_stack.__exit__(*exc)
         self._stack.__exit__(*exc)
-        self.new_events_file.close()
-    
-    def load_config(self, *, first_load=False):
-        self.config = GameConfig(config_path=self.config_path, start_dt = self.start_dt)
-        
-        new_events_path = self.config.save_path / f"{self.config.log_file_name_base}.json.gz"
-        is_opening = True
-        if not first_load:
-            if self.new_events_path == new_events_path:
-                is_opening = False
-            else:
-                self.new_events_file.close()
-        if is_opening:
-            self.new_events_path = new_events_path
-            # self.new_events_file = EventFile(path=self.new_events_path)
-            from butil.out_file import EventFileProcess
-            self.new_events_file = EventFileProcess(path=self.new_events_path)
-        
-        self.log_event('config_loaded', tags=[], info={
-            'time_utc': datetime.utcnow().isoformat(),
-            'config': self.config.to_json_dict(),
-            'raw': self.config.raw_config,
-        })
     
     def log_event(self, name: str, *, tags: List[str]=[], info=None):
         if info is None:
@@ -346,7 +344,7 @@ class MonkeyImages:
         }
         self.event_i += 1
         
-        self.new_events_file.write_record(out)
+        self.events_file.write_record(out)
         
         self._trigger_event(name, event=out)
         
@@ -407,6 +405,7 @@ class MonkeyImages:
             info['name'] = name
         if self._photodiode_off_time is not None:
             info['already_on'] = True
+        self.pending_photodiode_event = name
         self.log_event('photodiode_expected', info=info)
         self.game_frame.set_marker_level(level)
         # update screen immediately to ensure a consistent marker flash duration
@@ -498,6 +497,7 @@ class MonkeyImages:
         # display image without red box
         self.show_image(selected_image_key, variant='pending')
         self.flash_marker('discrim_shown')
+        self.dbg_simulate_photodiode('discrim_shown')
         
         yield from waiter.wait(t=pre_go_cue_delay)
         
@@ -506,6 +506,7 @@ class MonkeyImages:
         })
         self.show_image(selected_image_key, variant='pending', boxed=True)
         self.flash_marker('go_cue_shown')
+        self.dbg_simulate_photodiode('go_cue_shown')
         
         if winsound is not None:
             winsound.PlaySound(
@@ -723,45 +724,33 @@ class MonkeyImages:
                 return reward_duration, 0, exit_delay
             
             def get_classification_info():
-                debug("waiting to classify")
                 assert self._cl_helper is not None
-                if self.config.classify_wait_mode == 'local':
-                    yield from wait(self.config.classify_wait_time)
-                elif self.config.classify_wait_mode == 'plexon':
-                    assert self.config.classification_event is not None
-                    
-                    wait_res = yield from self._cl_helper.external_wait(self.config.classify_wait_time, self.config.classify_wait_timeout)
-                    if wait_res is None:
-                        # if the correct classification event hasn't been received
-                        # the classifier will still be using an event from a previous trial
-                        # and produce incorrect results
-                        return None, 0, 0
-                else:
-                    raise ValueError(f"Unknown classify wait mode `{self.config.classify_wait_mode}`")
                 
                 debug("before classify")
-                assert self._cl_helper.classifier is not None
-                res = self._cl_helper.classifier.classify()
-                debug("after classify")
-                correct = self._classifier_event_type == res
+                res = yield from self._cl_helper.classify()
+                debug("after classify %s", res)
+                if 'error' not in res:
+                    prediction = res['prediction']
+                    correct = prediction == self._classifier_event_type
+                else:
+                    prediction = None
+                    correct = False
                 
                 self.log_event('classification_attempted', tags=[], info={
                     'actual': self._classifier_event_type,
-                    'predicted': res,
-                    'is_correct': correct,
+                    'predicted': prediction,
+                    'correct': correct,
+                    '_result': res,
                 })
                 
                 if correct:
-                    assert self.config.classify_reward_duration is not None
-                    if self._classifier_event_type in self.config.classify_reward_duration:
-                        return self.config.classify_reward_duration[self._classifier_event_type], 0, 0
-                    else:
-                        return self.config.classify_reward_duration[None], 0, 0
+                    reward_duration = self.choose_reward(None, cue=selected_image_key)
+                    return reward_duration, 0, 0
                 else:
                     return None, 0, 0
             
             task_type = self.config.task_type
-            if not self.config.baseline:
+            if self.classification_enabled:
                 reward_duration, remote_pull_duration, pull_duration = yield from get_classification_info()
                 action_duration = 0
             elif task_type == 'joystick_pull':
@@ -797,7 +786,7 @@ class MonkeyImages:
             if log_failure_reason[0]:
                 print(log_failure_reason[0])
             try:
-                if not os.environ.get('no_print_stats'):
+                if not self.config.no_print_stats:
                     InfoView.print_histogram(self.event_log)
                 if self.info_view is not None:
                     self.info_view.update_info(self.event_log)
@@ -838,8 +827,8 @@ class MonkeyImages:
                         str(SOUND_PATH_BASE / 'zapsplat_multimedia_game_sound_kids_fun_cheeky_layered_mallets_complete_66202.wav'),
                         winsound.SND_FILENAME + winsound.SND_ASYNC + winsound.SND_NOWAIT)
                 
-                if self.config.post_succesful_pull_delay is not None:
-                    yield from wait(self.config.post_succesful_pull_delay)
+                if self.config.post_successful_pull_delay is not None:
+                    yield from wait(self.config.post_successful_pull_delay)
                 else:
                     # 1.87 is the duration of the sound effect
                     yield from wait(1.87)
@@ -887,12 +876,18 @@ class MonkeyImages:
         
         # if self.reward_thresholds is not None:
         for rwd in self.config.reward_thresholds:
-            if duration >= rwd['low'] and duration <= rwd['high']:
+            if duration is None:
+                # correct classification
+                pass
+            elif duration >= rwd['low'] and duration <= rwd['high']:
                 pass
             else:
                 continue
             if rwd['cue'] is not None and rwd['cue'] != cue:
                 continue
+            
+            if duration is None:
+                return rwd['mid']
             
             if rwd['type'] == 'flat':
                 return rwd['reward_duration']
@@ -938,7 +933,7 @@ class MonkeyImages:
         self.clear_image()
         if winsound is not None:
             winsound.PlaySound(None, winsound.SND_PURGE)
-        if not os.environ.get('no_print_stats'):
+        if not self.config.no_print_stats:
             pprint(InfoView.calc_end_info(self.event_log))
     
     def handle_key_press(self, event):
@@ -1026,6 +1021,24 @@ class MonkeyImages:
         if self.classifier_dbg:
             self.handle_classification_event(event_class, time.perf_counter())
     
+    def dbg_simulate_photodiode(self, event_class: str):
+        if not self.config.simulate_photodiode:
+            return
+        
+        def send_events():
+            time.sleep(random.random() * 0.016)
+            self.dbg_classification_event(event_class)
+            self.log_hw(
+                'photodiode_on',
+                plexon_ts=time.perf_counter(),
+                info={'edge_ts': time.perf_counter()},
+                sim=True,
+            )
+            time.sleep(self.config.photodiode_flash_duration)
+            self.log_hw('photodiode_off', plexon_ts=time.perf_counter(), sim=True)
+        thread = Thread(target=send_events)
+        thread.start()
+    
     def gathering_data_omni_new(self):
         assert self.plexon
         for d in self.plexon.get_data():
@@ -1053,9 +1066,14 @@ class MonkeyImages:
                         
                         self.handle_classification_event('joystick_released', d.ts)
                 elif self._photodiode is not None and d.chan == self.config.pd_channel:
+                    if self.analog_out is not None:
+                        self.analog_out['photodiode'].append(d.value)
                     edge = self._photodiode.handle_value(d.value, d.ts)
                     if edge.rising:
                         self.log_hw('photodiode_on', plexon_ts=d.ts, info={'edge_ts': edge.ts})
+                        if self.pending_photodiode_event is not None:
+                            self.handle_classification_event(self.pending_photodiode_event, edge.ts)
+                            self.pending_photodiode_event = None
                     if edge.falling:
                         self.log_hw('photodiode_off', plexon_ts=d.ts)
             elif d.type == d.SPIKE:
