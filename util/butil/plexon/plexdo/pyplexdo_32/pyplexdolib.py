@@ -7,6 +7,7 @@
 # TODO: update function documentation to indicate what the return values are
 # TODO: Python 3 support and refactor. This will be the first public release
 
+from pathlib import Path
 from ctypes import c_uint, byref, CDLL, c_char
 import os
 from collections import namedtuple
@@ -36,13 +37,17 @@ class PyPlexDO:
             prints an error message in the console
 
         '''
-        self.plexdo_dll_path = os.path.abspath(plexdo_dll_path)
-        self.plexdo_dll_file = os.path.join(self.plexdo_dll_path, 'PlexDO.dll')
+        dll_path = Path(__file__).parent / 'PlexDO.dll'
+        dll_path = dll_path.resolve()
+        # self.plexdo_dll_path = os.path.abspath(plexdo_dll_path)
+        # self.plexdo_dll_file = os.path.join(self.plexdo_dll_path, 'PlexDO.dll')
 
         try:
-            self.plexdoclient_dll = CDLL(self.plexdo_dll_file)
+            # self.plexdoclient_dll = CDLL(self.plexdo_dll_file)
+            self.plexdoclient_dll = CDLL(str(dll_path))
         except (WindowsError):
-            print("Error: Can't load PlexDO.dll at: " + self.plexdo_dll_path)
+            print(f"Error: Can't load PlexDO.dll at: {dll_path}")
+            raise
 
     def get_digital_output_info(self):
         '''

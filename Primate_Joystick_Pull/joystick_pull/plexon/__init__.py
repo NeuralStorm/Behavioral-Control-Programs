@@ -4,6 +4,9 @@ from pathlib import Path
 import os
 from multiprocessing import Process, Queue as PQueue
 from queue import Empty
+import platform
+
+from butil.plexon.plexdo import PlexDo
 
 logger = logging.getLogger(__name__)
 
@@ -109,56 +112,28 @@ class Plexon:
                     source_numbers_voltage_scalers[global_parameters.source_ids[index]] = voltage_scaler
                     logger.info("Digitization Rate: {}, Voltage Scaler: {}".format(rate, voltage_scaler))
         
+        
         if os.environ.get('disable_plexon_do') or no_do:
-            self.plexdo = None
+            self.plexdo: PlexDo | None = None
         else:
-            ## Setup for Plexon DO
-            compatible_devices = ['PXI-6224', 'PXI-6259']
-            self.plexdo = PyPlexDO(plexdo_dll_path=str(bin_path))
-            doinfo = self.plexdo.get_digital_output_info()
-            self.device_number = 1
-            for k in range(doinfo.num_devices):
-                if self.plexdo.get_device_string(doinfo.device_numbers[k]) in compatible_devices:
-                    device_number = doinfo.device_numbers[k]
-            if device_number == None:
-                print("No compatible devices found. Exiting.")
-                # sys.exit(1)
-                raise PlexonError()
-            else:
-                print("{} found as device {}".format(self.plexdo.get_device_string(device_number), device_number))
-            res = self.plexdo.init_device(device_number)
-            if res != 0:
-                print("Couldn't initialize device. Exiting.")
-                # sys.exit(1)
-                raise PlexonError()
-            self.plexdo.clear_all_bits(device_number)
+            self.plexdo = PlexDo()
         
     def wait_for_start(self):
         while True:
-            #self.client.opx_wait(1)
             new_data = self.client.get_new_data()
-            # if new_data.num_data_blocks < max_block_output:
-            #     num_blocks_to_output = new_data.num_data_blocks
-            # else:
-            #     num_blocks_to_output = max_block_output
             for i in range(new_data.num_data_blocks):
                 if new_data.source_num_or_type[i] == self.other_event_source and new_data.channel[i] == 2: # Start event timestamp is channel 2 in 'Other Events' source
-                    # print ("Recording start detected. All timestamps will be relative to a start time of {} seconds.".format(new_data.timestamp[i]))
-                    # WaitForStart = False
-                    # self.RecordingStartTimestamp = new_data.timestamp[i]
-                    # self.log_hw('plexon_recording_start', plexon_ts=new_data.timestamp[i], info={'wait': True})
                     return {
                         'ts': new_data.timestamp[i],
-                        
                     }
     
     def water_on(self):
         if self.plexdo is not None:
-            self.plexdo.set_bit(self.device_number, self.reward_nidaq_bit)
+            self.plexdo.bit_on(self.reward_nidaq_bit)
     
     def water_off(self):
         if self.plexdo is not None:
-            self.plexdo.clear_bit(self.device_number, self.reward_nidaq_bit)
+            self.plexdo.bit_off(self.reward_nidaq_bit)
     
     def get_data(self):
         # self.client.opx_wait(5)
@@ -179,7 +154,6 @@ class Plexon:
                 
                 yield PlexonEvent(ts, PlexonEvent.ANALOG, value=val, chan=chan)
             elif block_type == SPIKE_TYPE:
-                continue
                 unit = new_data.unit[i]
                 yield PlexonEvent(ts, PlexonEvent.SPIKE, chan=chan, unit=unit)
             elif num_or_type == self.event_source:
@@ -220,64 +194,27 @@ class PlexonProxy:
         
         self.reward_nidaq_bit = 17 # DO Channel
         
-        bin_path = Path(__file__).parent / 'pyplex_bin'
-        
         if os.environ.get('disable_plexon_do'):
-            self.plexdo = None
+            self.plexdo: PlexDo | None = None
         else:
-            ## Setup for Plexon DO
-            compatible_devices = ['PXI-6224', 'PXI-6259']
-            self.plexdo = PyPlexDO(plexdo_dll_path=str(bin_path))
-            doinfo = self.plexdo.get_digital_output_info()
-            self.device_number = 1
-            for k in range(doinfo.num_devices):
-                if self.plexdo.get_device_string(doinfo.device_numbers[k]) in compatible_devices:
-                    device_number = doinfo.device_numbers[k]
-            if device_number == None:
-                print("No compatible devices found. Exiting.")
-                # sys.exit(1)
-                raise PlexonError()
-            else:
-                print("{} found as device {}".format(self.plexdo.get_device_string(device_number), device_number))
-            res = self.plexdo.init_device(device_number)
-            if res != 0:
-                print("Couldn't initialize device. Exiting.")
-                # sys.exit(1)
-                raise PlexonError()
-            self.plexdo.clear_all_bits(device_number)
+            self.plexdo = PlexDo()
     
     def wait_for_start(self):
         while True:
-            #self.client.opx_wait(1)
-            # new_data = self.client.get_new_data()
             new_data = self._proc.get_data()
-            # if new_data.num_data_blocks < max_block_output:
-            #     num_blocks_to_output = new_data.num_data_blocks
-            # else:
-            #     num_blocks_to_output = max_block_output
             for x in new_data:
                 if x.type == x.OTHER_EVENT and x.chan == 2:
                     return {
                         'ts': x.ts
                     }
-            # for i in range(new_data.num_data_blocks):
-            #     if new_data.source_num_or_type[i] == self.other_event_source and new_data.channel[i] == 2: # Start event timestamp is channel 2 in 'Other Events' source
-            #         # print ("Recording start detected. All timestamps will be relative to a start time of {} seconds.".format(new_data.timestamp[i]))
-            #         # WaitForStart = False
-            #         # self.RecordingStartTimestamp = new_data.timestamp[i]
-            #         # self.log_hw('plexon_recording_start', plexon_ts=new_data.timestamp[i], info={'wait': True})
-            #         return {
-            #             'ts': new_data.timestamp[i],
-                        
-            #         }
     
     def water_on(self):
         if self.plexdo is not None:
-            self.plexdo.set_bit(self.device_number, self.reward_nidaq_bit)
+            self.plexdo.bit_on(self.reward_nidaq_bit)
     
     def water_off(self):
         if self.plexdo is not None:
-            self.plexdo.clear_bit(self.device_number, self.reward_nidaq_bit)
+            self.plexdo.bit_off(self.reward_nidaq_bit)
     
     def get_data(self):
         return self._proc.get_data()
