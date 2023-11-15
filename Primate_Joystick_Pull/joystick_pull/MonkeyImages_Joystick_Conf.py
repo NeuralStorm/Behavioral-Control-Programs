@@ -1067,7 +1067,7 @@ class MonkeyImages:
                         self.handle_classification_event('joystick_released', d.ts)
                 elif self._photodiode is not None and d.chan == self.config.pd_channel:
                     if self.analog_out is not None:
-                        self.analog_out['photodiode'].append(d.value)
+                        self.analog_out['photodiode'].append(d.value, ts=d.ts)
                     edge = self._photodiode.handle_value(d.value, d.ts)
                     if edge.rising:
                         self.log_hw('photodiode_on', plexon_ts=d.ts, info={'edge_ts': edge.ts})

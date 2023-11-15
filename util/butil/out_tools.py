@@ -48,12 +48,15 @@ class NumChunker:
 
 class AnalogOut:
     def __init__(self, channel: str, event_file: EventFile):
+        self._ts: float | None = None
         def flush(data: str):
             event_file.write_record({
                 'type': 'analog',
+                'ts': self._ts,
                 'channel': channel,
                 'samples': data,
             })
+            self._ts = None
         self._chunker = NumChunker(flush)
     
     def __enter__(self):
@@ -62,5 +65,7 @@ class AnalogOut:
     def __exit__(self, *exc):
         self._chunker.__exit__(*exc)
     
-    def append(self, x: float):
+    def append(self, x: float, *, ts: float | None = None):
+        if self._ts is None:
+            self._ts = ts
         self._chunker.append(x)
