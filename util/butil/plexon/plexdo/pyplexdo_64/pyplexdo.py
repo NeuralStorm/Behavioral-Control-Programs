@@ -80,8 +80,8 @@ def plexdo_get_digital_output_info():
         number_of_digital_output_bits = []
         number_of_digital_output_lines = []
 
-    digital_output_info = namedtuple("digital_output_info", ["num_do_cards", "device_numbers", "number_of_digital_output_bits", "number_of_digital_output_lines"])
-    info = digital_output_info(num_do_cards=num_do_cards, device_numbers=device_numbers, number_of_digital_output_bits=number_of_digital_output_bits, number_of_digital_output_lines=number_of_digital_output_lines)
+    digital_output_info = namedtuple("digital_output_info", ["num_devices", "device_numbers", "number_of_digital_output_bits", "number_of_digital_output_lines"])
+    info = digital_output_info(num_devices=num_do_cards, device_numbers=device_numbers, number_of_digital_output_bits=number_of_digital_output_bits, number_of_digital_output_lines=number_of_digital_output_lines)
     return info
 
 

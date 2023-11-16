@@ -1,7 +1,10 @@
 
 from typing import Literal
 import platform
+
 from .pyplexdo_32 import PyPlexDO
+
+from .. import PlexonError
 
 class Wrapper64:
     def __init__(self):
@@ -47,7 +50,7 @@ class PlexDo:
             # sys.exit(1)
             raise PlexonError()
         else:
-            print("{} found as device {}".format(self.plexdo.get_device_string(device_number), device_number))
+            print("{} found as device {}".format(self_plexdo.get_device_string(device_number), device_number))
         res = self_plexdo.init_device(device_number)
         if res != 0:
             print("Couldn't initialize device. Exiting.")

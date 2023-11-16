@@ -1,0 +1,3 @@
+
+class PlexonError(Exception):
+    pass
