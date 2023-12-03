@@ -69,8 +69,8 @@ class GameState:
         self.event_log = []
         
         
-        self.plexon_event_types = nidaq.build_event_types('Dev3')
-        self.nidaq_enabled = self.config.nidaq_enabled
+        self.nidaq_enabled = self.config.nidaq_device is not None
+        self.plexon_event_types = nidaq.build_event_types(self.config.nidaq_device or '')
         pin_list = [x['nidaq_pin'] for x in self.plexon_event_types.values()]
         if self.nidaq_enabled:
             self.nidaq = nidaq.Nidaq(pin_list)
@@ -88,8 +88,8 @@ class GameState:
         )
         
         if config.plexon_enabled:
-            import plexon
-            self.plex_do = plexon.init_plex_do()
+            from butil.plexon.plexdo import PlexDo
+            self.plex_do = PlexDo()
         else:
             self.plex_do = None
         
@@ -277,11 +277,10 @@ class GameState:
                         if self.plex_do is not None:
                             # https://github.com/NeuralStorm/Behavioral-Control-Programs/blob/61a9baa6d198e3dc13d30326901ea78bd42dc77f/touchscreen_co/Touchscreen/one_targ_new/main.py#L815
                             if reward_val > 0:
-                                plex_do_device_number = 1
                                 reward_nidaq_bit = 17
-                                self.plex_do.set_bit(plex_do_device_number, reward_nidaq_bit)
+                                self.plex_do.bit_on(reward_nidaq_bit)
                                 yield from self._wait(self.config.center_target_reward)
-                                self.plex_do.clear_bit(plex_do_device_number, reward_nidaq_bit)
+                                self.plex_do.bit_off(reward_nidaq_bit)
                         
                         yield from self._wait(2.5)
                 else:
@@ -335,7 +334,7 @@ class GameState:
 def parse_args():
     parser = argparse.ArgumentParser(description='')
     
-    parser.add_argument('--config', default='./config.hjson',
+    parser.add_argument('--config',
         help='config file')
     
     args = parser.parse_args()
@@ -345,7 +344,13 @@ def parse_args():
 def main():
     args = parse_args()
     
-    config_path = Path(args.config)
+    path_str = args.config
+    if path_str is None:
+        path_str = os.environ.get('config_path')
+    if path_str is None:
+        path_str = './config.hjson'
+    config_path = Path(path_str)
+    
     assert config_path.is_file()
     
     with open(config_path, encoding='utf8') as f:

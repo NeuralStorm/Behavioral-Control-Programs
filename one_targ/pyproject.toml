@@ -12,6 +12,8 @@ numpy = "1.25.2"
 hjson = "3.0.1"
 nidaqmx = { version = "0.5.7", optional = true }
 
+butil = { path = "../util", develop = true }
+
 [tool.poetry.dev-dependencies]
 
 [tool.poetry.extras]

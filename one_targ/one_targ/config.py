@@ -74,7 +74,9 @@ class Config:
         self.out_file_name: str = f"{out_animal_name}_{datetime.now().strftime('%Y%m%d_%H%M')}"
         
         self.plexon_enabled: bool = bool(os.environ.get('plexon'))
-        self.nidaq_enabled: bool = bool(os.environ.get('nidaq'))
+        self.nidaq_device: str|None = os.environ.get('nidaq')
+        if self.nidaq_device == '':
+            self.nidaq_device = None
         
         self.skip_start: bool = bool(os.environ.get('skip_start'))
     

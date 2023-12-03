@@ -6,6 +6,8 @@ from .pyplexdo_32 import PyPlexDO
 
 from .. import PlexonError
 
+_initialized = False
+
 class Wrapper64:
     def __init__(self):
         from .pyplexdo_64 import pyplexdo
@@ -33,6 +35,11 @@ class PlexDo:
         else:
             self._obj_32 = Wrapper64()
         self.device_number: Literal[1] = 1 # seems to be the result of mystery init anyway
+        
+        global _initialized
+        if not _initialized:
+            self.mystery_init()
+            _initialized = True
     
     def mystery_init(self):
         """replicates old init behavior

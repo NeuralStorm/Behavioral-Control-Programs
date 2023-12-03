@@ -12,10 +12,58 @@ modify `./config.hjson` as needed
 
 in bash
 ```sh
-export nidaq=1
+export nidaq=Dev3
 export plexon=1
 one-targ
 ```
+
+# Environment Variables
+
+For environment variables marked [flag] any value that is set and not an empty string will enable the functionality.  
+For example (bash)
+```bash
+export plexon=1
+```
+
+---
+### `config_path`
+
+use config file at path if no path is specified on the command line
+
+---
+### `pos`
+
+position the window with a specific location and size  
+format {pos_x},{pos_y}<-{width}x{height}
+
+this can be used to make the game effectively full screen
+
+example  
+position at -1920,0
+size 1920 by 1086
+```sh
+export pos='-1920,0<-1920x1086'
+```
+
+---
+### `plexon` [flag]
+
+enable plexdo output to trigger the juice reward
+
+---
+### `nidaq`
+
+nidaq device to use for event signal outputs. if not set nidaq output will be disabled
+
+example
+```sh
+export nidaq=Dev3
+```
+
+---
+### `skip_start` [flag]
+
+automatically dismiss the start screen
 
 # Other Things
 

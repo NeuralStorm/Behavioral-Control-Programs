@@ -1,10 +1,41 @@
 
 from typing import Optional, Any
 import sys
+import os
 from math import pi, sin, cos
 import random
 import time
 from pathlib import Path
+
+def get_pos() -> tuple[int, int, int , int] | None:
+    # -1920,0<-1920x1086
+    # ^ x pos
+    #       ^ y pos
+    #          ^ width
+    #               ^ height
+    try:
+        s = os.environ['pos']
+    except KeyError:
+        return None
+    
+    pos, size = s.split('<-')
+    px, py = pos.split(',')
+    px = int(px)
+    py = int(py)
+    sx, sy = size.split('x')
+    sx = int(sx)
+    sy = int(sy)
+    
+    return (px, py, sx, sy)
+
+from kivy.config import Config as KivyConfig
+_pos = get_pos()
+if _pos is not None:
+    KivyConfig.set('graphics', 'position', 'custom')
+    KivyConfig.set('graphics', 'left', _pos[0])
+    KivyConfig.set('graphics', 'top', _pos[1])
+    KivyConfig.set('graphics', 'width', _pos[2])
+    KivyConfig.set('graphics', 'height', _pos[3])
 
 from kivy.app import App
 from kivy.core.window import Window
