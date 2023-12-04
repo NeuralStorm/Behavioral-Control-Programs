@@ -54,12 +54,12 @@ class GameConfig:
         
         self.raw_config = config_dict
         # PARAMETERS META DATA
-        self.study_id: str = get('Study ID', 'NOTSET')       # 3 letter study code
-        self.session_id: str = get('Session ID', 'NOTSET') # Type of Session
-        self.experimental_group: str = get('experimental_group', 'NOTSET')
-        self.experimental_condition: str = get('experimental_condition', 'NOTSET')
-        self.animal_id: str = get('Animal ID', 'NOTSET')   # 3 digit number
-        self.TaskType: str = get('Task Type', 'NOTSET')
+        self.study_id: str = get('Study ID')       # 3 letter study code
+        self.session_id: str = get('Session ID') # Type of Session
+        self.experimental_group: str = get('experimental_group')
+        self.experimental_condition: str = get('experimental_condition')
+        self.animal_id: str = get('Animal ID')   # 3 digit number
+        self.file_name_task_type: str = get('Task Type')
         
         if start_dt is None:
             start_dt = datetime.now()
@@ -71,7 +71,7 @@ class GameConfig:
         if os.environ.get('out_file_name'):
             self.log_file_name_base = os.environ['out_file_name']
         else:
-            self.log_file_name_base: str = f"{self.study_id}{self.animal_id}_{self.experimental_group}_{self.experimental_condition}_{self.session_id}_{start_date_str}_{start_time_str}{self.TaskType}"
+            self.log_file_name_base: str = f"{self.study_id}{self.animal_id}_{self.experimental_group}_{self.experimental_condition}_{self.session_id}_{start_date_str}_{start_time_str}{self.file_name_task_type}"
         
         self.discrim_delay_range: Tuple[float, float] = (
             float(config_dict['Pre Discriminatory Stimulus Min delta t1'][0]),

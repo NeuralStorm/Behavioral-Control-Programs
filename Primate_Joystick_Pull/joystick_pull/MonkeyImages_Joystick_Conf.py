@@ -553,90 +553,34 @@ class MonkeyImages:
                 while trial_t() - start_time < t:
                     yield
             
+            yield from wait(self.config.InterTrialTime)
+            while not self.joystick_pulled:
+                yield
+            
+            homezone_enter = self.sentinel('homezone_enter')
+            homezone_exited = self.sentinel('homezone_exit')
+            while not in_zone():
+                yield
+            
             self.log_event('trial_start', tags=['game_flow'], info={
                 'discrim': selected_image_key,
                 'discrim_delay': discrim_delay,
                 'go_cue_delay': go_cue_delay,
                 'task_type': self.config.task_type,
                 'trial_index': trial_i,
+                'homezone_enter_event': get_event_id(homezone_enter.event),
             })
-            
-            # if winsound is not None:
-            #     winsound.PlaySound(
-            #         self.OutOfHomeZoneSound,
-            #         winsound.SND_ALIAS + winsound.SND_ASYNC + winsound.SND_NOWAIT + winsound.SND_LOOP
-            #     ) #Need to change the tone
-            
-            prep_flash = False
-            
-            if prep_flash:
-                in_zone_cbs = []
-                icon_flash_freq = 2
-                # icon period = 1 / freq
-                # change period = 0.5 * period
-                icon_change_period = 0.5 / icon_flash_freq
-                prep_shown = False
-                # wait for hand to be in the home zone
-                # wait at least inter-trial time before starting
-                while True:
-                    # print(trial_t())
-                    # print((trial_t() * 1000 // 500))
-                    if (trial_t() // icon_change_period) % 2:
-                        # blank
-                        if prep_shown:
-                            self.clear_image()
-                            prep_shown = False
-                    else:
-                        # black diamond
-                        if not prep_shown:
-                            self.show_image('yPrepare')
-                            prep_shown = True
-                    
-                    if trial_t() > self.config.InterTrialTime and in_zone():
-                        break
-                    yield
-            else:
-                # self.show_image('yPrepare')
-                def register_in_zone_cb():
-                    def _enter():
-                        self.show_image('yPrepare')
-                        # only flash the marker if it won't interfere with the discrim marker flash
-                        if self.config.discrim_delay_range[0] > self.config.photodiode_flash_duration+0.1:
-                            self.flash_marker('prep_diamond')
-                        if winsound is not None:
-                            winsound.PlaySound(
-                                str(SOUND_PATH_BASE / 'mixkit-arcade-bonus-229.wav'),
-                                winsound.SND_FILENAME + winsound.SND_ASYNC + winsound.SND_NOWAIT)
-                    
-                    def _exit():
-                        self.clear_image()
-                    
-                    if in_zone():
-                        _enter()
-                    
-                    enter_cb = self._register_callback('homezone_enter', _enter)
-                    trial_stack.enter_context(enter_cb)
-                    exit_cb = self._register_callback('homezone_exit', _exit)
-                    trial_stack.enter_context(exit_cb)
-                    
-                    return enter_cb, exit_cb
-                
-                in_zone_cbs = register_in_zone_cb()
-                while True:
-                    if trial_t() > self.config.InterTrialTime and in_zone() and not self.joystick_pulled:
-                        break
-                    yield
-            
-            # switch to blank to ensure diamond is no longer showing
-            if prep_flash:
-                self.clear_image()
             
             joystick_pulled = self.sentinel('joystick_pulled')
             joystick_released = self.sentinel('joystick_released')
-            homezone_exited = self.sentinel('homezone_exit')
             
-            for cb in in_zone_cbs:
-                cb.clear()
+            self.show_image('yPrepare')
+            if self.config.discrim_delay_range[0] > self.config.photodiode_flash_duration+0.1:
+                self.flash_marker('prep_diamond')
+            if winsound is not None:
+                winsound.PlaySound(
+                    str(SOUND_PATH_BASE / 'mixkit-arcade-bonus-229.wav'),
+                    winsound.SND_FILENAME + winsound.SND_ASYNC + winsound.SND_NOWAIT)
             
             gen = self.show_cues(
                 pre_discrim_delay = discrim_delay,
