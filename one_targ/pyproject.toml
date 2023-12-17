@@ -21,6 +21,7 @@ hw = ["nidaqmx"]
 
 [tool.poetry.scripts]
 one-targ = "one_targ.__main__:main"
+one-targ-count-trials = "one_targ.tools.count_trials:main"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
