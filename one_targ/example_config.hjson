@@ -16,7 +16,7 @@ animal_name: "donu"
 center_hold_time: 0.1
 target_hold_time: 0.1
 
-# can be set to a very large number to prevent automatic exit
+# can be set to null to prevent automatic exit
 autoquit_after: 10
 
 # value between 0 and 1

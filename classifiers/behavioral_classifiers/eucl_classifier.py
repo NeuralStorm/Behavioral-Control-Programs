@@ -2,10 +2,10 @@
 from typing import Optional, Tuple, List, Dict, Set, Union, Any
 from pathlib import Path
 import json
-import bz2
 from collections import deque
 from struct import Struct
 from base64 import b85decode
+import os
 
 from .classifier import Classifier
 
@@ -36,7 +36,7 @@ class EuclClassifier(Classifier):
         
         # (event type, timestamp in ms)
         self._current_event: Optional[Tuple[str, int]] = None
-        # list of spike timestamps in ms
+        # list of (channel, spike timestamps in ms)
         self.event_spike_list: deque[Tuple[str, int]] = deque()
         
         # event_type -> psth dict
@@ -45,8 +45,8 @@ class EuclClassifier(Classifier):
         self.channel_filter: set[str] | None = channel_filter
         
         self._buffer_time = self.post_time*1.2
-        if self._buffer_time < 0.1:
-            self._buffer_time = 0.1
+        if self._buffer_time < 2:
+            self._buffer_time = 2
     
     def clear(self):
         self._current_event = None
@@ -98,7 +98,8 @@ class EuclClassifier(Classifier):
         }
         return psths
     
-    def classify(self) -> str:
+    def classify_debug_info(self) -> tuple[str, Any]:
+        debug_info = {}
         event_psths = self.build_per_key_psth()
         
         def _avg(xs):
@@ -142,10 +143,27 @@ class EuclClassifier(Classifier):
             for event_type, template_psth in self.templates.items()
         }
         
+        debug_info['dists'] = dists
+        debug_info['templates'] = self.templates
+        debug_info['event'] = event_psths
+        # debug_info['spike_count'] = len(self.event_spike_list)
+        dbg_path = os.environ.get('eucl_debug')
+        if dbg_path:
+            import time
+            dbg: Any = {
+                'now': time.perf_counter(),
+                'current_event': self._current_event,
+                'dists': dists,
+            }
+            if dbg_path.startswith('!'):
+                dbg['spikes'] = sorted(self.event_spike_list)
+            with open(dbg_path.lstrip('!'), 'a') as f:
+                json.dump(dbg, f)
+        
         assert dists
         closest_event_type, _ = min(dists.items(), key=lambda x: x[1])
         
-        return closest_event_type
+        return closest_event_type, debug_info
 
 def _build_templates_from_psths(
     psths: Dict[str, List[EuclClassifier]],
@@ -189,7 +207,7 @@ def build_templates_from_new_events_file(*,
     labels: Optional[Dict[str, List[int]]],
 ):
     if labels is None:
-        chan_filter = None
+        chan_filter: set[str] | None = None
     else:
         chan_filter = set()
         if labels is not None:
@@ -209,6 +227,9 @@ def build_templates_from_new_events_file(*,
                     """get spikes for the next chunk and put the timestamps in order"""
                     for chan, v in rec['s'].items():
                         if chan_filter is not None and chan not in chan_filter:
+                            continue
+                        # remove unsorted spikes
+                        if chan.endswith('_0'):
                             continue
                         for s in unpacker.iter_unpack(b85decode(v)):
                             ts, = s
@@ -284,6 +305,7 @@ def build_templates_from_new_events_file(*,
     builder = EuclClassifier(post_time=post_time, bin_size=bin_size)
     for _cue, template in templates.items():
         template_chans = set(template['spike_counts'])
+        # add zeros for channels in the channel filter but that had no spikes
         for chan in chan_list - template_chans:
             template['spike_counts'][chan] = builder.zero_psth()
         
@@ -301,6 +323,18 @@ def build_templates_from_new_events_file(*,
         chan_filter_list = None
     else:
         chan_filter_list = list(chan_filter)
+    
+    # list of all channels in the output
+    out_chans_list = set()
+    for _, chan_templates in templates.items():
+        out_chans_list.update(chan_templates['spike_counts'].keys())
+    def sort_key(x):
+        try:
+            a, b = x.split('_')
+            return int(a), int(b)
+        except:
+            return x
+    chan_filter_list = sorted(out_chans_list, key=sort_key)
     
     #"templates": {
     #  "sun": { cue

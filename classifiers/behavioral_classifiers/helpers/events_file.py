@@ -12,6 +12,7 @@ from typing import Optional, Any
 import time
 from contextlib import ExitStack
 from array import array
+from struct import Struct
 from base64 import b85encode
 import sys
 import logging
@@ -30,9 +31,7 @@ class EventsFileWriter:
         self._ts = {}
         self._events = {}
         
-        # ensure the system is the correct endianess so we get
-        # consistent results from array.tobytes
-        assert sys.byteorder == 'little'
+        self._packer = Struct('<d')
     
     def __enter__(self):
         return self
@@ -53,7 +52,7 @@ class EventsFileWriter:
         try:
             buf = m[key]
         except KeyError:
-            buf = array('d')
+            buf = bytearray()
             m[key] = buf
         return buf
     
@@ -72,8 +71,8 @@ class EventsFileWriter:
         for chan, buf in self._ts.items():
             if not buf:
                 continue
-            out[chan] = b85encode(buf.tobytes()).decode('ascii')
-            buf[:] = EMPTY
+            out[chan] = b85encode(buf).decode('ascii')
+            buf.clear()
         if not out:
             return
         out = { 'type': 'spikes', 's': out }
@@ -92,6 +91,6 @@ class EventsFileWriter:
     def write_spike(self, *, channel: str, timestamp: float):
         buf = self._get_buf(f'{channel}')
         
-        buf.append(timestamp)
+        buf.extend(self._packer.pack(timestamp))
         
         self.flush_ts()

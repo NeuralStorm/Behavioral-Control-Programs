@@ -4,6 +4,7 @@ import time
 from array import array
 from base64 import b85encode
 from collections.abc import Callable
+from struct import Struct
 
 from .out_file import EventFile
 
@@ -12,15 +13,13 @@ FlushCallback = Callable[[str], None]
 class NumChunker:
     def __init__(self, flush_callback: FlushCallback, *, array_type='d'):
         self._empty = array(array_type)
-        self._buf = array(array_type)
         self._flush_callback = flush_callback
         
         self._last_flush = time.perf_counter()
         self._flush_period = 5
         
-        # ensure the system is the correct endianess so we get
-        # consistent results from array.tobytes
-        assert sys.byteorder == 'little'
+        self._buf = bytearray()
+        self._packer = Struct('<d')
     
     def __enter__(self):
         return self
@@ -37,13 +36,13 @@ class NumChunker:
         if not self._buf:
             return
         
-        encoded = b85encode(self._buf.tobytes()).decode('ascii')
-        self._buf[:] = self._empty
+        encoded = b85encode(self._buf).decode('ascii')
+        self._buf.clear()
         
         self._flush_callback(encoded)
     
     def append(self, x):
-        self._buf.append(x)
+        self._buf.extend(self._packer.pack(x))
         self.flush()
 
 class AnalogOut:

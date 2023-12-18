@@ -60,6 +60,8 @@ def get_trial_details(
         go_cue  = find_one(trial, 'go_cue_shown'  , default=None)
         water   = find_one(trial, 'water_dispense', default=None)
         
+        class_attem = find_one(trial, 'classification_attempted', default=None)
+        
         def prep_pd(event):
             try:
                 edge_time = pd_times[event['id']]
@@ -136,6 +138,7 @@ def get_trial_details(
             'discrim': discrim,
             'go_cue': go_cue,
             'water_dispense': water,
+            'classification_attempted': class_attem,
         }
         
         # find reference to estimate plexon time based on

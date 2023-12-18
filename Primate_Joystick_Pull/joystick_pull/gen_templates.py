@@ -34,7 +34,7 @@ aliases (optional) is a set that specifies other strings that can be used instea
 event_classes = {
     'joystick_pull': {
         'event': 'joystick_pull',
-        'event_class': 'joystick_pull',
+        'event_class': 'joystick_pulled',
         'aliases': {'tpullstart'},
     },
     'discrim': {

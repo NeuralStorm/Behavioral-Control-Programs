@@ -236,7 +236,7 @@ default: 0.018
 ---
 ### `photodiode`
 
-photodiode settings, json string
+photodiode settings, hjson string
 
 `channel`: analog channel that the photodiode is on  
 `threshold`:  
@@ -251,10 +251,10 @@ this should probably be `min_pulse_width` / -1000 to get the timestamp when the 
 Example (bash)
 ```bash
 export photodiode='{
-        channel: 8
-        threshold: [0.005, 0.02]
-        min_pulse_width: 4
-        edge_offset: -0.004
+    channel: 8
+    threshold: [0.005, 0.02]
+    min_pulse_width: 4
+    edge_offset: -0.004
 }'
 ```
 ---
@@ -263,9 +263,23 @@ export photodiode='{
 Enable recording of classification events and spikes.
 
 ---
-### `record_analog` [flag]
+### `record_analog`
 
-Enable recording of photodiode signal.
+Enable recording of analog channels, hjson string
+
+Keys are the names used in the saved data, values are the channels recorded from.
+
+The `photodiode` channel can be set to `auto` to use the channel configured with the photodiode environment variable.
+
+The `joystick` channel can be set to `auto` to use the channel configured in the config file.
+
+Example (bash)
+```bash
+export photodiode='{
+    photodiode: auto
+    go_cue_photodiode: 3
+}'
+```
 
 ---
 ### `classifier_debug` [flag]

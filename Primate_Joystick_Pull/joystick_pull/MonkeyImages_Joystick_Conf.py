@@ -555,7 +555,7 @@ class MonkeyImages:
                     yield
             
             yield from wait(self.config.InterTrialTime)
-            while not self.joystick_pulled:
+            while self.joystick_pulled:
                 yield
             
             homezone_enter = self.sentinel('homezone_enter')
@@ -631,6 +631,9 @@ class MonkeyImages:
                 assert pull_start is not None
                 assert pull_end is not None
                 
+                self.handle_classification_event('joystick_pulled', pull_start['info']['time_ext'])
+                self.handle_classification_event('joystick_released', pull_end['info']['time_ext'])
+                
                 pull_duration = pull_end['time_m'] - pull_start['time_m']
                 remote_pull_duration = pull_end['info']['time_ext'] - pull_start['info']['time_ext']
                 
@@ -647,9 +650,6 @@ class MonkeyImages:
                 if homezone_exited:
                     fail_r('hand removed before cue')
                     return None, 0, 0
-                # if not in_zone_at_go_cue:
-                #     fail_r('hand removed from homezone before go cue')
-                #     return None, 0, 0
                 
                 # wait up to MaxTimeAfterSound for the hand to exit the homezone
                 while in_zone():
@@ -670,6 +670,22 @@ class MonkeyImages:
             
             def get_classification_info():
                 assert self._cl_helper is not None
+                
+                if joystick_pulled: # joystick pulled before prompt
+                    fail_r('joystick pulled before cue')
+                    return None, 0, 0
+                if homezone_exited:
+                    fail_r('hand removed before cue')
+                    return None, 0, 0
+                
+                def handle_pull(evt):
+                    self.handle_classification_event('joystick_pulled', evt['info']['time_ext'])
+                def handle_release(evt):
+                    self.handle_classification_event('joystick_released', evt['info']['time_ext'])
+                pull_cb = self._register_callback('joystick_pulled', handle_pull)
+                release_cb = self._register_callback('joystick_released', handle_release)
+                self.trial_stack.enter_context(pull_cb)
+                self.trial_stack.enter_context(release_cb)
                 
                 debug("before classify")
                 res = yield from self._cl_helper.classify()
@@ -915,7 +931,7 @@ class MonkeyImages:
                 self.joystick_pulled = True
                 evt = self.log_hw('joystick_pulled', plexon_ts=time.perf_counter(), sim=True)
                 self.joystick_pull_event = evt
-                self.dbg_classification_event('joystick_pull')
+                self.dbg_classification_event('joystick_pulled')
             else:
                 self.joystick_release_remote_ts = time.perf_counter()
                 self.joystick_pulled = False
@@ -1006,8 +1022,6 @@ class MonkeyImages:
                         self.joystick_pull_event = evt
                         self.joystick_pulled = True
                         self.joystick_pull_remote_ts = d.ts
-                        
-                        self.handle_classification_event('joystick_pull', d.ts)
                     elif edge.falling:
                         self.log_hw('joystick_released', plexon_ts=d.ts, info={
                             'pull_event': get_event_id(self.joystick_pull_event),
@@ -1015,11 +1029,7 @@ class MonkeyImages:
                         self.joystick_pull_event = None
                         self.joystick_pulled = False
                         self.joystick_release_remote_ts = d.ts
-                        
-                        self.handle_classification_event('joystick_released', d.ts)
                 elif self._photodiode is not None and d.chan == self.config.pd_channel:
-                    if self.analog_out is not None:
-                        self.analog_out['photodiode'].append(d.value, ts=d.ts)
                     edge = self._photodiode.handle_value(d.value, d.ts)
                     if edge.rising:
                         self.log_hw('photodiode_on', plexon_ts=d.ts, info={'edge_ts': edge.ts})

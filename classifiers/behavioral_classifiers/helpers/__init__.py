@@ -185,9 +185,10 @@ class Helper:
         else:
             wait_res = None
         
-        prediction = self.classifier.classify()
+        prediction, debug_info = self.classifier.classify_debug_info()
         res = {
             'prediction': prediction,
             '_wait_res': wait_res,
+            '_classify_debug': debug_info,
         }
         return res
