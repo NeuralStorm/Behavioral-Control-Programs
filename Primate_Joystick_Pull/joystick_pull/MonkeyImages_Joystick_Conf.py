@@ -186,12 +186,13 @@ class MonkeyImages:
             EventFileProcess(path=events_path))
         if self.config.record_analog:
             self.analog_out = {
-                'photodiode': AnalogOut('photodiode', self.events_file),
+                a_ch: AnalogOut(a_name, self.events_file)
+                for a_name, a_ch in self.config.record_analog.items()
             }
             for v in self.analog_out.values():
                 self._stack.enter_context(v)
         else:
-            self.analog_out: dict[str, AnalogOut] | None = None
+            self.analog_out: dict[int, AnalogOut] = {}
         
         self.log_event('config_loaded', tags=[], info={
             'time_utc': datetime.utcnow().isoformat(),
@@ -990,6 +991,13 @@ class MonkeyImages:
                 self._cl_helper.any_event(d.ts)
             
             if d.type == d.ANALOG:
+                try:
+                    a_out = self.analog_out[d.chan]
+                except KeyError:
+                    pass
+                else:
+                    a_out.append(d.value, ts=d.ts)
+                
                 if d.chan == self.config.joystick_channel:
                     edge = self.joystick_debounce.sample(d.ts, d.value)
                     

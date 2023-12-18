@@ -159,7 +159,26 @@ class GameConfig:
         self.photodiode_flash_duration: float = float(os.environ.get('photodiode_flash_duration', 0.018))
         
         self.record_events: bool = bool(os.environ.get('record_events'))
-        self.record_analog: bool = bool(os.environ.get('record_analog'))
+        
+        def load_record_analog() -> Dict[str, int]:
+            ra = os.environ.get('record_analog')
+            if not ra:
+                return {}
+            
+            data = hjson.loads(ra)
+            def load_auto(k: str, ch: int | None):
+                if data.get(k) != 'auto':
+                    return
+                if ch is None:
+                    del data[k]
+                else:
+                    data[k] = ch
+            load_auto('photodiode', self.pd_channel)
+            load_auto('joystick', self.joystick_channel)
+            
+            data = {str(a): int(b) for a, b in data.items()}
+            return data
+        self.record_analog: Dict[str, int] = load_record_analog()
         
         template_in_path = get('template', None)
         if template_in_path is None:
