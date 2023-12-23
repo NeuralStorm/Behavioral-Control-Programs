@@ -44,9 +44,9 @@ class EuclClassifier(Classifier):
         
         self.channel_filter: set[str] | None = channel_filter
         
-        self._buffer_time = self.post_time*1.2
-        if self._buffer_time < 2:
-            self._buffer_time = 2
+        self._buffer_time: float | None = self.post_time*1.5
+        if self._buffer_time < 2000:
+            self._buffer_time = 2000
     
     def clear(self):
         self._current_event = None
@@ -63,7 +63,7 @@ class EuclClassifier(Classifier):
         
         timestamp_ms = round(timestamp * 1000)
         self.event_spike_list.append((channel, timestamp_ms))
-        while timestamp_ms - self.event_spike_list[0][1] > self._buffer_time:
+        while self._buffer_time is not None and timestamp_ms - self.event_spike_list[0][1] > self._buffer_time:
             self.event_spike_list.popleft()
     
     def zero_psth(self) -> List[int]:
@@ -263,6 +263,10 @@ def build_templates_from_new_events_file(*,
             post_time=post_time, bin_size=bin_size,
             channel_filter = chan_filter,
         )
+        # disable discarding of old spikes to ensure
+        # all spikes in buf are processed, even if the classifier
+        # would normally keep a window smaller than buf covers
+        builder._buffer_time = None
         
         builder.event(timestamp = event_ts)
         
