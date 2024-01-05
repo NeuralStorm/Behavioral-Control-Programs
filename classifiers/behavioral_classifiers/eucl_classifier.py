@@ -35,9 +35,9 @@ class EuclClassifier(Classifier):
         self.bin_size = bin_size
         
         # (event type, timestamp in ms)
-        self._current_event: Optional[Tuple[str, int]] = None
+        self._current_event: Optional[Tuple[str, float]] = None
         # list of (channel, spike timestamps in ms)
-        self.event_spike_list: deque[Tuple[str, int]] = deque()
+        self.event_spike_list: deque[Tuple[str, float]] = deque()
         
         # event_type -> psth dict
         self.templates: Dict[str, PsthDict] = {}
@@ -53,7 +53,7 @@ class EuclClassifier(Classifier):
     
     def event(self, *, event_type: str = '', timestamp: float):
         # convert to integer ms
-        timestamp_ms = round(timestamp * 1000)
+        timestamp_ms = timestamp * 1000
         
         self._current_event = (event_type, timestamp_ms)
     
@@ -61,7 +61,7 @@ class EuclClassifier(Classifier):
         if self.channel_filter is not None and channel not in self.channel_filter:
             return
         
-        timestamp_ms = round(timestamp * 1000)
+        timestamp_ms = timestamp * 1000
         self.event_spike_list.append((channel, timestamp_ms))
         while self._buffer_time is not None and timestamp_ms - self.event_spike_list[0][1] > self._buffer_time:
             self.event_spike_list.popleft()
@@ -82,7 +82,19 @@ class EuclClassifier(Classifier):
             if target_key is None or key != target_key:
                 continue
             
-            bin_ = (ts - event_ts) // self.bin_size
+            d = ts - event_ts
+            if d < 0:
+                continue
+            
+            bin_ = d / self.bin_size
+            is_on_left_edge = bin_.is_integer()
+            bin_ = int(bin_)
+            # make right edge inclusive instead of left
+            # to match offline analysis
+            if is_on_left_edge:
+                bin_ -= 1
+            if bin_ < 0:
+                continue
             try:
                 psth[bin_] += 1
             except IndexError:
@@ -146,19 +158,6 @@ class EuclClassifier(Classifier):
         debug_info['dists'] = dists
         debug_info['templates'] = self.templates
         debug_info['event'] = event_psths
-        # debug_info['spike_count'] = len(self.event_spike_list)
-        dbg_path = os.environ.get('eucl_debug')
-        if dbg_path:
-            import time
-            dbg: Any = {
-                'now': time.perf_counter(),
-                'current_event': self._current_event,
-                'dists': dists,
-            }
-            if dbg_path.startswith('!'):
-                dbg['spikes'] = sorted(self.event_spike_list)
-            with open(dbg_path.lstrip('!'), 'a') as f:
-                json.dump(dbg, f)
         
         assert dists
         closest_event_type, _ = min(dists.items(), key=lambda x: x[1])

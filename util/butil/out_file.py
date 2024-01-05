@@ -5,6 +5,8 @@ from pathlib import Path
 from contextlib import ExitStack
 import gzip
 import bz2
+from struct import Struct
+from base64 import b85decode
 import time
 from multiprocessing import Queue as PQueue, Process
 
@@ -137,3 +139,21 @@ class EventReader:
         except (EOFError, json.decoder.JSONDecodeError):
             if not self.ignore_error:
                 raise
+    
+    def read_spikes(self):
+        unpacker = Struct('<d')
+        for rec in self.read_records():
+            rt = rec.get('type')
+            if rt != 'spikes':
+                continue
+            
+            def get_chunk_spikes():
+                """get spikes for the next chunk, may not be ordered"""
+                for chan, v in rec['s'].items():
+                    for s in unpacker.iter_unpack(b85decode(v)):
+                        ts, = s
+                        yield chan, ts
+            
+            chunk_spikes = list(get_chunk_spikes())
+            chunk_spikes.sort(key=lambda x: x[1])
+            yield from chunk_spikes
