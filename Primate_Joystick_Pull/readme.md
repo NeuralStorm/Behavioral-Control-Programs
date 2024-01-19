@@ -275,7 +275,7 @@ The `joystick` channel can be set to `auto` to use the channel configured in the
 
 Example (bash)
 ```bash
-export photodiode='{
+export record_analog='{
     photodiode: auto
     go_cue_photodiode: 3
 }'

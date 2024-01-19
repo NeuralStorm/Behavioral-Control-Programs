@@ -12,9 +12,6 @@ logger = logging.getLogger(__name__)
 
 try:
     from .pyopxclient import PyOPXClientAPI, OPX_ERROR_NOERROR, SPIKE_TYPE, CONTINUOUS_TYPE, EVENT_TYPE, OTHER_TYPE
-    from .pyplexdo import PyPlexDO, DODigitalOutputInfo
-    # import PyDAQmx
-    # from PyDAQmx import Task
 except ImportError:
     plexon_import_failed = True
 else:
