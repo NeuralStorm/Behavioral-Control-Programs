@@ -123,8 +123,9 @@ def main():
                 stem = removesuffix(stem, ".json")
                 stem = removesuffix(stem, '_new_events')
                 output_path = input_path.parent / f"{stem}_trials.txt"
-                with open(output_path, 'w') as _f:
-                    pass
+                if not output_path.exists():
+                    with open(output_path, 'w') as _f:
+                        pass
 
 if __name__ == '__main__':
     main()

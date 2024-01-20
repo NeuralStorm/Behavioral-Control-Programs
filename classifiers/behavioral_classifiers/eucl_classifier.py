@@ -6,6 +6,7 @@ from collections import deque
 from struct import Struct
 from base64 import b85decode
 import os
+from math import isclose
 
 from .classifier import Classifier
 
@@ -26,13 +27,12 @@ class EuclClassifier(Classifier):
             post_time: time after event to classify in in ms
             bin_size: in ms
             """
+        self.post_time: float = post_time / 1000
+        self.bin_size: float = bin_size / 1000
+        bins_n: int = round(self.post_time / self.bin_size)
         
-        assert post_time % bin_size == 0
-        bins_n = post_time // bin_size
-        self.post_time = post_time
-        self._bins_n = bins_n
-        self.bins = [0 for _ in range(bins_n)]
-        self.bin_size = bin_size
+        self._bins_n: int = bins_n
+        self.bins: list[int] = [0 for _ in range(bins_n)]
         
         # (event type, timestamp in ms)
         self._current_event: Optional[Tuple[str, float]] = None
@@ -45,25 +45,21 @@ class EuclClassifier(Classifier):
         self.channel_filter: set[str] | None = channel_filter
         
         self._buffer_time: float | None = self.post_time*1.5
-        if self._buffer_time < 2000:
-            self._buffer_time = 2000
+        if self._buffer_time < 2:
+            self._buffer_time = 2
     
     def clear(self):
         self._current_event = None
     
     def event(self, *, event_type: str = '', timestamp: float):
-        # convert to integer ms
-        timestamp_ms = timestamp * 1000
-        
-        self._current_event = (event_type, timestamp_ms)
+        self._current_event = (event_type, timestamp)
     
     def spike(self, channel: str, timestamp: float):
         if self.channel_filter is not None and channel not in self.channel_filter:
             return
         
-        timestamp_ms = timestamp * 1000
-        self.event_spike_list.append((channel, timestamp_ms))
-        while self._buffer_time is not None and timestamp_ms - self.event_spike_list[0][1] > self._buffer_time:
+        self.event_spike_list.append((channel, timestamp))
+        while self._buffer_time is not None and timestamp - self.event_spike_list[0][1] > self._buffer_time:
             self.event_spike_list.popleft()
     
     def zero_psth(self) -> List[int]:
@@ -87,12 +83,13 @@ class EuclClassifier(Classifier):
                 continue
             
             bin_ = d / self.bin_size
-            is_on_left_edge = bin_.is_integer()
+            # is_on_left_edge = bin_.is_integer()
             bin_ = int(bin_)
+            
             # make right edge inclusive instead of left
-            # to match offline analysis
-            if is_on_left_edge:
-                bin_ -= 1
+            # if is_on_left_edge:
+            #     bin_ -= 1
+            
             if bin_ < 0:
                 continue
             try:
@@ -114,11 +111,6 @@ class EuclClassifier(Classifier):
         debug_info = {}
         event_psths = self.build_per_key_psth()
         
-        def _avg(xs):
-            if not xs: # return 0 if no items
-                return 0
-            return sum(xs) / len(xs)
-        
         def calc_chan_eucl_dist(a, b):
             assert len(a) == len(b)
             acc = 0
@@ -127,31 +119,28 @@ class EuclClassifier(Classifier):
             acc **= 0.5 # square root
             return acc
         
-        def calc_dist_from_zero(a):
-            acc = 0
-            for a in a:
-                acc += a**2
-            acc **= 0.5 # square root
-            return acc
-        
-        def calc_eucl_dist(template: PsthDict):
-            chan_dists = []
+        def calc_eucl_dist(template: PsthDict, new=False):
+            # combined list of counts for all channels
+            event_counts: list[float] = []
+            template_counts: list[float] = []
+            
             for chan, template_psth in template.items():
+                template_counts.extend(template_psth)
                 try:
                     chan_psth = event_psths[chan]
                 except KeyError:
-                    chan_dist = calc_dist_from_zero(template_psth)
+                    event_counts.extend([0]*len(template_psth))
                 else:
-                    chan_dist = calc_chan_eucl_dist(template_psth, chan_psth)
+                    event_counts.extend(chan_psth)
                 
-                chan_dists.append(chan_dist)
+                assert len(event_counts) == len(template_counts)
             
-            dist = _avg(chan_dists)
+            dist = calc_chan_eucl_dist(event_counts, template_counts)
             
             return dist
         
         dists = {
-            event_type: calc_eucl_dist(template_psth)
+            event_type: calc_eucl_dist(template_psth, new=True)
             for event_type, template_psth in self.templates.items()
         }
         
@@ -318,7 +307,7 @@ def build_templates_from_new_events_file(*,
         template['spike_counts'] = {k: v for k, v in sorted(template['spike_counts'].items(), key=key)}
         
         if chan_filter is not None:
-            assert set(template) == chan_filter
+            assert set(template['spike_counts']) == chan_filter
         
         templates[_cue] = template
     
