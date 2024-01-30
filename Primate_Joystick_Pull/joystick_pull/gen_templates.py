@@ -6,6 +6,7 @@ import json
 import sys
 import os
 from contextlib import ExitStack
+from datetime import datetime
 
 import behavioral_classifiers
 from butil import EventReader
@@ -62,10 +63,12 @@ def parse_args(args):
         help="debug info output path")
     parser.add_argument('--labels', type=Path,
         help="json labels file")
-    parser.add_argument('--post-time', type=int, default=200,
+    parser.add_argument('--post-time', type=int, required=True,
         help="window size after event in ms")
-    parser.add_argument('--bin-size', type=int, default=20,
+    parser.add_argument('--bin-size', type=int, required=True,
         help="bin size in ms")
+    parser.add_argument('--baseline-offset', type=int,
+        help="adds baseline events offset by specified amount (ms)")
     
     return parser.parse_args(args=args)
 
@@ -131,7 +134,7 @@ def gen_templates_main(stack, args_list=None):
             event = rec['events'][event_class['event']]
             if event is None or '_ts' not in event:
                 dbg['error'] = f"no timestamp for task {task_id}"
-                print_error(f"no timestamp for task {task_id}")
+                print_error(f"no timestamp for task (event id={task_id})")
                 continue
             ts = event['_ts']
             dbg['ts'] = ts
@@ -143,6 +146,15 @@ def gen_templates_main(stack, args_list=None):
             yield cue, ts
     
     ts = list(get_ts())
+    
+    if args.baseline_offset is not None:
+        def get_baseline():
+            for cue, _ts in ts:
+                baseline_cue = f"{cue}_baseline"
+                yield baseline_cue, _ts + (args.baseline_offset/1000)
+        baseline_ts = list(get_baseline())
+        ts.extend(baseline_ts)
+    
     debug_info['event_timestamps'] = ts
     # eprint('events', ts)
     eprint('event count', len(ts))
@@ -153,16 +165,20 @@ def gen_templates_main(stack, args_list=None):
         with open(args.labels) as f:
             labels = json.load(f)['channels']
     
+    debug_info['templates'] = behavioral_classifiers.eucl_classifier.build_templates_from_new_events_file(
+        ts_list = ts,
+        events_path = args.events,
+        # template_path = args.template_out,
+        event_class = event_class['event_class'],
+        post_time = args.post_time,
+        bin_size = args.bin_size,
+        labels = labels,
+    )
+    debug_info['templates']['_input_filename'] = args.events.name
+    debug_info['templates']['_generation_date'] = datetime.now().isoformat()
     if args.template_out is not None:
-        debug_info['templates'] = behavioral_classifiers.eucl_classifier.build_templates_from_new_events_file(
-            ts_list = ts,
-            events_path = args.events,
-            template_path = args.template_out,
-            event_class = event_class['event_class'],
-            post_time = args.post_time,
-            bin_size = args.bin_size,
-            labels = labels,
-        )
+        with open(args.template_out, 'w', encoding='utf8', newline='\n') as f:
+            json.dump(debug_info['templates'], f, indent=2)
 
 def main():
     with ExitStack() as stack:

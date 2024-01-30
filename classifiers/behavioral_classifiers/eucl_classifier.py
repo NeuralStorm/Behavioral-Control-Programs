@@ -189,7 +189,7 @@ def _build_templates_from_psths(
 def build_templates_from_new_events_file(*,
     ts_list: list[tuple[str, float]],
     events_path: Path,
-    template_path: Path,
+    template_path: Optional[Path] = None,
     event_class: Optional[str],
     post_time: int, bin_size: int,
     labels: Optional[Dict[str, List[int]]],
@@ -353,7 +353,8 @@ def build_templates_from_new_events_file(*,
         'templates': templates,
     }
     
-    with open(template_path, 'w', encoding='utf8', newline='\n') as f:
-        json.dump(out_data, f, indent=2)
+    if template_path is not None:
+        with open(template_path, 'w', encoding='utf8', newline='\n') as f:
+            json.dump(out_data, f, indent=2)
     
     return out_data
