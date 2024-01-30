@@ -194,12 +194,19 @@ def build_templates_from_new_events_file(*,
     post_time: int, bin_size: int,
     labels: Optional[Dict[str, List[int]]],
 ):
+    def map_channel_name(k):
+        channel, unit = k.split('_')
+        return f"{channel:0>4}_{unit:0>4}"
+    
     if labels is None:
         chan_filter: set[str] | None = None
     else:
         chan_filter = set()
         if labels is not None:
             for channel, units in labels.items():
+                if units is None:
+                    chan_filter.add(channel)
+                    continue
                 for unit in units:
                     chan_filter.add(f"{channel:0>4}_{unit:0>4}")
     
@@ -214,10 +221,11 @@ def build_templates_from_new_events_file(*,
                 def get_chunk_spikes():
                     """get spikes for the next chunk and put the timestamps in order"""
                     for chan, v in rec['s'].items():
+                        chan = map_channel_name(chan)
                         if chan_filter is not None and chan not in chan_filter:
                             continue
                         # remove unsorted spikes
-                        if chan.endswith('_0'):
+                        if chan.endswith('_0') or chan.endswith('_0000'):
                             continue
                         for s in unpacker.iter_unpack(b85decode(v)):
                             ts, = s
