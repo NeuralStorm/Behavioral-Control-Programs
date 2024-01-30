@@ -141,7 +141,7 @@ class MonkeyImages:
     def __init__(self, parent):
         self._stack = ExitStack()
         
-        # delay for how often state is updated, only used for new loop
+        # delay for how often state is updated
         self.cb_delay_ms: int = 1
         
         # False while the game is running or paused
@@ -240,6 +240,11 @@ class MonkeyImages:
         
         # tracks the time that the photodiode should turn off at
         self._photodiode_off_time: Optional[float] = None
+        
+        # number of times the photodiode marker has been flashed
+        self._photodiode_flash_count = 0
+        # number of times photodiode edge has been detected
+        self._photodiode_edge_count = 0
         
         if self.config.template_in_path is not None:
             self.classification_enabled = True
@@ -413,6 +418,9 @@ class MonkeyImages:
         # update_idletasks won't call the game logic callback, only update drawn geometry
         self.root.update_idletasks()
         self._photodiode_off_time = time.perf_counter() + self.config.photodiode_flash_duration
+        self._photodiode_flash_count += 1
+        if self.info_view is not None:
+            self.info_view.update_pd_info(self._photodiode_flash_count, self._photodiode_edge_count)
     
     # resets loop state, starts callback loop
     def start_new_loop(self):
@@ -1033,6 +1041,9 @@ class MonkeyImages:
                     edge = self._photodiode.handle_value(d.value, d.ts)
                     if edge.rising:
                         self.log_hw('photodiode_on', plexon_ts=d.ts, info={'edge_ts': edge.ts})
+                        self._photodiode_edge_count += 1
+                        if self.info_view is not None:
+                            self.info_view.update_pd_info(self._photodiode_flash_count, self._photodiode_edge_count)
                         if self.pending_photodiode_event is not None:
                             self.handle_classification_event(self.pending_photodiode_event, edge.ts)
                             self.pending_photodiode_event = None

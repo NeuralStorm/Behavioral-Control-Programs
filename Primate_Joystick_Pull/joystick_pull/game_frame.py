@@ -78,6 +78,10 @@ class InfoView:
         root.bind('<Key>', self.key_handler)
         
         font = Font(family='consolas', size=15)
+        
+        self.pd_info_label = tk.Label(root, text = '-', justify=tk.LEFT, font=font)
+        self.pd_info_label.pack(side=tk.TOP, anchor=tk.NW)
+        
         self.label = tk.Label(root, text = '-', justify=tk.LEFT, font=font)
         self.label.pack(side=tk.TOP, anchor=tk.NW)
         
@@ -224,6 +228,9 @@ class InfoView:
         }
         
         return info
+    
+    def update_pd_info(self, flash_count, edge_count):
+        self.pd_info_label['text'] = f"photodiode detected {edge_count}/{flash_count}"
     
     def update_info(self, event_log):
         end_info = self.calc_end_info(event_log)
