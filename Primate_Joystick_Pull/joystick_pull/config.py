@@ -158,7 +158,7 @@ class GameConfig:
         # default to 18ms, longer than 1 refresh at 60hz (16.7 ms)
         self.photodiode_flash_duration: float = float(os.environ.get('photodiode_flash_duration', 0.018))
         
-        self.record_events: bool = bool(os.environ.get('record_events'))
+        self.record_events: bool = not bool(os.environ.get('disable_record_events'))
         
         def load_record_analog() -> Dict[str, int]:
             ra = os.environ.get('record_analog')

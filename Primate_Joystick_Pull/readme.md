@@ -258,9 +258,9 @@ export photodiode='{
 }'
 ```
 ---
-### `record_events` [flag]
+### `disable_record_events` [flag]
 
-Enable recording of classification events and spikes.
+Disable recording of classification events and spikes.
 
 ---
 ### `record_analog`
