@@ -112,7 +112,7 @@ class Helper:
     
     def spike(self, channel: int, unit: int, timestamp: float):
         """call when a spike is received"""
-        out_chan = f'{channel}_{unit}'
+        out_chan = f"{channel:0>4}_{unit:0>4}"
         if self.classifier is not None:
             self.classifier.spike(
                 channel = out_chan,

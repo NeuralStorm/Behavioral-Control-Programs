@@ -201,7 +201,7 @@ def build_templates_from_new_events_file(*,
         if labels is not None:
             for channel, units in labels.items():
                 for unit in units:
-                    chan_filter.add(f"{channel}_{unit}")
+                    chan_filter.add(f"{channel:0>4}_{unit:0>4}")
     
     def get_spikes():
         unpacker = Struct('<d')
