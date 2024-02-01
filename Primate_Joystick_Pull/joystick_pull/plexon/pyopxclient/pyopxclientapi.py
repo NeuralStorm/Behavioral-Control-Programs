@@ -10,6 +10,7 @@
 from collections import namedtuple
 from .pyopxclientlib import PyOPXClient, OPX_ERROR_NOERROR
 import time
+from pathlib import Path
 
 class PyOPXClientAPI:
     """
@@ -34,8 +35,10 @@ class PyOPXClientAPI:
         self._wait_handle - contains the _wait_handle for the OPX server, used by opx_wait(), considered private
         self.last_result - contains the return code of the last run function
     """
-    def __init__(self, opxclient_dll_path = 'bin', max_opx_data = 100000):
-
+    def __init__(self, *, max_opx_data = 100000):
+        bin_path = Path(__file__).parent / 'bin'
+        opxclient_dll_path = str(bin_path)
+        
         self.opx_client = PyOPXClient(opxclient_dll_path, max_opx_data)
         
         self.connected = False

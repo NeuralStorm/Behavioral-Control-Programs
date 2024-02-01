@@ -56,10 +56,7 @@ class Plexon:
         
         self.reward_nidaq_bit = 17 # DO Channel
         
-        bin_path = Path(__file__).parent / 'pyplex_bin'
-        ## Setup Plexon Server
-        # Initialize the API class
-        self.client = PyOPXClientAPI(opxclient_dll_path=str(bin_path))
+        self.client = PyOPXClientAPI()
         
         # Connect to OmniPlex Server, check for success
         self.client.connect()
