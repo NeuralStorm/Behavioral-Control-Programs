@@ -46,6 +46,10 @@ Example to generate histograms for all events files in output directory, assumin
 js-histogram --skip-failed ./output/*.json.gz
 ```
 
+## Online Classification
+
+See [online_classification.md](./documentation/online_classification.md)
+
 # Config
 
 Optional parameters are considered unspecified if they are omitted, have no values, or have a single empty string value  
@@ -185,24 +189,6 @@ The path of the classifier template file to load. If this parameter is specified
 Amount of time, based on the computer's local time, to wait before failing classification.
 
 If not specified the program will wait an indefinite amount of time for the event to occur.
-
-# Template generation
-
-Example
-```sh
-js-gen-template --events output/test.json.gz --event-class tpullstart --template-out output/test_template.json --labels output/labels.json --post-time 200 --bin-size 5
-```
-
-Example labels file: https://github.com/NeuralStorm/Behavioral-Control-Programs/blob/75f3f6e869c1c8869a93ab25f6270787049ab98c/tilt_hardware_control/tilt_hardware_control/example_labels.hjson
-
-The labels file has one parameter `channels`. The parameters of the dict are plexon channels and the values are plexon units within that channel.
-
-Supported event classes
-```
-tpullstart
-tgocue
-tdiscrim
-```
 
 # Environment Variables
 
