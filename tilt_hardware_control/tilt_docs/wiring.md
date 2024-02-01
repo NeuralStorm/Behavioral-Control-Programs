@@ -11,9 +11,6 @@ the force/toque sensors connect to the nidaq directly via a scsi connector. the 
 pin numbers are prefixed based on the device/port, e.g. tim(5) is pin 5 on the plexon timing board
 
 ---
-`conv` - voltage conversion board, see [the image of the conversion board](voltage_conversion_board/voltage_conversion_board_pinout.png) for pin numbers
-
----
 `downsample` - clock downsampling board
 
 port numbers correspond to the labels on the downsampling board
@@ -39,9 +36,9 @@ the SI software refers to pins Y1-Y4 as output 1-4, X1-X4 as input 1-4. these te
 port numbers will have both the port number and the name, e.g. `tim(40 kHz|5)` is port 5 which is named "40 kHz"
 
 ---
-`din` - plexon DIN board port A
+`din` - plexon DIN board port B
 
-port numbers will have both the port number and part or all of the name, e.g. `din(Data 1|1)` is port 1 which has the name "Data 1"
+port numbers will have both the port number and part or all of the name, e.g. `din(Data 1|17)` is port 1 which has the name "Data 17"
 
 ---
 ---
@@ -54,59 +51,28 @@ the following pins should all be connected together
 `conv(5)`  
 `conv(18)` (optional)  
 `conv(16)` (optional)  
-`downsample(In -)`  
 `downsample(Pwr -)`  
+`downsample(In -)`  
 `downsample(out -)`  
-`motor(GND|19)`  
-`motor(X COMMON|8)`  
 `din(Ground|19)`  
 `tim(GND|15)`
 
 ## power
 the nidaq, plexon, f/t sensor amp and motor controller have external power sources that need to be connected
 
-`conv(1)` 5v  
-`conv(2)` 12v  
-`conv(17)` 24v (shared with the V+ connector on the motor controller)
-
 `downsample(Pwr +)` - `nidaq(+5V|8)`
 
-## tilt type
+## tilt type to plexon
 
-((this pin isn't used to indicate tilt type anymore))  
-`nidaq(P1.0|52)` - `conv(15)` - `din(Data 1|1)`  
-`conv(14)` - `motor(X3|7)`
+`nidaq(P2.2)` - `din(Data 22|6)`  
+`nidaq(P2.3)` - `din(Data 25|9)`  
+`nidaq(P2.4)` - `din(Data 21|5)`  
+`nidaq(P2.5)` - `din(Data 24|8)`
 
-`nidaq(P1.1|17)` - `conv(13)` - `din(Data2|2)`  
-`conv(12)` - `motor(X4|6)`
+## tilt timing for recording
 
-`nidaq(P1.2|49)` - `conv(11)` - `din(Data3|3)`  
-`conv(10)` - `motor(X5|5)`
-
-## tilt trigger (sent by tilt computer to indicate a tilt should occur)
-
-`nidaq(P1.3|47)` - `conv(9)`  
-`conv(8)` - `motor(X6|4)`
-
-# tilt active (high while a tilt is currently occuring)
-
-`motor(Y2)` - `schmidt trigger ?`
-`schmidt trigger ?` - `nidaq(P0.3)`
-
-# tilt midpoint (pulse when tilt reaches midpoint)
-
-`motor(Y3)` - `schmidt trigger ?`
-`schmidt trigger ?` - `nidaq(P0.4)`
-
-((removed))  
-## tilt start (sent by motor controller at the start of tilt)
-
-`motor(Y2|15)` - `conv(4)` - `nidaq(AI 8|34)`  
-`conv(3)` - `nidaq(P2.3|)` - `din(Data ready|22)`
-
-## plexon start/sync signal
-
-tbd, start signal was connected to `nidaq(P2.1|3)` and `nidaq(AI 9|66)` with the old plexon system
+`nidaq(P2.0)` - `nidaq(P0.0)`  
+`nidaq(P2.1)` - `nidaq(P0.1)`
 
 ## inclinometer
 
