@@ -281,6 +281,14 @@ export record_analog='{
 }'
 ```
 
+The default is
+```json
+{
+    "photodiode": "auto",
+    "joystick": "auto"
+}
+```
+
 ---
 ### `classifier_debug` [flag]
 

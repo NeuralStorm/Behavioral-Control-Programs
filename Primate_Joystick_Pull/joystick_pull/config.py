@@ -163,9 +163,13 @@ class GameConfig:
         def load_record_analog() -> Dict[str, int]:
             ra = os.environ.get('record_analog')
             if not ra:
-                return {}
+                data = {
+                    'photodiode': 'auto',
+                    'joystick': 'auto',
+                }
+            else:
+                data: Dict[str, Any] = hjson.loads(ra)
             
-            data = hjson.loads(ra)
             def load_auto(k: str, ch: int | None):
                 if data.get(k) != 'auto':
                     return
