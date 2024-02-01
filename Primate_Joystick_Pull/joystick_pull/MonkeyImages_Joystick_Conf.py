@@ -209,7 +209,7 @@ class MonkeyImages:
                 self.plexon: Optional[PlexonProxy] = PlexonProxy() #type: ignore
                 self.digital_output = PlexonOutput()
             case 'ability':
-                from .data_bridge import DataBridge
+                from butil.bridge.data_bridge import DataBridge
                 self.plexon = DataBridge() #type: ignore
                 self.digital_output = DigitalOutput()
             case None:

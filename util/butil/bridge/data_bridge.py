@@ -5,7 +5,7 @@ import json
 import os
 import time
 
-from .plexon import PlexonEvent
+from ..plexon import PlexonEvent
 
 class ConnectionError(Exception):
     pass
@@ -46,14 +46,6 @@ class DataBridge:
     
     def wait_for_start(self):
         return {'ts': 0}
-    
-    def water_on(self):
-        # assert False
-        pass
-    
-    def water_off(self):
-        # assert False
-        pass
     
     def connect(self):
         soc = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
