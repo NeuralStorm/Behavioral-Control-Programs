@@ -146,10 +146,10 @@ class Plexon:
             if block_type == CONTINUOUS_TYPE and source_name == 'AI':
                 voltage_scaler = source_numbers_voltage_scalers[num_or_type]
                 samples = new_data.waveform[i]
-                samples = [s * voltage_scaler for s in samples]
-                val = samples[-1]
+                samples = (s * voltage_scaler for s in samples)
                 
-                yield PlexonEvent(ts, PlexonEvent.ANALOG, value=val, chan=chan)
+                for val in samples:
+                    yield PlexonEvent(ts, PlexonEvent.ANALOG, value=val, chan=chan)
             elif block_type == SPIKE_TYPE:
                 unit = new_data.unit[i]
                 yield PlexonEvent(ts, PlexonEvent.SPIKE, chan=chan, unit=unit)
