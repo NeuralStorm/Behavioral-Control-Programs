@@ -13,20 +13,6 @@ from .. import DigitalOutput
 
 logger = logging.getLogger(__name__)
 
-try:
-    from .pyopxclient import PyOPXClientAPI, OPX_ERROR_NOERROR, SPIKE_TYPE, CONTINUOUS_TYPE, EVENT_TYPE, OTHER_TYPE
-except ImportError:
-    plexon_import_failed = True
-else:
-    plexon_import_failed = False
-
-# This will be filled in later. Better to store these once rather than have to call the functions
-# to get this information on every returned data block
-source_numbers_types = {}
-source_numbers_names = {}
-source_numbers_rates = {}
-source_numbers_voltage_scalers = {}
-
 class PlexonEvent:
     ANALOG = 'analog'
     SPIKE = 'spike'
@@ -52,7 +38,9 @@ class PlexonEvent:
 
 class Plexon:
     def __init__(self):
-        assert not plexon_import_failed
+        from .pyopxclient import PyOPXClientAPI, OPX_ERROR_NOERROR, SPIKE_TYPE, CONTINUOUS_TYPE, EVENT_TYPE, OTHER_TYPE
+        self._SPIKE_TYPE = SPIKE_TYPE
+        self._CONTINUOUS_TYPE = CONTINUOUS_TYPE
         
         self.client = PyOPXClientAPI()
         
@@ -63,6 +51,15 @@ class Plexon:
             # print("Error code: {}\n".format(self.client.last_result))
             raise PlexonError("Client isn't connected, Error code: {}".format(self.client.last_result))
             # self.plexon = False
+        
+        self.client.exclude_source('WB')
+        self.client.exclude_source('FP')
+        self.client.exclude_source('SPKC')
+        
+        self.source_numbers_types = {}
+        self.source_numbers_names = {}
+        self.source_numbers_rates = {}
+        self.source_numbers_voltage_scalers = {}
         
         # print("Connected to OmniPlex Server\n")
         # Get global parameters
@@ -87,8 +84,8 @@ class Plexon:
                 # Get general information on the source
                 source_name, source_type, num_chans, linear_start_chan = self.client.get_source_info(global_parameters.source_ids[index])
                 # Store information about the source types and names for later use.
-                source_numbers_types[global_parameters.source_ids[index]] = source_type
-                source_numbers_names[global_parameters.source_ids[index]] = source_name
+                self.source_numbers_types[global_parameters.source_ids[index]] = source_type
+                self.source_numbers_names[global_parameters.source_ids[index]] = source_name
                 if source_name == 'AI':
                     logger.info("----- Source {} -----".format(global_parameters.source_ids[index]))
                     source_types = { SPIKE_TYPE: "Spike", EVENT_TYPE: "Event", CONTINUOUS_TYPE: "Continuous", OTHER_TYPE: "Other" }
@@ -100,8 +97,8 @@ class Plexon:
                     # Get information specific to a continuous source
                     _, rate, voltage_scaler = self.client.get_cont_source_info(source_name)
                     # Store information about the source rate and voltage scaler for later use.
-                    source_numbers_rates[global_parameters.source_ids[index]] = rate
-                    source_numbers_voltage_scalers[global_parameters.source_ids[index]] = voltage_scaler
+                    self.source_numbers_rates[global_parameters.source_ids[index]] = rate
+                    self.source_numbers_voltage_scalers[global_parameters.source_ids[index]] = voltage_scaler
                     logger.info("Digitization Rate: {}, Voltage Scaler: {}".format(rate, voltage_scaler))
     
     def wait_for_start(self):
@@ -119,19 +116,19 @@ class Plexon:
         
         for i in range(new_data.num_data_blocks):
             num_or_type = new_data.source_num_or_type[i]
-            block_type = source_numbers_types[new_data.source_num_or_type[i]]
-            source_name = source_numbers_names[new_data.source_num_or_type[i]]
+            block_type = self.source_numbers_types[new_data.source_num_or_type[i]]
+            source_name = self.source_numbers_names[new_data.source_num_or_type[i]]
             chan = new_data.channel[i]
             ts = new_data.timestamp[i]
             
-            if block_type == CONTINUOUS_TYPE and source_name == 'AI':
-                voltage_scaler = source_numbers_voltage_scalers[num_or_type]
+            if block_type == self._CONTINUOUS_TYPE and source_name == 'AI':
+                voltage_scaler = self.source_numbers_voltage_scalers[num_or_type]
                 samples = new_data.waveform[i]
                 samples = (s * voltage_scaler for s in samples)
                 
                 for val in samples:
                     yield PlexonEvent(ts, PlexonEvent.ANALOG, value=val, chan=chan)
-            elif block_type == SPIKE_TYPE:
+            elif block_type == self._SPIKE_TYPE:
                 unit = new_data.unit[i]
                 yield PlexonEvent(ts, PlexonEvent.SPIKE, chan=chan, unit=unit)
             elif num_or_type == self.event_source:
@@ -165,8 +162,6 @@ class _PlexonProcess(Process):
 
 class PlexonProxy:
     def __init__(self):
-        assert not plexon_import_failed
-        
         self._proc = _PlexonProcess()
         self._proc.start()
     

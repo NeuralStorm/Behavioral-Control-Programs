@@ -229,19 +229,22 @@ class PyOPXClientAPI:
     def exclude_source(self, source_name_or_number):
         """
         Excludes the given source from the data sent to this client.
-
+        
         Args:
             source_name_or_number - name or number of continuous source
-
+        
         Returns:
             None
         """
-
+        
         if type(source_name_or_number) is str:
             self.last_result = self.opx_client.exclude_source_by_name(source_name_or_number)
-
+        
         if type(source_name_or_number) is int:
             self.last_result = self.opx_client.exclude_source_by_number(source_name_or_number)
+        
+        if self.last_result != 0:
+            print(f'exclude failed? {source_name_or_number}')
 
     def include_source(self, source_name_or_number):
         """
