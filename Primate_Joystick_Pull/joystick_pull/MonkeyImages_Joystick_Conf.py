@@ -205,7 +205,7 @@ class MonkeyImages:
             case 'plexon':
                 # from .plexon import Plexon
                 # self.plexon: Optional[Plexon] = Plexon()
-                from .plexon import PlexonProxy, PlexonOutput
+                from butil.plexon import PlexonProxy, PlexonOutput
                 self.plexon: Optional[PlexonProxy] = PlexonProxy() #type: ignore
                 self.digital_output = PlexonOutput()
             case 'ability':

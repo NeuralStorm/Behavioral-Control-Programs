@@ -4,7 +4,7 @@ import platform
 
 from .pyplexdo_32 import PyPlexDO
 
-from .. import PlexonError
+from ..common import PlexonError
 
 _initialized = False
 
