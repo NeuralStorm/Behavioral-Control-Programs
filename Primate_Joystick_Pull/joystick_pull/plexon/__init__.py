@@ -7,6 +7,7 @@ from queue import Empty
 import platform
 
 from butil.plexon.plexdo import PlexDo
+from butil import DigitalOutput
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +52,7 @@ class PlexonEvent:
         return not self.falling
 
 class Plexon:
-    def __init__(self, *, no_do=False):
+    def __init__(self):
         assert not plexon_import_failed
         
         self.reward_nidaq_bit = 17 # DO Channel
@@ -105,13 +106,7 @@ class Plexon:
                     source_numbers_rates[global_parameters.source_ids[index]] = rate
                     source_numbers_voltage_scalers[global_parameters.source_ids[index]] = voltage_scaler
                     logger.info("Digitization Rate: {}, Voltage Scaler: {}".format(rate, voltage_scaler))
-        
-        
-        if os.environ.get('disable_plexon_do') or no_do:
-            self.plexdo: PlexDo | None = None
-        else:
-            self.plexdo = PlexDo()
-        
+    
     def wait_for_start(self):
         while True:
             new_data = self.client.get_new_data()
@@ -120,14 +115,6 @@ class Plexon:
                     return {
                         'ts': new_data.timestamp[i],
                     }
-    
-    def water_on(self):
-        if self.plexdo is not None:
-            self.plexdo.bit_on(self.reward_nidaq_bit)
-    
-    def water_off(self):
-        if self.plexdo is not None:
-            self.plexdo.bit_off(self.reward_nidaq_bit)
     
     def get_data(self):
         # self.client.opx_wait(5)
@@ -163,7 +150,7 @@ class _PlexonProcess(Process):
         super().__init__(daemon=True)
     
     def run(self):
-        plexon = Plexon(no_do=True)
+        plexon = Plexon()
         
         while True:
             plexon.client.opx_wait(1)
@@ -185,13 +172,6 @@ class PlexonProxy:
         
         self._proc = _PlexonProcess()
         self._proc.start()
-        
-        self.reward_nidaq_bit = 17 # DO Channel
-        
-        if os.environ.get('disable_plexon_do'):
-            self.plexdo: PlexDo | None = None
-        else:
-            self.plexdo = PlexDo()
     
     def wait_for_start(self):
         while True:
@@ -202,6 +182,14 @@ class PlexonProxy:
                         'ts': x.ts
                     }
     
+    def get_data(self):
+        return self._proc.get_data()
+
+class PlexonOutput(DigitalOutput):
+    def __init__(self):
+        self.reward_nidaq_bit = 17 # DO Channel
+        self.plexdo = PlexDo()
+    
     def water_on(self):
         if self.plexdo is not None:
             self.plexdo.bit_on(self.reward_nidaq_bit)
@@ -209,6 +197,3 @@ class PlexonProxy:
     def water_off(self):
         if self.plexdo is not None:
             self.plexdo.bit_off(self.reward_nidaq_bit)
-    
-    def get_data(self):
-        return self._proc.get_data()

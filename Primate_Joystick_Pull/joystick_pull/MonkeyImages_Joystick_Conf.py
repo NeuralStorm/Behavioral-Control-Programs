@@ -30,6 +30,7 @@ from tkinter import filedialog
 
 import behavioral_classifiers
 from butil import EventFile, Debounce, get_git_info, AnalogOut
+from butil import DigitalOutput
 from butil.out_file import EventFileProcess
 
 from .game_frame import GameFrame, InfoView, screenshot_widgets, screenshot_widget
@@ -202,15 +203,18 @@ class MonkeyImages:
         
         match self.config.event_source:
             case 'plexon':
-                from .plexon import Plexon
+                # from .plexon import Plexon
                 # self.plexon: Optional[Plexon] = Plexon()
-                from .plexon import PlexonProxy
-                self.plexon: Optional[Plexon] = PlexonProxy() #type: ignore
+                from .plexon import PlexonProxy, PlexonOutput
+                self.plexon: Optional[PlexonProxy] = PlexonProxy() #type: ignore
+                self.digital_output = PlexonOutput()
             case 'ability':
                 from .data_bridge import DataBridge
                 self.plexon = DataBridge() #type: ignore
+                self.digital_output = DigitalOutput()
             case None:
                 self.plexon = None
+                self.digital_output: DigitalOutput = DigitalOutput()
             case _:
                 raise ValueError(f"Invalid event_source {self.config.event_source}")
         
@@ -326,11 +330,10 @@ class MonkeyImages:
         pass
     
     def __exit__(self, *exc):
-        if self.plexon:
-            try:
-                self.plexon.water_off()
-            except:
-                traceback.print_exc()
+        try:
+            self.digital_output.water_off()
+        except:
+            traceback.print_exc()
         self.trial_stack.__exit__(*exc)
         self._stack.__exit__(*exc)
     
@@ -804,13 +807,11 @@ class MonkeyImages:
                 
                 if self.auto_water_reward_enabled and reward_duration > 0:
                     self.log_event("water_dispense", tags=['game_flow'], info={'duration': reward_duration})
-                    if self.plexon:
-                        self.plexon.water_on()
+                    self.digital_output.water_on()
                 
                 yield from wait(reward_duration)
                 
-                if self.plexon:
-                    self.plexon.water_off()
+                self.digital_output.water_off()
                 
                 self.clear_image()
             
@@ -821,14 +822,12 @@ class MonkeyImages:
         self.log_event("manual_water_dispense", tags=[], info={'duration': self.config.manual_reward_time})
         def gen():
             print("water on")
-            if self.plexon:
-                self.plexon.water_on()
+            self.digital_output.water_on()
             t = time.perf_counter()
             while time.perf_counter() - t < self.config.manual_reward_time:
                 yield
             print("water off")
-            if self.plexon:
-                self.plexon.water_off()
+            self.digital_output.water_off()
         
         loop_iter = gen()
         def inner():
@@ -897,8 +896,7 @@ class MonkeyImages:
         self.stopped = True
         self._clear_callbacks()
         
-        if self.plexon:
-            self.plexon.water_off()
+        self.digital_output.water_off()
         self.clear_image()
         if winsound is not None:
             winsound.PlaySound(None, winsound.SND_PURGE)
