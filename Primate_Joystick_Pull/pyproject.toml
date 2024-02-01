@@ -28,6 +28,7 @@ js-histogram = "joystick_pull.tools.gen_histogram:main"
 js-gen-template = "joystick_pull.gen_templates:main"
 js-display-trials = "joystick_pull.tools.display_trials:main"
 js-get-event-times = "joystick_pull.tools.time_sync.get_event_times:main"
+js-analog-to-npy = "joystick_pull.tools.analog_to_npy:main"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
