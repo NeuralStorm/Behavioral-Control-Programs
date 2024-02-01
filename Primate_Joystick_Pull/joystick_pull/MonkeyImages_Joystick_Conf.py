@@ -210,8 +210,9 @@ class MonkeyImages:
                 self.digital_output = PlexonOutput()
             case 'ability':
                 from butil.bridge.data_bridge import DataBridge
+                from butil.bridge.output import BridgeOutput
                 self.plexon = DataBridge() #type: ignore
-                self.digital_output = DigitalOutput()
+                self.digital_output = BridgeOutput()
             case None:
                 self.plexon = None
                 self.digital_output: DigitalOutput = DigitalOutput()
