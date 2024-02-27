@@ -158,9 +158,6 @@ class MonkeyImages:
         # found for it
         self.pending_photodiode_event: Optional[str] = None
         
-        # used in gathering_data_omni_new to track changes in joystick position
-        self.joystick_debounce = Debounce(threshold=2, high_threshold=4, delay=0.001)
-        
         # callbacks triggered by external events
         # Dict[str, Set[Callable[[], None]]]
         self._callbacks = {
@@ -234,6 +231,9 @@ class MonkeyImages:
         self.zone_by_name = {x.name: x for x in self.zones}
         self.zone_by_chan = {x.chan: x for x in self.zones}
         self.zone_by_exit_chan = {x.exit_chan: x for x in self.zones if x.exit_chan is not None}
+        
+        # used in gathering_data_omni_new to track changes in joystick position
+        self.joystick_debounce = Debounce(threshold=2, high_threshold=4, delay=self.config.joystick_debounce)
         
         self.trial_stack: ExitStack = ExitStack()
         

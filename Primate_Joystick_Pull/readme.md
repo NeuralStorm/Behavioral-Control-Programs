@@ -214,6 +214,12 @@ set to `plexon` or `ability` to collect events from an external system
 overrides normal file name generation and uses a fixed value instead
 
 ---
+### `joystick_debounce`
+
+Debounce time for joystick state changes in seconds.  
+default: 0.001
+
+---
 ### `photodiode_flash_duration`
 
 photodiode marker flash duration in seconds, set to 0 to disable the photodiode marker flash  

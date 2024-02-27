@@ -106,6 +106,7 @@ class GameConfig:
         self.post_successful_pull_delay: float = pspd
         
         self.joystick_channel: int = int(get('joystick_channel', 3))
+        self.joystick_debounce: float = float(os.environ.get('joystick_debounce', 0.001))
         
         num_trials = int(get('no_trials', 0))
         if num_trials == 0:
