@@ -42,6 +42,7 @@ class DataBridge:
         self._buf = None
         
         self.robust = True
+        self.custom_config: bytes | None = None
         
         # time.perf_counter value to reconnect at
         self._reconnect_after = 0
@@ -63,7 +64,9 @@ class DataBridge:
             return
         
         try:
-            if self.robust:
+            if self.custom_config is not None:
+                soc.sendall(self.custom_config)
+            elif self.robust:
                 soc.sendall(b'''{"allow_drop": false, "buffer_size": 2000, "prefix_filter": ["b"]}\n''')
             else:
                 soc.sendall(b'''{"allow_drop": true, "buffer_size": 10, "prefix_filter": ["b"]}\n''')
