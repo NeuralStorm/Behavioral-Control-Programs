@@ -211,8 +211,16 @@ class MonkeyImages:
             case 'ability':
                 from butil.bridge.data_bridge import DataBridge
                 from butil.bridge.output import BridgeOutput
-                self.plexon = DataBridge() #type: ignore
+                from butil.event_source.process_source import SourceProxy
+                # self.plexon = DataBridge() #type: ignore
+                self.plexon = SourceProxy(DataBridge) #type: ignore
                 self.digital_output = BridgeOutput()
+                # self.digital_output: DigitalOutput = DigitalOutput()
+            case 'ability_no_output':
+                from butil.bridge.data_bridge import DataBridge
+                from butil.event_source.process_source import SourceProxy
+                self.plexon = SourceProxy(DataBridge) #type: ignore
+                self.digital_output: DigitalOutput = DigitalOutput()
             case None:
                 self.plexon = None
                 self.digital_output: DigitalOutput = DigitalOutput()

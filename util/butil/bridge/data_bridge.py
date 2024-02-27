@@ -41,6 +41,8 @@ class DataBridge:
         
         self._buf = None
         
+        self.robust = True
+        
         # time.perf_counter value to reconnect at
         self._reconnect_after = 0
     
@@ -61,14 +63,14 @@ class DataBridge:
             return
         
         try:
-            # print('sendall')
-            # soc.sendall(b'd:10:40:b\n')
-            # downsample by 10
-            # soc.sendall(b'd:10::b\n')
-            # soc.sendall(b'd:10::b\n')
-            soc.sendall(b'''{"allow_drop": true, "buffer_size": 10, "prefix_filter": ["b"]}\n''')
+            if self.robust:
+                soc.sendall(b'''{"allow_drop": false, "buffer_size": 2000, "prefix_filter": ["b"]}\n''')
+            else:
+                soc.sendall(b'''{"allow_drop": true, "buffer_size": 10, "prefix_filter": ["b"]}\n''')
         except OSError as e:
             print(f'data bridge error {e}')
+            if self.robust:
+                raise
             self._soc = None
             self._reconnect_after = time.perf_counter() + 1
             return
@@ -76,45 +78,52 @@ class DataBridge:
         
         self._soc = soc
     
+    def get_raw(self):
+        if self._soc is None:
+            x = b''
+        else:
+            try:
+                x = self._soc.recv(4096)
+            except BlockingIOError:
+                time.sleep(1/8000)
+                return
+            except OSError as e:
+                print(f'data bridge error {e}')
+                x = b''
+        
+        if not x:
+            if self._soc is not None:
+                try:
+                    self._soc.close()
+                except:
+                    pass
+                if self.robust:
+                    raise ConnectionError()
+            if time.perf_counter() > self._reconnect_after:
+                self.connect()
+            if self._soc is None and self.robust:
+                raise ConnectionError()
+            return
+        
+        if self._buf:
+            x = self._buf + x
+        
+        parts = x.split(b'\n')
+        
+        self._buf = parts[-1]
+        parts = parts[:-1]
+        
+        for part in parts:
+            # print(part)
+            part = part.removeprefix(b'b')
+            if part[0] != b'{'[0]:
+                continue
+            msg = json.loads(part)
+            yield msg
+    
     def get_data(self):
         # while True:
-            if self._soc is None:
-                x = b''
-            else:
-                try:
-                    x = self._soc.recv(4096)
-                except BlockingIOError:
-                    # time.sleep(1/4000)
-                    # continue
-                    # break
-                    # print('blocking io')
-                    return
-                except OSError as e:
-                    print(f'data bridge error {e}')
-                    x = b''
-            
-            if not x:
-                if self._soc is not None:
-                    self._soc.close()
-                # raise ConnectionError()
-                if time.perf_counter() > self._reconnect_after:
-                    self.connect()
-                # continue
-                return
-            
-            if self._buf:
-                x = self._buf + x
-            
-            parts = x.split(b'\n')
-            self._buf = parts[-1]
-            parts = parts[:-1]
-            
-            for part in parts:
-                # print(part)
-                part = part.removeprefix(b'b')
-                if part[0] != b'{'[0]:
-                    continue
-                msg = json.loads(part)
+            for msg in self.get_raw():
                 
                 message_type = msg.get('t')
                 
