@@ -20,10 +20,6 @@ import inspect
 import json
 from threading import Thread
 
-try:
-    import winsound
-except ImportError:
-    winsound = None # type: ignore
 
 import tkinter as tk
 from tkinter import filedialog
@@ -32,6 +28,7 @@ import behavioral_classifiers
 from butil import EventFile, Debounce, get_git_info, AnalogOut
 from butil import DigitalOutput
 from butil.out_file import EventFileProcess
+from butil.sound import get_sound_provider, SoundProvider
 
 from .game_frame import GameFrame, InfoView, screenshot_widgets, screenshot_widget
 from .photodiode import Photodiode
@@ -321,6 +318,8 @@ class MonkeyImages:
                 self.log_hw('plexon_recording_start', plexon_ts=wait_res['ts'], info={'wait': True})
                 print ("Recording start detected.")
         
+        self.sound: SoundProvider = get_sound_provider(disable=self.config.no_audio)
+        
         self.classifier_dbg = self.config.classifier_debug
         if self.classifier_dbg:
             assert self._cl_helper is not None
@@ -529,10 +528,7 @@ class MonkeyImages:
         self.flash_marker('go_cue_shown')
         self.dbg_simulate_photodiode('go_cue_shown')
         
-        if winsound is not None:
-            winsound.PlaySound(
-                str(SOUND_PATH_BASE / 'mixkit-unlock-game-notification-253.wav'),
-                winsound.SND_FILENAME + winsound.SND_ASYNC + winsound.SND_NOWAIT)
+        self.sound.play_file(SOUND_PATH_BASE / 'mixkit-unlock-game-notification-253.wav')
     
     def run_trial(self, trial_i=0):
         self.trial_stack.close()
@@ -598,10 +594,7 @@ class MonkeyImages:
             self.show_image('yPrepare')
             if self.config.discrim_delay_range[0] > self.config.photodiode_flash_duration+0.1:
                 self.flash_marker('prep_diamond')
-            if winsound is not None:
-                winsound.PlaySound(
-                    str(SOUND_PATH_BASE / 'mixkit-arcade-bonus-229.wav'),
-                    winsound.SND_FILENAME + winsound.SND_ASYNC + winsound.SND_NOWAIT)
+            self.sound.play_file(SOUND_PATH_BASE / 'mixkit-arcade-bonus-229.wav')
             
             gen = self.show_cues(
                 pre_discrim_delay = discrim_delay,
@@ -776,10 +769,7 @@ class MonkeyImages:
             
             if reward_duration is None: # pull failed
                 if self.config.EnableBlooperNoise:
-                    if winsound is not None:
-                        winsound.PlaySound(
-                            str(SOUND_PATH_BASE / 'zapsplat_multimedia_game_sound_kids_fun_cheeky_layered_mallets_negative_66204.wav'),
-                            winsound.SND_FILENAME + winsound.SND_ASYNC + winsound.SND_NOWAIT)
+                    self.sound.play_file(SOUND_PATH_BASE / 'zapsplat_multimedia_game_sound_kids_fun_cheeky_layered_mallets_negative_66204.wav')
                 
                 self.log_event('image_reward_shown', tags=['game_flow'], info={
                     'selected_image': selected_image_key,
@@ -803,10 +793,7 @@ class MonkeyImages:
                 self.show_image(selected_image_key, variant='success', boxed=True)
                 self.flash_marker('reward')
                 
-                if winsound is not None:
-                    winsound.PlaySound(
-                        str(SOUND_PATH_BASE / 'zapsplat_multimedia_game_sound_kids_fun_cheeky_layered_mallets_complete_66202.wav'),
-                        winsound.SND_FILENAME + winsound.SND_ASYNC + winsound.SND_NOWAIT)
+                self.sound.play_file(SOUND_PATH_BASE / 'zapsplat_multimedia_game_sound_kids_fun_cheeky_layered_mallets_complete_66202.wav')
                 
                 if self.config.post_successful_pull_delay is not None:
                     yield from wait(self.config.post_successful_pull_delay)
@@ -907,8 +894,7 @@ class MonkeyImages:
         
         self.digital_output.water_off()
         self.clear_image()
-        if winsound is not None:
-            winsound.PlaySound(None, winsound.SND_PURGE)
+        self.sound.stop()
         if not self.config.no_print_stats:
             pprint(InfoView.calc_end_info(self.event_log))
     

@@ -9,7 +9,9 @@ python = ">=3.11,<4.0"
 # 9.5.0 is the last Pillow version with binaries for 32-bit python
 Pillow = "9.5.0"
 hjson = "3.0.2"
+pygame = { version = "2.5.2", markers = "sys_platform == 'linux'" }
 
+# numpy = "1.26.4"
 plotnine = { version = "0.10.1", optional = true }
 
 behavioral_classifiers = { path = "../classifiers", develop = true }

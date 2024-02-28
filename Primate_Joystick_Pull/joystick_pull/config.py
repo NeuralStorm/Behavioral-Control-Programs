@@ -209,6 +209,7 @@ class GameConfig:
         self.no_info_view: bool = bool(os.environ.get('no_info_view'))
         self.hide_buttons: bool = bool(os.environ.get('hide_buttons'))
         self.layout_debug: bool = bool(os.environ.get('layout_debug'))
+        self.no_audio: bool = bool(os.environ.get('no_audio'))
     
     def parse_threshold(self, s):
         s = s.strip()
