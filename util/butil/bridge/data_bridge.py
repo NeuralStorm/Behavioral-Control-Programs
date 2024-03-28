@@ -87,6 +87,7 @@ class DataBridge:
         else:
             try:
                 x = self._soc.recv(4096)
+                # x = self._soc.recv(128)
             except BlockingIOError:
                 time.sleep(1/8000)
                 return
@@ -141,33 +142,35 @@ class DataBridge:
                     
                     for i, is_high in enumerate(msg['d']):
                         if self._analog_js_emu and 28 <= i <= 31:
-                            out_chan = i-28+3
-                            assert 3 <= out_chan <= 6
+                            # out_chan = i-28+3
+                            # assert 3 <= out_chan <= 6
+                            out_chan = i
                             if is_high:
                                 yield PlexonEvent(msg['ts'], PlexonEvent.ANALOG, value=5, chan=out_chan)
                             else:
                                 yield PlexonEvent(msg['ts'], PlexonEvent.ANALOG, value=0, chan=out_chan)
-                    # if self._digital_prev is None:
-                    #     self._digital_prev = msg['d']
-                    # else:
-                    #     for i, (prev, new) in enumerate(zip(self._digital_prev, msg['d'])):
-                    #         if not prev and new: # rising edge
-                    #             if self._analog_js_emu and 28 <= i <= 31:
-                    #                 yield PlexonEvent(msg['ts'], PlexonEvent.ANALOG, value=5, chan=i-28+3)
+                    
+                    if self._digital_prev is None:
+                        self._digital_prev = msg['d']
+                    else:
+                        for i, (prev, new) in enumerate(zip(self._digital_prev, msg['d'])):
+                            if not prev and new: # rising edge
+                                # if self._analog_js_emu and 28 <= i <= 31:
+                                #     yield PlexonEvent(msg['ts'], PlexonEvent.ANALOG, value=5, chan=i-28+3)
                                 
-                    #             chan = CHAN_MAPPING.get(i, i)
-                    #             if chan is None:
-                    #                 continue
-                    #             yield PlexonEvent(msg['ts'], PlexonEvent.EVENT, chan=chan)
-                    #         if not new and prev: # falling edge
-                    #             if self._analog_js_emu and 28 <= i <= 31:
-                    #                 yield PlexonEvent(msg['ts'], PlexonEvent.ANALOG, value=0, chan=i-28+3)
+                                chan = CHAN_MAPPING.get(i, i)
+                                if chan is None:
+                                    continue
+                                yield PlexonEvent(msg['ts'], PlexonEvent.EVENT, chan=chan)
+                            if not new and prev: # falling edge
+                                # if self._analog_js_emu and 28 <= i <= 31:
+                                #     yield PlexonEvent(msg['ts'], PlexonEvent.ANALOG, value=0, chan=i-28+3)
                                 
-                    #             chan = CHAN_MAPPING.get(i, i)
-                    #             if chan is None:
-                    #                 continue
-                    #             # chan *= -1
-                    #             yield PlexonEvent(msg['ts'], PlexonEvent.EVENT, chan=chan, falling=True)
-                    #     self._digital_prev = msg['d']
+                                chan = CHAN_MAPPING.get(i, i)
+                                if chan is None:
+                                    continue
+                                # chan *= -1
+                                yield PlexonEvent(msg['ts'], PlexonEvent.EVENT, chan=chan, falling=True)
+                        self._digital_prev = msg['d']
                 elif message_type == 'spike':
                     yield PlexonEvent(msg['ts'], PlexonEvent.SPIKE, chan=msg['ch'], unit=0)
