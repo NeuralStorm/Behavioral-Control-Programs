@@ -13,6 +13,23 @@ from contextlib import ExitStack
 from butil import EventReader
 from ..output_gen.gen_csv import group_trials, find, find_one, find_id
 
+def isolate_recording_start(events, target_idx):
+    found = True
+    idx = 0
+    
+    out = []
+    for evt in events:
+        if evt['name'] != 'plexon_recording_start':
+            out.append(evt)
+        else:
+            if target_idx == idx:
+                found = True
+                out.append(evt)
+            idx += 1
+    
+    assert found
+    return out
+
 def get_trial_details(
     events: list, plx_offset: Optional[float]=None,
     pd_times: Dict[int, float] = {},
@@ -408,6 +425,7 @@ def run_for_paths(
     key_format: str,
     include_failed: bool = False,
     permissive: bool = False,
+    recording_start_idx: Optional[int] = None,
 ):
     input_path = events_path
     out_events = []
@@ -425,6 +443,9 @@ def run_for_paths(
             if ignore_photodiode and name in ['photodiode_on', 'photodiode_off']:
                 continue
             out_events.append(record)
+    
+    if recording_start_idx is not None:
+        out_events = isolate_recording_start(out_events, recording_start_idx)
     
     pd_times = {}
     if pd_times_path is not None:
@@ -485,6 +506,8 @@ def parse_args():
         help='include failed trials in event file')
     parser.add_argument('--permissive', action='store_true',
         help='attempt to fill in data in older formats')
+    parser.add_argument('--recording-start', type=int,
+        help='which recording start to use')
     
     return parser.parse_args()
 
@@ -504,6 +527,7 @@ def main():
         key_format=args.group_by,
         include_failed=args.include_failed,
         permissive=args.permissive,
+        recording_start_idx=args.recording_start,
     )
 
 if __name__ == '__main__':
