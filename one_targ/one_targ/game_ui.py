@@ -6,67 +6,25 @@ from math import pi, sin, cos
 import random
 import time
 from pathlib import Path
+import gc
 
-def get_pos() -> tuple[int, int, int , int] | None:
-    # -1920,0<-1920x1086
-    # ^ x pos
-    #       ^ y pos
-    #          ^ width
-    #               ^ height
-    try:
-        s = os.environ['pos']
-    except KeyError:
-        return None
-    
-    pos, size = s.split('<-')
-    px, py = pos.split(',')
-    px = int(px)
-    py = int(py)
-    sx, sy = size.split('x')
-    sx = int(sx)
-    sy = int(sy)
-    
-    return (px, py, sx, sy)
-
-from kivy.config import Config as KivyConfig
-_pos = get_pos()
-if _pos is not None:
-    KivyConfig.set('graphics', 'position', 'custom')
-    KivyConfig.set('graphics', 'left', _pos[0])
-    KivyConfig.set('graphics', 'top', _pos[1])
-    KivyConfig.set('graphics', 'width', _pos[2])
-    KivyConfig.set('graphics', 'height', _pos[3])
-
-from kivy.app import App
-from kivy.core.window import Window
-from kivy.core.audio import SoundLoader
-from kivy.uix.widget import Widget
-from kivy.properties import NumericProperty, ReferenceListProperty, ObjectProperty, ListProperty, StringProperty, BooleanProperty
-from kivy.uix.screenmanager import ScreenManager, Screen
-from kivy.clock import Clock
+import pygame
+from pygame._sdl2 import Window, Texture, Renderer
 
 from .config import Config
 
-# these values get set in main
-config: Config
-game_state: Any
-
-class Splash(Widget):
-    def init(self, *args):
-        self.args = args
-
 class BackgroundOverlay:
-    def __init__(self, color, *, window=Window):
+    def __init__(self, color, *, window):
         self.window = window
-        self.original_color = window.clearcolor
+        self.original_color = window.background_color
         self.color = color
     
     def __enter__(self):
-        self.original_color = self.window.clearcolor
-        self.window.clearcolor = self.color
+        self.original_color = self.window.background_color
+        self.window.background_color = self.color
     
     def __exit__(self, *exc):
-        self.window.clearcolor = self.original_color
+        self.window.background_color = self.original_color
 
 class TargetOverlay:
     def __init__(self, target, color):
@@ -81,68 +39,64 @@ class TargetOverlay:
     def __exit__(self, *exc):
         self.target.set_color(self._starting_color)
 
-class Target(Widget):
+class PyGameTarget:
+    def __init__(self):
+        self.color = [0, 0, 0]
+        
+        self.center = 0, 0
+        self.abs_pos = 0, 0
+        self.size = 0
+        self.shape = 'circle'
+        self.hidden = True
     
-    color = [1, 1, 1, 1]
-    _color = ListProperty([0,0,0,0])
-    _rectangle_color = ListProperty([0,0,0,0])
-    _triangle_color = ListProperty([0,0,0,0])
-    triangle_points = ListProperty([500, 500, 510, 510, 490, 510])
-    shape = 'circle'
-    hidden = True
-    
-    def set_color(self, color):
+    def set_color(self, color: tuple[int, int, int]):
         self.color = color
-        self._update()
     
     def overlay(self, color):
         return TargetOverlay(self, color)
     
     def show(self):
         self.hidden = False
-        self._update()
     
     def hide(self):
         self.hidden = True
-        self._update()
     
-    def _update(self):
-        if self.shape == 'circle':
-            self._color = self._get_color('circle')
-        elif self.shape == 'square':
-            self._rectangle_color = self._get_color('square')
-        elif self.shape == 'triangle':
-            self._triangle_color = self._get_color('triangle')
-    
-    def _get_color(self, shape):
+    def render(self, screen, center_pos):
         if self.hidden:
-            return (0, 0, 0, 0)
-        if self.shape != shape:
-            return (0, 0, 0, 0)
+            return
         
-        return self.color
+        cx, cy = center_pos
+        rx, ry = self.center
+        x = cx + rx
+        y = cy + ry
+        self.abs_pos = x, y
+        
+        s = self.size
+        r = self.size / 2
+        if self.shape == 'circle':
+            pygame.draw.circle(screen, self.color, (x, y), r)
+        elif self.shape == 'square':
+            pygame.draw.rect(screen, self.color, (x-r, y-r, s, s))
+        elif self.shape == 'triangle':
+            points = [
+                (x, y - r),
+                (x-r, y+r),
+                (x+r, y+r),
+            ]
+            pygame.draw.polygon(screen, self.color, points)
     
     def set_size(self, size):
         self.size = size
     
     def move_px(self, pos):
-        x, y = pos
-        self.center = int(x), int(y)
-        
-        x, y = self.center
-        hs = self.size[0] / 2 # half of size
-        self.triangle_points = [
-            x, y + hs,
-            x - hs, y - hs,
-            x + hs, y - hs,
-        ]
+        self.center = pos
     
     def point_is_within(self, pos):
-        t_x, t_y = self.center
-        c_x, c_y = pos
+        t_x, t_y = pos
+        c_x, c_y = self.abs_pos
         
         shape = self.shape
-        hs = self.size[0] / 2
+        hs = self.size / 2
         if shape == 'circle':
             d = ((t_x - c_x)**2 + (t_y - c_y)**2)**0.5
             return d <= hs
@@ -166,196 +120,140 @@ class Target(Widget):
         else:
             raise ValueError()
 
-class PhotoMarker(Widget):
-    color = ListProperty((0, 0, 0, 0))
-    photo_marker = ObjectProperty(None)
+class GameRenderer:
+    def __init__(self, config: Config):
+        self.periph_pos = 0, 0
+        self.trial_counter = 0
+        self.cursor_px = {}
+        
+        self.background_color = (0,0,0)
+        
+        self.center_target = PyGameTarget()
+        self.periph_target = PyGameTarget()
+        
+        self.photodiode_flash_duration = config.photodiode_flash_duration
+        self._photodiode_off_time = None
+        
+        px_per_cm = config.px_per_cm
+        self.px_per_cm = px_per_cm
+        cent_rad = config.center_target_radius
+        self.nudge = config.nudge
+        
+        self.center_target.set_size(2*cent_rad*px_per_cm)
+        self.center_target.set_color((255,255,0))
+        nx, ny = self.nudge
+        self.center_target.move_px((nx*px_per_cm, ny*px_per_cm))
+        
+        self.periph_target.set_color(config.periph_target_color)
+        self.periph_target.shape = config.periph_target_shape
+        self.periph_target.set_size(2*config.periph_target_radius*px_per_cm)
     
-    def on(self):
-        self.color = 1, 1, 1, 1
+    def overlay(self, color):
+        return BackgroundOverlay(color, window=self)
     
-    def off(self):
-        self.color = 0, 0, 0, 1
-    
-    def set_color(self, r, g, b):
-        _, _, _, a = self.color
-        self.color = r, g, b, a
-    
-    def show(self):
-        r, g, b, _ = self.color
-        self.color = r, g, b, 1
-    
-    def hide(self):
-        r, g, b, _ = self.color
-        self.color = r, g, b, 0
-    
-    def reposition(self, root):
-        # self.top = root.height
-        self.top = root.top
-        # self.right = root.width
-        # self.bottom = root.y
-        self.left = root.x
-
-class COGame(Widget):
-    center = ObjectProperty()
-    target = ObjectProperty()
-    
-    cursor_px = {}
-    cursor_start_px = {}
-    
-    center_target = ObjectProperty()
-    periph_target = ObjectProperty()
-    
-    photo_marker = ObjectProperty()
-    
-    trial_counter = NumericProperty(0)
-    
-    def on_touch_down(self, touch):
-        self.cursor_start_px[touch.uid] = touch.x, touch.y
-        
-        self.cursor_px[touch.uid] = touch.x, touch.y
-
-    def on_touch_move(self, touch):
-        self.cursor_px[touch.uid] = touch.x, touch.y
-
-    def on_touch_up(self, touch):
-        try:
-            del self.cursor_px[touch.uid]
-        except KeyError:
-            pass
-    
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        
-        self.plexon: bool = config.plexon_enabled
-        
-        self.update_callback: Optional[Any] = None
-        
-        self.px_per_cm = config.px_per_cm
-        
-        self.center_target_rad = config.center_target_radius
-        self.periph_target_rad = config.periph_target_radius
-        
-        self.corner_dist = config.corner_dist
-        
-        self.peripheral_target_param = (
-            config.periph_target_shape,
-            config.periph_target_color,
-        )
-        
-        self.nudge_x, self.nudge_y = config.nudge
-        
-        self.size = self.width, self.height
-        self.center_target_position = 0, 0
-        
-        # late initialized
-        self.reward1: Any = None
-        self.reward2: Any = None
-        
-        # game state
-        self.periph_rel = 0, 0
-        
-        self._photodiode_off_time: Optional[float] = None
-    
-    def init(self):
-        self.center_target.set_size((2*self.center_target_rad*self.px_per_cm,)*2)
-        self.center_target.set_color((1,1,0,1))
-        
-        shape, color = self.peripheral_target_param
-        self.periph_target.set_color(color)
-        self.periph_target.shape = shape
-        self.periph_target.set_size((2*self.periph_target_rad*self.px_per_cm,)*2)
-        
-        try:
-            pygame.mixer.init()
-        except:
-            pass
-        self.reward1 = SoundLoader.load('reward1.wav')
-        self.reward2 = SoundLoader.load('reward2.wav')
-        
-        Window.bind(on_resize=self.handle_window_resize)
-        self.handle_reposition()
-    
-    def handle_window_resize(self, _root, width, height):
-        self.size = (width, height)
-        self.handle_reposition()
-    
-    def handle_reposition(self):
-        self.photo_marker.reposition(self)
-        width, height = self.size
-        self.center_target_position = \
-            width//2 + self.nudge_x*self.px_per_cm, \
-            height//2 + self.nudge_y*self.px_per_cm
-        self.center_target.move_px(self.center_target_position)
-        
-        x, y = self.periph_rel
-        x += self.center_target.center[0]
-        y += self.center_target.center[1]
-        self.periph_target.move_px((x, y))
+    def flash_marker(self, duration):
+        if self.photodiode_flash_duration is not None:
+            self._photodiode_off_time = time.perf_counter() + duration
     
     def move_periph(self, x: float, y: float):
-        x *= self.px_per_cm
-        y *= self.px_per_cm
-        self.periph_rel = x, y
-        self.handle_reposition()
+        nx, ny = self.nudge
+        x = (x+nx) * self.px_per_cm
+        y = (y+ny) * self.px_per_cm
+        self.periph_target.move_px((x, y))
     
-    def update(self, ts):
-        now = time.perf_counter()
-        
-        if self._photodiode_off_time is not None and now >= self._photodiode_off_time:
-            self.photo_marker.off()
-            self._photodiode_off_time = None
-        
-        if self.update_callback is not None:
-            self.update_callback()
-    
-    def flash_marker(self, duration: float):
-        self.photo_marker.on()
-        self._photodiode_off_time = time.perf_counter() + duration
-    
-    def run_big_rew_sound(self):
-        self.reward1 = SoundLoader.load('reward1.wav')
-        self.reward1.play()
-    
-    def target_touched(self, target, *, start=False):
-        if start:
-            cursor_px = self.cursor_start_px
-        else:
-            cursor_px = self.cursor_px
-        for _, pos in cursor_px.items():
+    def target_touched(self, target, *, no_drag_in=True):
+        for _, (start_pos, pos) in self.cursor_px.items():
+            if no_drag_in and not target.point_is_within(start_pos):
+                continue
             if target.point_is_within(pos):
                 return True
         return False
+    
+    def render(self, screen):
+        now = time.perf_counter()
+        w = screen.get_width()
+        h = screen.get_height()
+        
+        center = w / 2, h / 2
+        
+        screen.fill(self.background_color)
+        
+        if self.photodiode_flash_duration is not None:
+            if self._photodiode_off_time is not None:
+                if now > self._photodiode_off_time:
+                    self._photodiode_off_time = None
+            if self._photodiode_off_time is not None:
+                pygame.draw.rect(screen, (255,255,255), (0, 0, 100, 100))
+            else:
+                pygame.draw.rect(screen, (0,0,0), (0, 0, 100, 100))
+        
+        self.center_target.render(screen, center)
+        self.periph_target.render(screen, center)
 
-class Manager(ScreenManager):
-    _splash = ObjectProperty(None)
-    config = ObjectProperty()
-    
-    def __init__(self, config_path: Path, config: Config):
-        super(Manager, self).__init__()
-        self.current = 'splash_start'
-        self.config = config
+class MultiWindow:
+    def __init__(self, *, title='-', size=None, position=None):
+        if size is None:
+            size = (1280, 720)
+        kwargs = {}
+        if position is not None:
+            kwargs['position'] = position
+        window = Window(title,
+            size = size,
+            # position=window_pos,
+            **kwargs,
+        )
+        window.resizable = True
         
-        if config.skip_start:
-            self.start_co_game()
-    
-    def start_co_game(self):
-        self.current = 'game_screen'
-        game = self.ids['game']
-        game.init()
-        # global config
+        render = Renderer(window, vsync=False)
         
-        # global game_state
-        # game_state = GameState(config)
-        game.update_callback = game_state.progress_gen
-        game_state.co_game = game
+        surface = pygame.Surface(window.size)
         
-        Clock.schedule_interval(game.update, 1.0 / 5000)
-
-class COApp(App):
-    def __init__(self, config_path: Path, config: Config):
-        super(COApp, self).__init__()
-        self._config_path = config_path
-        self._config = config
+        texture = Texture.from_surface(render, surface)
+        
+        window.show()
+        
+        self.window = window
+        self._render = render
+        self.surface = surface
+        self._texture = texture
+        
+        self._size = window.size
+        self.fullscreen = False
     
-    def build(self, **kwargs):
-        return Manager(self._config_path, self._config)
+    def destroy(self):
+        # SIGSEGV was caused when render was cleaned up after window.destroy()
+        # this makes it get cleaned up beforehand
+        # it's very important no references to self._render are held externally
+        # this is almost certainly very fragile and relies on the specifics of cpython's GC
+        del self._texture
+        gc.collect()
+        assert len(gc.get_referrers(self._render)) == 1
+        del self._render
+        gc.collect()
+        
+        self.window.destroy()
+    
+    def toggle_fullscreen(self):
+        if not self.fullscreen:
+            self.window.set_fullscreen()
+            self.fullscreen = True
+        else:
+            self.window.set_windowed()
+            self.fullscreen = False
+    
+    def _resize(self):
+        del self._texture
+        del self.surface
+        self.surface = pygame.Surface(self.window.size)
+        self._texture = Texture.from_surface(self._render, self.surface)
+        self._size = self.window.size
+    
+    def present(self):
+        if self._size != self.window.size:
+            # print('resize')
+            # self._size = self.window.size
+            self._resize()
+        
+        self._texture.update(self.surface)
+        self._texture.draw()
+        self._render.present()

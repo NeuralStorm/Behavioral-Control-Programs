@@ -1,7 +1,7 @@
 
 # Setup
 
-copy `./example_config.hjson` to `./config.hjson`
+copy `<project>/example_config.hjson` to `./config.hjson`
 
 using python 3.11  
 run `pip install .[hw]`
@@ -17,6 +17,18 @@ export plexon=1
 one-targ
 ```
 
+Press a to begin the task.
+
+See comments in [example_config.hjson](./example_config.hjson) for descriptions of config parameters.
+
+# Hotkeys
+
+`~` - exit game  
+`a` - start game  
+`s` - stop game  
+`f` - toggle fullscreen  
+`c` - toggle calibration square (always 200x200 px)  
+
 # Environment Variables
 
 For environment variables marked [flag] any value that is set and not an empty string will enable the functionality.  
@@ -29,6 +41,7 @@ export plexon=1
 ### `config_path`
 
 use config file at path if no path is specified on the command line
+default: `./config.hjson`
 
 ---
 ### `pos`
@@ -61,32 +74,28 @@ export nidaq=Dev3
 ```
 
 ---
-### `skip_start` [flag]
+### `no_audio` [flag]
 
-automatically dismiss the start screen
+disables audio
 
-# Other Things
+---
+### `photodiode_flash_duration`
 
-### Output file save location  
-Some previous versions of "one_targ_new" replicated the save location from "One Targ" assuming the working directory was in the same folder as the script, not the full original logic.  
-The current logic does not split the path on backslashes on platforms besides windows, the original logic split the path on backslashes regardless of platform.  
-```
-on non windows (mac, linux)
-    if ./data/ exists
-        files will be saved to `<working dir>/data/`
-    else
-        files will be saved to `<working dir>/data_tmp_<date>/`
+photodiode marker flash duration in seconds, set to 0 to disable the photodiode marker flash  
+default: 0.018
 
-on windows
-    where <p> is the working directory with any segments containing "Touch" or "Targ" removed
-    if <p>/data/ exists
-        files will be saved to `<p>/data/`
-    else
-        files will be saved to `<p>/data_tmp_<date>/`
-```
+---
+### `output_dir`
 
-## misc dev notes  
-https://kivy.org/doc/stable/guide/lang.html
+directory for output files  
+default: `./output`
 
-`poetry env use ~/.pyenv/versions/3.8.12/bin/python`
-`set -x KIVY_NO_ARGS 1`
+---
+### `px_per_cm`
+
+pixels per cm used to convert cm input values to pixels
+default: 20.08
+
+# misc dev notes
+
+https://github.com/NeuralStorm/Behavioral-Control-Programs/tree/61a9baa6d198e3dc13d30326901ea78bd42dc77f/touchscreen_co/Touchscreen/One%20Targ

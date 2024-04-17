@@ -5,80 +5,108 @@ from sys import platform
 from datetime import datetime
 import os
 
+def get_pos() -> tuple[int, int, int , int] | None:
+    # -1920,0<-1920x1086
+    # ^ x pos
+    #       ^ y pos
+    #          ^ width
+    #               ^ height
+    try:
+        s = os.environ['pos']
+    except KeyError:
+        return None
+    
+    pos, size = s.split('<-')
+    px, py = pos.split(',')
+    px = int(px)
+    py = int(py)
+    sx, sy = size.split('x')
+    sx = int(sx)
+    sy = int(sy)
+    
+    return (px, py, sx, sy)
+
 def _parse_hold(x) -> tuple[float, float]:
     if type(x) is str:
         _min, _max = x.split('-')
         _min = float(_min)
         _max = float(_max)
-        a = (_min+_max)*.5
     else:
         _min = float(x)
-        a = _min
-        # _max = None
         _max = _min
     
     return (_min, _max)
+
+Color = tuple[int, int, int]
+def _parse_color(raw) -> Color:
+    if isinstance(raw, str):
+        split = raw.split('_')
+        if len(split) == 4:
+            r, g, b, a = split
+            assert a == '1', f"alpha must be 1 in `{raw}`"
+        else:
+            r, g, b = split
+        def conv(v) -> int:
+            return round(float(v)*255)
+        return conv(r), conv(g), conv(b)
+    
+    assert isinstance(raw, list)
+    assert len(raw) == 3
+    assert all(isinstance(x, int) for x in raw)
+    assert all(0 <= x <= 255 for x in raw)
+    return tuple(raw)
 
 class Config:
     def __init__(self, raw: Any):
         self.max_trials: Optional[int] = raw['autoquit_after']
         
+        self.window_position: tuple[int, int, int , int] | None = get_pos()
+        
+        # 85. is the value used in the original code
         # 3/12.7 is a correction factor based on tina's measurments on the lab computer
-        self.px_per_cm: float = 85. * (3/12.7)
+        # 85. / (3/12.7) is roughly 20.08 and that is preserved as the default
+        self.px_per_cm: float = float(os.environ.get('px_per_cm', 20.08))
         
         self.center_target_radius: float = float(raw['target_radius'])
         self.periph_target_radius: float = float(raw['target_radius'])
         self.periph_target_shape: str = raw['peripheral_target_shape']
-        r, g, b, a = raw['peripheral_target_color'].split('_')
-        self.periph_target_color: tuple[float, float, float, float] = (
-            float(r), float(g), float(b), float(a),
-        )
+        self.periph_target_color: Color = _parse_color(raw['peripheral_target_color'])
         
         self.corner_dist: float = float(raw['corner_non_cage_target_distance'])
         
         self.nudge: tuple[float, float] = (float(raw['nudge_x']), float(raw['nudge_y']))
         
+        self.inter_trial_time: tuple[float, float] = _parse_hold(raw['inter_trial_time'])
         self.center_hold_time: tuple[float, float] = _parse_hold(raw['center_hold_time'])
         self.periph_hold_time: tuple[float, float] = _parse_hold(raw['target_hold_time'])
         
         self.center_touch_timeout: float = float(raw['ch_timeout'])
         self.periph_touch_timeout: float = float(raw['target_timeout'])
         
+        self.pre_reward_delay: float = float(raw.get('pre_reward_delay', 1.87))
+        self.post_reward_delay: float = float(raw.get('post_reward_delay', 0))
         self.center_target_reward: float = float(raw['center_target_reward'])
-        self.percent_of_trials_rewarded: float = float(raw['reward_variability'])
-        self.percent_of_rewards_doubled: float = float(raw['reward_double_chance'])
+        
+        self.punish_delay: float = float(raw.get('punish_delay', 1.2))
+        self.post_punish_delay: float = float(raw.get('post_punish_delay', 0))
         
         self.animal_name: str = raw['animal_name']
         
-        monkey_names = {
-            'Donut': 'donu', 'Sandpiper': 'sand', 'Sabotage': 'sabo',
-        }
+        self.output_dir: Path = Path(os.environ.get('output_dir', './output'))
         
-        # https://github.com/NeuralStorm/Behavioral-Control-Programs/blob/61a9baa6d198e3dc13d30326901ea78bd42dc77f/touchscreen_co/Touchscreen/one_targ_new/main.py#L431
-        p = Path.cwd()
-        # the program would split the path on \ creating platform specific behavior
-        # attempt to recreate that here
-        if platform == 'win32':
-            p = p.resolve()
-            path_parts = [x for x in p.parts if 'Touch' not in x and 'Targ' not in x]
-            p = Path(*path_parts)
-        data_p = p / 'data'
-        if data_p.exists():
-            p = data_p
-        else:
-            p = p / f"data_tmp_{datetime.now().strftime('%Y%m%d')}/"
-            # p.mkdir(exist_ok=True)
-        self.output_dir: Path = p
-        
-        out_animal_name = monkey_names.get(self.animal_name, self.animal_name)
-        self.out_file_name: str = f"{out_animal_name}_{datetime.now().strftime('%Y%m%d_%H%M')}"
+        self.out_file_name: str = f"{self.animal_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         
         self.plexon_enabled: bool = bool(os.environ.get('plexon'))
         self.nidaq_device: str|None = os.environ.get('nidaq')
         if self.nidaq_device == '':
             self.nidaq_device = None
         
-        self.skip_start: bool = bool(os.environ.get('skip_start'))
+        # default to 18ms, longer than 1 refresh at 60hz (16.7 ms)
+        self.photodiode_flash_duration: Optional[float] = float(os.environ.get('photodiode_flash_duration', 0.018))
+        if self.photodiode_flash_duration == 0.0:
+            self.photodiode_flash_duration = None
+        
+        self.no_audio: bool = bool(os.environ.get('no_audio'))
     
     def to_json_dict(self):
         out = {}

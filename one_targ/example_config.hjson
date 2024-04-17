@@ -5,44 +5,47 @@ target_timeout: 60
 // time after the center target appears before the trial is failed
 ch_timeout: 60
 
-center_target_reward: 0.1
-peripheral_target_reward: 0.7
-
-target_radius: 2.25
-
-animal_name: "donu"
-
+# time that target must be helf for
 # can be set to ".4-.6" to replicate old "Rand: .4-.6" behavour
 center_hold_time: 0.1
 target_hold_time: 0.1
 
+# reward duration on succesful trial
+center_target_reward: 0.1
+
+# time before juice is dispensed, defaults to duration of sound effect
+# pre_reward_delay: 1.87
+# time after quice is dispensed
+# post_reward_delay: 0
+# time for which punish screen is shown
+# punish_delay: 1.2
+# extra time after punish screen is hidden, equivelent to "TimeOut" in the joystick task
+# post_punish_delay: 0
+
+# radius of targets in cm
+target_radius: 2.25
+
+# name used in output file name
+animal_name: "donu"
+
 # can be set to null to prevent automatic exit
-autoquit_after: 10
+# can be set to a number to exit after a specific number of trials
+autoquit_after: null
 
-# value between 0 and 1
-reward_variability: 1
-reward_double_chance: 0
-
+# shifts all targets by the specified number of cm
 nudge_x: 0
 nudge_y: 0
 
 # can be circle, square, triangle
 peripheral_target_shape: circle
-# rgba value
-# yellow 1_1_0_1
-# red    1_0_0_1
-# green  0_1_0_1
-peripheral_target_color: 1_1_0_1
+# rgb value
+# r, g and b can be between 0 and 1
+# yellow 1_1_0
+# red    1_0_0
+# green  0_1_0
+peripheral_target_color: 1_1_0
 
+# distance between center of center target and center of peripheral target in cm
 corner_non_cage_target_distance: 6
-
-# when true gives a big reward for a perpheral target and small reward for a center target
-# when false always gives a big reward
-# big reward = center_target_reward setting, small reward = peripheral_target_reward
-# (based on config gui)
-# when true always gives a big reward (center_target_reward)
-# when false gives no reward
-# (based on kristina's observations)
-reward_setup: true
 
 }
