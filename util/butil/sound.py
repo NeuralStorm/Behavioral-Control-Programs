@@ -3,16 +3,6 @@ from typing import Any
 from os import PathLike
 from pathlib import Path
 
-try:
-    import winsound
-except ImportError:
-    winsound = None # type: ignore
-
-try:
-    import pygame
-except ImportError:
-    pygame = None # type: ignore
-
 class SoundProvider:
     def play_file(self, path: PathLike):
         raise NotImplementedError()
