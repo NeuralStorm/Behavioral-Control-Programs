@@ -1,5 +1,5 @@
 
-from typing import Optional, Any
+from typing import Optional, Any, Tuple
 import sys
 import os
 from math import pi, sin, cos
@@ -48,6 +48,7 @@ class PyGameTarget:
         self.size = 0
         self.shape = 'circle'
         self.hidden = True
+        self.show_time = 0
     
     def set_color(self, color: tuple[int, int, int]):
         self.color = color
@@ -56,6 +57,7 @@ class PyGameTarget:
         return TargetOverlay(self, color)
     
     def show(self):
+        self.show_time = time.perf_counter()
         self.hidden = False
     
     def hide(self):
@@ -162,7 +164,9 @@ class GameRenderer:
         self.periph_target.move_px((x, y))
     
     def target_touched(self, target, *, no_drag_in=True):
-        for _, (start_pos, pos) in self.cursor_px.items():
+        for _, (start_pos, pos, show_time) in self.cursor_px.items():
+            if show_time < target.show_time:
+                continue
             if no_drag_in and not target.point_is_within(start_pos):
                 continue
             if target.point_is_within(pos):
@@ -191,17 +195,11 @@ class GameRenderer:
         self.periph_target.render(screen, center)
 
 class MultiWindow:
-    def __init__(self, *, title='-', size=None, position=None):
-        if size is None:
-            size = (1280, 720)
-        kwargs = {}
-        if position is not None:
-            kwargs['position'] = position
-        window = Window(title,
-            size = size,
-            # position=window_pos,
-            **kwargs,
-        )
+    def __init__(self, *,
+            title='-',
+            fullscreen_position: Tuple[Tuple[int, int], Tuple[int, int]] | None = None):
+        
+        window = Window(title)
         window.resizable = True
         
         render = Renderer(window, vsync=False)
@@ -218,7 +216,12 @@ class MultiWindow:
         self._texture = texture
         
         self._size = window.size
+        self._fullscreen_position = fullscreen_position
+        self._fs_restore = window.position, window.size
         self.fullscreen = False
+        
+        if fullscreen_position is not None:
+            self.toggle_fullscreen
     
     def destroy(self):
         # SIGSEGV was caused when render was cleaned up after window.destroy()
@@ -235,10 +238,21 @@ class MultiWindow:
     
     def toggle_fullscreen(self):
         if not self.fullscreen:
-            self.window.set_fullscreen()
+            if self._fullscreen_position is not None:
+                self.window.borderless = True
+                self._fs_restore = self.window.position, self.window.size
+                pos, size = self._fullscreen_position
+                self.window.position = pos
+                self.window.size = size
+            else:
+                self.window.set_fullscreen()
             self.fullscreen = True
         else:
-            self.window.set_windowed()
+            if self._fullscreen_position is not None:
+                self.window.position, self.window.size = self._fs_restore
+                self.window.borderless = False
+            else:
+                self.window.set_windowed()
             self.fullscreen = False
     
     def _resize(self):

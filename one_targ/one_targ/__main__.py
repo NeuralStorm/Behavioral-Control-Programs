@@ -23,6 +23,7 @@ import pygame
 from butil.sound import get_sound_provider, SoundProvider
 from butil import EventFile
 from butil.out_file import EventFileProcess
+from butil.digital_output import DigitalOutput, get_digital_output
 
 from . import game_ui
 from .game_ui import BackgroundOverlay, GameRenderer, MultiWindow
@@ -92,13 +93,9 @@ class GameState:
         # self._gen = self._main_loop()
         self._gen: Optional[Any] = None
         
-        self.periph_pos_gen = self._get_corner_target_gen(config.corner_dist)
+        self.periph_pos_gen = self._get_corner_target_gen(config.corner_dist, config.periph_target_count)
         
-        if config.plexon_enabled:
-            from butil.plexon.plexdo import PlexDo
-            self.plex_do = PlexDo()
-        else:
-            self.plex_do = None
+        self.digital_output = get_digital_output(config.output_device)
         
         self.sound: SoundProvider = get_sound_provider(disable=config.no_audio)
     
@@ -184,8 +181,8 @@ class GameState:
             yield from self.run_trial()
             self.trial_i += 1
     
-    def _get_corner_target_gen(self, dist: float):
-        n = 4
+    def _get_corner_target_gen(self, dist: float, target_count: int):
+        n = target_count
         max_angle = 2*pi
         angles = [(i/n+1/8)*max_angle for i in range(n)]
         positions = [
@@ -198,6 +195,13 @@ class GameState:
             # random.shuffle(positions)
             # for pos in positions:
             #     yield pos
+    
+    def run_reward(self, reward_duration: float):
+        if reward_duration == 0:
+            return
+        self.digital_output.water_on()
+        yield from self._wait(self.config.reward_duration)
+        self.digital_output.water_off()
     
     def run_punish(self):
         renderer = self.renderer
@@ -270,17 +274,11 @@ class GameState:
                     yield from self.run_punish()
                     return {'result': 'fail'}
             
+            yield from self.run_reward(self.config.center_target_reward_duration)
+            
             x, y = next(self.periph_pos_gen)
             renderer.move_periph(x, y)
-            
-            if x < 0 and y > 0:
-                self.send_plexon_event('top_left')
-            elif x > 0 and y > 0:
-                self.send_plexon_event('top_right')
-            elif x < 0 and y < 0:
-                self.send_plexon_event('bottom_left')
-            elif x > 0 and y < 0:
-                self.send_plexon_event('bottom_right')
+            self.log_event('periph_target_moved', info={'x': x, 'y': y})
             
             renderer.periph_target.show()
             self.flash_marker('periph_show')
@@ -326,11 +324,7 @@ class GameState:
                         
                         self.sound.play_file(SOUND_PATH_BASE / 'zapsplat_multimedia_game_sound_kids_fun_cheeky_layered_mallets_complete_66202.wav')
                         yield from self._wait(self.config.pre_reward_delay)
-                        if self.plex_do is not None:
-                            reward_nidaq_bit = 17
-                            self.plex_do.bit_on(reward_nidaq_bit)
-                            yield from self._wait(self.config.center_target_reward)
-                            self.plex_do.bit_off(reward_nidaq_bit)
+                        yield from self.run_reward(self.config.reward_duration)
                         yield from self._wait(self.config.post_reward_delay)
                     
                     return {'result': 'success'}
@@ -375,20 +369,22 @@ def main_inner(stack):
         'raw': raw_config,
     })
     
-    user_pos = config.window_position
+    user_pos = config.fullscreen_position
     if user_pos is not None:
         window_size = user_pos[2], user_pos[3]
         # os.environ['SDL_VIDEO_WINDOW_POS'] = f"{user_pos[0]},{user_pos[1]}"
         window_pos = user_pos[0], user_pos[1]
+        fullscreen_position = window_pos, window_size
     else:
-        window_size = None
-        window_pos = None
+        # window_size = None
+        # window_pos = None
+        fullscreen_position = None
     
     pygame.display.init()
     stack.callback(pygame.quit)
     # return
     
-    window_task = MultiWindow(title = 'CO Task', size=window_size, position=window_pos)
+    window_task = MultiWindow(title = 'CO Task', fullscreen_position=fullscreen_position)
     stack.callback(window_task.destroy)
     
     # window_info = MultiWindow(title = 'CO Info')
@@ -414,21 +410,24 @@ def main_inner(stack):
     
     def stop_logic_thread():
         exiting.set()
-        logic_thread.join
+        logic_thread.join()
     stack.callback(stop_logic_thread)
     
     while True:
         for event in pygame.event.get():
             # print(event)
             window = getattr(event, 'window', None)
-            if window == window_task.window:
+            
+            is_touch = getattr(event, 'touch', None)
+            
+            if window == window_task.window and not is_touch:
                 # lock required around modifying cursor_pos
                 # to avoid `dictionary changed size during iteration` error
                 if event.type == pygame.MOUSEBUTTONDOWN:
                     if event.button != 1:
                         continue
                     with lock:
-                        cursor_pos[None] = [event.pos, event.pos]
+                        cursor_pos[None] = [event.pos, event.pos, perf_counter()]
                 if event.type == pygame.MOUSEMOTION:
                     if None in cursor_pos:
                         with lock:
@@ -440,14 +439,25 @@ def main_inner(stack):
                     except KeyError:
                         pass
             
-            if event.type == pygame.MOUSEMOTION and event.touch is not False:
-                print(event)
             if event.type == pygame.FINGERDOWN:
-                print(event)
+                # touch events seem to be 0-1 mapping to the size of the window
+                w = window_task.surface.get_width()
+                h = window_task.surface.get_height()
+                pos = event.x*w, event.y*h
+                with lock:
+                    cursor_pos[event.finger_id] = [pos, pos, perf_counter()]
             if event.type == pygame.FINGERMOTION:
-                print(event)
+                w = window_task.surface.get_width()
+                h = window_task.surface.get_height()
+                pos = event.x*w, event.y*h
+                with lock:
+                    cursor_pos[event.finger_id][1] = pos
             if event.type == pygame.FINGERUP:
-                print(event)
+                try:
+                    with lock:
+                        del cursor_pos[event.finger_id]
+                except KeyError:
+                    pass
             
             if event.type == pygame.KEYDOWN:
                 if event.unicode == 'a':
@@ -456,7 +466,7 @@ def main_inner(stack):
                 elif event.unicode == 's':
                     with lock:
                         game_state.stop()
-                elif event.unicode == '~':
+                elif event.unicode == '`' or event.unicode == '~':
                     return
                 elif event.unicode == 'f':
                     window_task.toggle_fullscreen()

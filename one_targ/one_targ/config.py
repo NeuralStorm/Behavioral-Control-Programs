@@ -60,7 +60,7 @@ class Config:
     def __init__(self, raw: Any):
         self.max_trials: Optional[int] = raw['autoquit_after']
         
-        self.window_position: tuple[int, int, int , int] | None = get_pos()
+        self.fullscreen_position: tuple[int, int, int , int] | None = get_pos()
         
         # 85. is the value used in the original code
         # 3/12.7 is a correction factor based on tina's measurments on the lab computer
@@ -73,6 +73,7 @@ class Config:
         self.periph_target_color: Color = _parse_color(raw['peripheral_target_color'])
         
         self.corner_dist: float = float(raw['corner_non_cage_target_distance'])
+        self.periph_target_count: int = int(raw.get('peripheral_target_count'))
         
         self.nudge: tuple[float, float] = (float(raw['nudge_x']), float(raw['nudge_y']))
         
@@ -85,7 +86,8 @@ class Config:
         
         self.pre_reward_delay: float = float(raw.get('pre_reward_delay', 1.87))
         self.post_reward_delay: float = float(raw.get('post_reward_delay', 0))
-        self.center_target_reward: float = float(raw['center_target_reward'])
+        self.reward_duration: float = float(raw['center_target_reward'])
+        self.center_target_reward_duration: float = float(raw.get('actual_center_target_reward', 0.0))
         
         self.punish_delay: float = float(raw.get('punish_delay', 1.2))
         self.post_punish_delay: float = float(raw.get('post_punish_delay', 0))
@@ -96,7 +98,7 @@ class Config:
         
         self.out_file_name: str = f"{self.animal_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         
-        self.plexon_enabled: bool = bool(os.environ.get('plexon'))
+        self.output_device: str = os.environ.get('output_device', 'none')
         self.nidaq_device: str|None = os.environ.get('nidaq')
         if self.nidaq_device == '':
             self.nidaq_device = None

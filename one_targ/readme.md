@@ -6,6 +6,17 @@ copy `<project>/example_config.hjson` to `./config.hjson`
 using python 3.11  
 run `pip install .[hw]`
 
+### Ubuntu 20 notes
+
+To disable multi touch gestures in gnome the following extension can be installed.
+
+https://extensions.gnome.org/extension/1140/disable-gestures/
+```sh
+gnome-extensions install disable-gestures@mattbell.com.au.v2.shell-extension.zip
+gnome-extensions enable disable-gestures@mattbell.com.au
+killall -3 gnome-shell
+```
+
 # Running
 
 modify `./config.hjson` as needed
@@ -13,7 +24,7 @@ modify `./config.hjson` as needed
 in bash
 ```sh
 export nidaq=Dev3
-export plexon=1
+export output_device=plexdo
 one-targ
 ```
 
@@ -23,7 +34,7 @@ See comments in [example_config.hjson](./example_config.hjson) for descriptions 
 
 # Hotkeys
 
-`~` - exit game  
+\` (grave accent) - exit game  
 `a` - start game  
 `s` - stop game  
 `f` - toggle fullscreen  
@@ -36,6 +47,10 @@ For example (bash)
 ```bash
 export plexon=1
 ```
+
+### Ubuntu 20 notes
+
+If mouse input stops working after touch screen input `killall -3 gnome-shell` can resolve the issue.
 
 ---
 ### `config_path`
@@ -51,6 +66,8 @@ format {pos_x},{pos_y}<-{width}x{height}
 
 this can be used to make the game effectively full screen
 
+this changes how the game handles fullscreen and is likely required on ubuntu 20/gnome for correct functionality
+
 example  
 position at -1920,0
 size 1920 by 1086
@@ -59,9 +76,13 @@ export pos='-1920,0<-1920x1086'
 ```
 
 ---
-### `plexon` [flag]
+### `output_device`
 
-enable plexdo output to trigger the juice reward
+juicer output device
+
+`plexdo` - use plexon plexdo library  
+`bridge` - use bridge  
+`none` (default) - no output
 
 ---
 ### `nidaq`

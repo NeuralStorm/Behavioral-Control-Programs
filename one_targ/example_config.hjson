@@ -10,12 +10,14 @@ ch_timeout: 60
 center_hold_time: 0.1
 target_hold_time: 0.1
 
-# reward duration on succesful trial
+# reward duration on successful trial
 center_target_reward: 0.1
+# reward duration after successful center target touch
+actual_center_target_reward: 0
 
 # time before juice is dispensed, defaults to duration of sound effect
 # pre_reward_delay: 1.87
-# time after quice is dispensed
+# time after juice is dispensed
 # post_reward_delay: 0
 # time for which punish screen is shown
 # punish_delay: 1.2
@@ -24,6 +26,9 @@ center_target_reward: 0.1
 
 # radius of targets in cm
 target_radius: 2.25
+
+// time before target appears
+inter_trial_time: 0.5
 
 # name used in output file name
 animal_name: "donu"
@@ -47,5 +52,7 @@ peripheral_target_color: 1_1_0
 
 # distance between center of center target and center of peripheral target in cm
 corner_non_cage_target_distance: 6
+# number of possible peripheral target positions
+peripheral_target_count: 4
 
 }
