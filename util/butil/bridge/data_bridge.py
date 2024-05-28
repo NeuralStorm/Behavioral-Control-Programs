@@ -5,7 +5,8 @@ import json
 import os
 import time
 
-from ..plexon import PlexonEvent
+from ..event_source import Event, EventSource
+PlexonEvent = Event
 
 class ConnectionError(Exception):
     pass
@@ -17,7 +18,7 @@ CHAN_MAPPING = {
     12: None, # ensure zone exit channel is never sent
 }
 
-class DataBridge:
+class DataBridge(EventSource):
     def __init__(self):
         p_key = 'data_bridge_path'
         if p_key in os.environ:
@@ -32,7 +33,6 @@ class DataBridge:
         self._path = path
         
         # simulate analog joystick values based on digital events on channel 28-31 (PB12-PB15)
-        # shows up as analog channels 3-6
         self._analog_js_emu = True
         
         self._digital_prev = None

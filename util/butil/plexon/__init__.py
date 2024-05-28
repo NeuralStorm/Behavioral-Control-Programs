@@ -10,31 +10,9 @@ from .common import PlexonError
 
 from .plexdo import PlexDo
 from .. import DigitalOutput
+from ..event_source import Event as PlexonEvent
 
 logger = logging.getLogger(__name__)
-
-class PlexonEvent:
-    ANALOG = 'analog'
-    SPIKE = 'spike'
-    EVENT = 'event'
-    OTHER_EVENT = 'other_event'
-    
-    def __init__(self, ts, event_type, *,
-        value: float = 0,
-        chan: int = 0,
-        unit: int = 0,
-        falling: bool = False,
-    ):
-        self.ts: float = ts
-        self.type: str = event_type
-        self.value: float = value
-        self.chan: int = chan
-        self.unit: int = unit
-        self.falling: bool = falling
-    
-    @property
-    def rising(self) -> bool:
-        return not self.falling
 
 class Plexon:
     def __init__(self):

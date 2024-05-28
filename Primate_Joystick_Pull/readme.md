@@ -206,7 +206,8 @@ use config file at path instead of showing gui file chooser
 ---
 ### `event_source`
 
-set to `plexon` or `ability` to collect events from an external system
+set to `plexon|plexdo` or `bridge|bridge` to collect events from an external system  
+See the [event source docs](../util/event_source.md) for more information.
 
 ---
 ### `out_file_name`

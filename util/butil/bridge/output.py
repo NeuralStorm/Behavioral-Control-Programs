@@ -1,6 +1,7 @@
 
 import os
 import termios
+import time
 
 from .. import DigitalOutput
 
@@ -98,3 +99,9 @@ class BridgeOutput(DigitalOutput):
     
     def water_off(self):
         self._send_command('off 2')
+    
+    def cineplex_start(self):
+        self._send_command('on 1')
+    
+    def cineplex_stop(self):
+        self._send_command('off 1')

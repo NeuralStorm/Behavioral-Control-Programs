@@ -200,7 +200,7 @@ class GameConfig:
         self.classifier_debug: bool = bool(os.environ.get('classifier_debug'))
         self.simulate_photodiode: bool = bool(os.environ.get('simulate_photodiode'))
         
-        self.event_source: Optional[str] = os.environ.get('event_source')
+        self.event_source: str = os.environ.get('event_source', 'none')
         
         self.no_git: bool = bool(os.environ.get('no_git'))
         self.no_print_stats: bool = bool(os.environ.get('no_print_stats'))

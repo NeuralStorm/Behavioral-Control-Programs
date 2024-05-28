@@ -26,7 +26,7 @@ from tkinter import filedialog
 
 import behavioral_classifiers
 from butil import EventFile, Debounce, get_git_info, AnalogOut
-from butil import DigitalOutput
+from butil import Event, EventSource, DigitalOutput, get_event_source
 from butil.out_file import EventFileProcess
 from butil.sound import get_sound_provider, SoundProvider
 
@@ -195,31 +195,35 @@ class MonkeyImages:
             'raw': self.config.raw_config,
         })
         
-        match self.config.event_source:
-            case 'plexon':
-                # from .plexon import Plexon
-                # self.plexon: Optional[Plexon] = Plexon()
-                from butil.plexon import PlexonProxy, PlexonOutput
-                self.plexon: Optional[PlexonProxy] = PlexonProxy() #type: ignore
-                self.digital_output = PlexonOutput()
-            case 'ability':
-                from butil.bridge.data_bridge import DataBridge
-                from butil.bridge.output import BridgeOutput
-                from butil.event_source.process_source import SourceProxy
-                # self.plexon = DataBridge() #type: ignore
-                self.plexon = SourceProxy(DataBridge) #type: ignore
-                self.digital_output = BridgeOutput()
-                # self.digital_output: DigitalOutput = DigitalOutput()
-            case 'ability_no_output':
-                from butil.bridge.data_bridge import DataBridge
-                from butil.event_source.process_source import SourceProxy
-                self.plexon = SourceProxy(DataBridge) #type: ignore
-                self.digital_output: DigitalOutput = DigitalOutput()
-            case None:
-                self.plexon = None
-                self.digital_output: DigitalOutput = DigitalOutput()
-            case _:
-                raise ValueError(f"Invalid event_source {self.config.event_source}")
+        # match self.config.event_source:
+        #     case 'plexon':
+        #         # from .plexon import Plexon
+        #         # self.plexon: Optional[Plexon] = Plexon()
+        #         from butil.plexon import PlexonProxy, PlexonOutput
+        #         self.plexon: Optional[PlexonProxy] = PlexonProxy() #type: ignore
+        #         self.digital_output = PlexonOutput()
+        #     case 'ability':
+        #         from butil.bridge.data_bridge import DataBridge
+        #         from butil.bridge.output import BridgeOutput
+        #         from butil.event_source.process_source import SourceProxy
+        #         # self.plexon = DataBridge() #type: ignore
+        #         self.plexon = SourceProxy(DataBridge) #type: ignore
+        #         self.digital_output = BridgeOutput()
+        #         # self.digital_output: DigitalOutput = DigitalOutput()
+        #     case 'ability_no_output':
+        #         from butil.bridge.data_bridge import DataBridge
+        #         from butil.event_source.process_source import SourceProxy
+        #         self.plexon = SourceProxy(DataBridge) #type: ignore
+        #         self.digital_output: DigitalOutput = DigitalOutput()
+        #     case None:
+        #         self.plexon = None
+        #         self.digital_output: DigitalOutput = DigitalOutput()
+        #     case _:
+        #         raise ValueError(f"Invalid event_source {self.config.event_source}")
+        
+        self.plexon: EventSource
+        self.digital_output: DigitalOutput
+        self.plexon, self.digital_output = get_event_source(self.config.event_source)
         
         self.zones = [
             Zone('homezone', 14, None),

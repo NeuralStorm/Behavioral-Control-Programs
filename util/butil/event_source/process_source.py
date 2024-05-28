@@ -3,6 +3,8 @@ import time
 from multiprocessing import Process, Queue as PQueue
 from queue import Empty
 
+from . import EventSource
+
 class SourceProcessError(Exception):
     pass
 
@@ -33,7 +35,7 @@ class _SourceProcess(Process):
             return []
         return data
 
-class SourceProxy:
+class SourceProxy(EventSource):
     def __init__(self, init_func):
         self._proc = _SourceProcess(init_func)
         self._proc.start()

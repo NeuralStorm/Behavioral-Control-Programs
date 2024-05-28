@@ -5,6 +5,12 @@ class DigitalOutput:
     
     def water_off(self):
         pass
+    
+    def cineplex_start(self):
+        pass
+    
+    def cineplex_stop(self):
+        pass
 
 def get_digital_output(mode: str):
     match mode:
