@@ -1,9 +1,19 @@
 
 version_1 41f3eef480ce4fcedaf3e6d5c59fcd30968820b1
-    on computer as of 2023-12-07
+    on plexon computer as of 2023-12-07
 
 version_2 9748aa9652a7615e77a17f0263fb2efa743e246a
-    in /tasks/testing/new as of 2024-01-30
+    on plexon computer in /tasks/testing/new as of 2024-01-30
+    rework classification
+    add 64-bit plexdo
+    require study id, session id, etc in config
+    change prep diamond behavior
 
 version_2.1 aa2d2147c16f0a15d4dd0b7c2c9f07c4407de89d
-    in /tasks/testing/new as of 2024-02-01
+    on plexon computer in /tasks/testing/new as of 2024-02-01
+    update classifier logic
+    add neurokey digital output
+
+version_3.0 9c74abe2ae158adafde06c74901fce5a503882f5
+    on blackbox 2 in ~/tasks/joystick/main as of 2024-05-06
+    add audio output on linux
