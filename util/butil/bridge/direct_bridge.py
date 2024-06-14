@@ -174,9 +174,6 @@ class DirectBridge(EventSource):
                     else:
                         yield Event(ts, Event.ANALOG, value=0, chan=out_chan)
             
-            self._edge_dig = _EdgeDetector()
-            self._edge_out = _EdgeDetector()
-            
             for i, is_rising in self._edge_dig.proc(digital):
                 chan = CHAN_MAPPING.get(i, i)
                 if chan is None:
