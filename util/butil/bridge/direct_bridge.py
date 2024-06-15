@@ -59,6 +59,7 @@ class DirectBridge(EventSource):
         
         # time.perf_counter value to reconnect at
         self._reconnect_after = 0
+        self._count = 0
     
     def wait_for_start(self):
         return {'ts': 0}
@@ -80,7 +81,8 @@ class DirectBridge(EventSource):
             if self.custom_config is not None:
                 soc.sendall(self.custom_config)
             elif self.robust:
-                soc.sendall(b'''{"allow_drop": false, "buffer_size": 2000, "prefix_filter": ["h"]}\n''')
+                # soc.sendall(b'''{"allow_drop": false, "buffer_size": 2000, "prefix_filter": ["h"]}\n''')
+                soc.sendall(b'''{"allow_drop": false, "downsample_factor": 20, "buffer_size": 2000, "prefix_filter": ["h"]}\n''')
             else:
                 soc.sendall(b'''{"allow_drop": true, "buffer_size": 10, "prefix_filter": ["h"]}\n''')
         except OSError as e:
@@ -130,7 +132,6 @@ class DirectBridge(EventSource):
         self._buf = parts[-1]
         parts = parts[:-1]
         
-        count = 0
         for part in parts:
             # print(part)
             part = part.removeprefix(b'h')
@@ -144,14 +145,16 @@ class DirectBridge(EventSource):
             digital = list(_to_bits(int(digital), 32))
             output = list(_to_bits(int(output), 32))
             analog = [int(x) for x in analog.split(b',')]
-            yield count, digital, output, analog
-            count += 1
+            yield self._count, digital, output, analog
+            self._count += 1
     
     def get_data(self):
         # count = 0
         for count, digital, output, analog in self.get_raw():
             
-            ts = count / 4000
+            # ts = count / 4000
+            ts = count / 200 # downsample of 20
+            
             # message_type = msg.get('t')
             
             # if message_type == 'bridge':
@@ -165,7 +168,8 @@ class DirectBridge(EventSource):
                 )
             
             for i, is_high in enumerate(digital):
-                if self._analog_js_emu and 28 <= i <= 31:
+                # if self._analog_js_emu and 28 <= i <= 31:
+                if self._analog_js_emu and i >= 2: # all but the two actual analog channels
                     # out_chan = i-28+3
                     # assert 3 <= out_chan <= 6
                     out_chan = i
