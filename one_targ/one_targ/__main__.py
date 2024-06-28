@@ -108,6 +108,7 @@ class GameState:
         return self
     
     def __exit__(self, *exc):
+        self.digital_output.water_off()
         if self.bridge_event_output is not None:
             self.bridge_event_output.__exit__(*exc)
         if self.nidaq is not None:
