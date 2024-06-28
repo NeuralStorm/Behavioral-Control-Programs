@@ -102,6 +102,13 @@ class Config:
         self.nidaq_device: str|None = os.environ.get('nidaq')
         if self.nidaq_device == '':
             self.nidaq_device = None
+        temp = os.environ.get('bridge_enabled')
+        if temp is None:
+            # default to using bridge output on linux
+            temp = os.name == 'posix'
+        if temp == 'no':
+            temp = False
+        self.bridge_event_enabled: bool = bool(temp)
         
         # default to 18ms, longer than 1 refresh at 60hz (16.7 ms)
         self.photodiode_flash_duration: Optional[float] = float(os.environ.get('photodiode_flash_duration', 0.018))

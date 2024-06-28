@@ -32,6 +32,10 @@ Press a to begin the task.
 
 See comments in [example_config.hjson](./example_config.hjson) for descriptions of config parameters.
 
+### Ubuntu 20 notes
+
+If mouse input stops working after touch screen input `killall -3 gnome-shell` can resolve the issue.
+
 # Hotkeys
 
 \` (grave accent) - exit game  
@@ -47,10 +51,6 @@ For example (bash)
 ```bash
 export plexon=1
 ```
-
-### Ubuntu 20 notes
-
-If mouse input stops working after touch screen input `killall -3 gnome-shell` can resolve the issue.
 
 ---
 ### `config_path`
@@ -93,6 +93,12 @@ example
 ```sh
 export nidaq=Dev3
 ```
+
+---
+### `bridge_enabled` [flag]
+
+enables event output to the bridge server, enabled by default on linux  
+if set to "`no`" bridge event output will be disabled
 
 ---
 ### `no_audio` [flag]

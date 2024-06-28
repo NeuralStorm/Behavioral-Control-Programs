@@ -24,6 +24,7 @@ from butil.sound import get_sound_provider, SoundProvider
 from butil import EventFile
 from butil.out_file import EventFileProcess
 from butil.digital_output import DigitalOutput, get_digital_output
+from butil.bridge.bridge_events import BridgeEventOutput
 
 from . import game_ui
 from .game_ui import BackgroundOverlay, GameRenderer, MultiWindow
@@ -89,6 +90,10 @@ class GameState:
             self.nidaq.start()
         else:
             self.nidaq = None
+        if self.config.bridge_event_enabled:
+            self.bridge_event_output: Optional[BridgeEventOutput] = BridgeEventOutput()
+        else:
+            self.bridge_event_output = None
         
         # self._gen = self._main_loop()
         self._gen: Optional[Any] = None
@@ -103,6 +108,8 @@ class GameState:
         return self
     
     def __exit__(self, *exc):
+        if self.bridge_event_output is not None:
+            self.bridge_event_output.__exit__(*exc)
         if self.nidaq is not None:
             self.nidaq.stop()
     
@@ -128,18 +135,24 @@ class GameState:
         })
     
     def send_plexon_event(self, name, *, info=None):
-        print(name)
         tags = ['plexon_send']
         if info is None:
             info = {}
-        event_info = self.plexon_event_types[name]
-        info['nidaq_pin'] = event_info['nidaq_pin']
-        info['plexon_channel'] = event_info['plexon_channel']
-        if self.nidaq is not None:
-            self.nidaq.pulse_pin(event_info['nidaq_pin'])
+        if self.bridge_event_output is not None:
+            self.bridge_event_output.send_event(name, info)
+        try:
+            event_info = self.plexon_event_types[name]
+        except KeyError:
+            pass
         else:
-            info['no_hardware'] = True
+            info['nidaq_pin'] = event_info['nidaq_pin']
+            info['plexon_channel'] = event_info['plexon_channel']
+            if self.nidaq is not None:
+                self.nidaq.pulse_pin(event_info['nidaq_pin'])
+            else:
+                info['no_hardware'] = True
         self.log_event(name, tags=tags, info=info)
+        print(name)
     
     def start(self):
         self._gen = self._main_loop()
@@ -236,6 +249,7 @@ class GameState:
                 'center_hold_time': center_hold_time,
                 'periph_hold_time': periph_hold_time,
             })
+            self.send_plexon_event('trial_start', info={'i': self.trial_i})
             
             yield from self._wait(inter_trial_time)
             
@@ -277,12 +291,13 @@ class GameState:
             yield from self.run_reward(self.config.center_target_reward_duration)
             
             x, y = next(self.periph_pos_gen)
+            pos_info = {'x': round(x, 6), 'y': round(y, 6)}
             renderer.move_periph(x, y)
-            self.log_event('periph_target_moved', info={'x': x, 'y': y})
+            self.log_event('periph_target_moved', info=pos_info)
             
             renderer.periph_target.show()
             self.flash_marker('periph_show')
-            self.send_plexon_event('periph_show')
+            self.send_plexon_event('periph_show', info=pos_info)
             yield
             
             # wait for periph target to be touched
