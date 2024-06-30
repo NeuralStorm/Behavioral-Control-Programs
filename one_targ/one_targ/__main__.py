@@ -4,6 +4,7 @@ import time
 from time import perf_counter
 from datetime import datetime
 from contextlib import ExitStack
+import traceback
 from sys import platform
 import sys
 import os
@@ -21,7 +22,7 @@ import hjson
 import pygame
 
 from butil.sound import get_sound_provider, SoundProvider
-from butil import EventFile
+from butil import EventFile, get_git_info
 from butil.out_file import EventFileProcess
 from butil.digital_output import DigitalOutput, get_digital_output
 from butil.bridge.bridge_events import BridgeEventOutput
@@ -384,6 +385,14 @@ def main_inner(stack):
         'config': config.to_json_dict(),
         'raw': raw_config,
     })
+    
+    if not config.no_git:
+        try:
+            git_info = get_git_info()
+        except Exception as e:
+            traceback.print_exc()
+            git_info = {'error': str(e)}
+        game_state.log_event('git_info', info=git_info)
     
     user_pos = config.fullscreen_position
     if user_pos is not None:

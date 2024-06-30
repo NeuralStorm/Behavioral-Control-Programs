@@ -116,6 +116,7 @@ class Config:
             self.photodiode_flash_duration = None
         
         self.no_audio: bool = bool(os.environ.get('no_audio'))
+        self.no_git: bool = bool(os.environ.get('no_git'))
     
     def to_json_dict(self):
         out = {}
